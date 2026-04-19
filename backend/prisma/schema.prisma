@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql" 
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int      @id @default(autoincrement())
+  firstName       String
+  lastName        String
+  phone           String   @unique
+  whatsapp        String?
+  optionalPhone   String?
+  nic             String?
+  addressHouseNo  String?
+  addressStreet   String?
+  city            String?
+  district        String?
+  password        String
+  role            String   @default("Student")
+  department      String?  
+  businessType    String? 
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Business {
+  id                               Int      @id @default(autoincrement())
+  name                             String
+  category                         String
+  medium                           String   @default("Sinhala")
+  description                      String?
+  logo                             String?
+  streams                          String?
+  isDiscountEnabledForInstallments Int      @default(0)
+  head_manager_id                  Int?
+  ass_manager_id                   Int?
+  status                           Int      @default(1)
+  batches                          Batch[]
+  createdAt                        DateTime @default(now())
+}
+
+model Batch {
+  id          Int      @id @default(autoincrement())
+  name        String
+  logo        String?
+  type        Int      @default(1)
+  itemOrder   Int      @default(1)
+  description String?
+  status      Int      @default(1)
+  businessId  Int
+  business    Business @relation(fields: [businessId], references: [id])
+  groups      Group[]
+  createdAt   DateTime @default(now())
+}
+
+model Group {
+  id             Int      @id @default(autoincrement())
+  name           String
+  type           Int      @default(1)
+  itemOrder      Int      @default(1)
+  discount_rules String?  @db.Text
+  batchId        Int
+  batch          Batch    @relation(fields: [batchId], references: [id])
+  courses        Course[]
+  createdAt      DateTime @default(now())
+}
+
+model Course {
+  id          Int      @id @default(autoincrement())
+  name        String
+  code        String?
+  stream      String?
+  streams     String?
+  description String?  @db.Text
+  itemOrder   Int      @default(1)
+  courseType  Int      @default(1)
+  price       Float    @default(0)
+  groupPrices String?  @db.Text
+  groupId     Int?
+  group       Group?   @relation(fields: [groupId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Installment {
+  id           Int      @id @default(autoincrement())
+  batchId      Int
+  subjectCount Int
+  details      String   @db.Text
+  createdAt    DateTime @default(now())
+}
+
+model Post {
+  id          Int      @id @default(autoincrement())
+  title       String
+  caption     String   @db.Text
+  image       String?
+  business_id BigInt?
+  batch_id    BigInt?
+  created_at  DateTime @default(now())
+}
+
+model ContentGroup {
+  id         Int       @id @default(autoincrement())
+  title      String
+  type       Int
+  itemOrder  Int       @default(1)
+  batchId    Int
+  courseCode String?   
+  createdAt  DateTime  @default(now())
+  contents   Content[]
+}
+
+model Content {
+  id             Int       @id @default(autoincrement())
+  title          String
+  contentType    String
+  link           String?
+  fileName       String?
+  meetingId      String?
+  date           DateTime?
+  startTime      String?
+  endTime        String?
+  paperTime      Int?
+  questionCount  Int?
+  isFree         Boolean   @default(false)
+  contentGroupId Int?
+  group          ContentGroup? @relation(fields: [contentGroupId], references: [id])
+  batchId        Int
+  courseId       Int
+  createdAt      DateTime  @default(now())
+}
+
+model ContentCourse {
+  id         Int      @id @default(autoincrement())
+  content_id Int
+  course_id  BigInt
+  type       Int
+  itemOrder  String   @default("0")
+  created_at DateTime @default(now())
+}
