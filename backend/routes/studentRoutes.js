@@ -13,6 +13,7 @@ router.post('/enroll-with-slip', uploadDocument.single('slipImage'), studentCont
 
 // 🔥 අලුතින් දාපු Routes ටික (404 Errors නැතිවෙන්න)
 router.get('/classroom', studentController.getStudentClassroom);
+router.get('/module/:id', studentController.getCourseModules); // 🔥 NEW: Module Data Route
 router.get('/my-payments', studentController.getMyPayments);
 router.post('/profile/update', uploadImage.single('image'), studentController.updateProfile);
 router.post('/profile/password', studentController.updatePassword);

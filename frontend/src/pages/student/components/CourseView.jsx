@@ -12,12 +12,16 @@ export default function CourseView({ courseId, onBack }) {
 
     useEffect(() => {
         axios.get(`/student/module/${courseId}`).then(res => {
+            console.log("🔥 DEBUG: Backend Data received ->", res.data); // <--- අවුලක් ආවොත් F12 ගහල බලන්න පුළුවන්
             setData(res.data);
             if (res.data?.lessonGroups) {
                 const initialOpen = {};
                 res.data.lessonGroups.forEach(f => initialOpen[f.id] = true);
                 setOpenFolders(initialOpen);
             }
+        }).catch(err => {
+            console.error(err);
+            toast.error("Failed to load course contents.");
         }).finally(() => setLoading(false));
     }, [courseId]);
 
@@ -87,7 +91,6 @@ export default function CourseView({ courseId, onBack }) {
 
     return (
         <div className="w-full animate-fade-in">
-            {/* IN-CONTAINER BACK BUTTON (Calls onBack instead of React Router navigate) */}
             <button onClick={onBack} className="mb-8 text-white/70 hover:text-red-400 bg-white/5 hover:bg-white/10 px-5 py-2.5 rounded-xl font-bold flex items-center border border-white/10 w-max transition-colors">
                 <ArrowLeft size={16} className="mr-2" /> Back to Subjects
             </button>
@@ -106,7 +109,8 @@ export default function CourseView({ courseId, onBack }) {
             </div>
 
             <div className="glass-card p-4 md:p-8 rounded-[2rem] min-h-[400px] border border-white/10">
-                {data?.paidStatus !== 1 ? (
+                {/* 🔥 FIX: '1' විතරක් නෙවෙයි, String ආවත් වැඩ කරන විදිහට හැදුවා */}
+                {String(data?.paidStatus) !== '1' ? (
                     <div className="text-center py-20 px-4">
                         <Lock size={48} className="text-red-500 mx-auto mb-4" />
                         <h3 className="text-2xl font-bold text-white mb-2">Access Locked</h3>

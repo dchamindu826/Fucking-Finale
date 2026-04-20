@@ -165,8 +165,14 @@ const handleFinalSubmit = async () => {
     }
 };
 
-// Data DB එකට යවන function එක වෙනම හැදුවා ලේසි වෙන්න
+// Data DB එකට යවන function එක
 const saveEnrollmentToBackend = async (method, payhereOrderId) => {
+    
+    // 🔥 FIX: Amount එක calculate කරලා ගන්නවා
+    const amountToPay = finalPaymentType === 'installment' 
+                        ? installmentStepsParsed[0]?.amount 
+                        : calculateTotal();
+
     const formData = new FormData();
     formData.append('businessId', selectedBusiness.id);
     formData.append('batchId', selectedBatch.id);
@@ -174,17 +180,26 @@ const saveEnrollmentToBackend = async (method, payhereOrderId) => {
     formData.append('subjects', JSON.stringify(selectedSubjects));
     formData.append('paymentMethodChosen', finalPaymentType); 
     formData.append('method', method);
+    
+    // 🔥 FIX: Amount එක Backend එකට යවනවා
+    formData.append('amount', amountToPay); 
+
     if (payhereOrderId) formData.append('orderId', payhereOrderId);
     if (method === 'slip') formData.append('slipImage', slipFile);
 
-    const response = await axios.post('/student/enroll-with-slip', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-    if(response.status === 200) {
-        toast.success(method === 'slip' ? "Enrollment successful! Awaiting verification." : "Enrollment Confirmed!");
-        setShowPaymentModal(false);
-        setSlipFile(null);
-        setActiveTab('history'); 
+    try {
+        const response = await axios.post('/student/enroll-with-slip', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+        if(response.status === 200) {
+            toast.success(method === 'slip' ? "Enrollment successful! Awaiting verification." : "Enrollment Confirmed!");
+            setShowPaymentModal(false);
+            setSlipFile(null);
+            setActiveTab('history'); 
+        }
+    } catch (error) {
+        toast.error("Failed to save enrollment. Please try again.");
+    } finally {
+        setIsSubmitting(false);
     }
-    setIsSubmitting(false);
 };
 
   const handleBackNavigation = () => {

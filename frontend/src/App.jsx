@@ -14,13 +14,14 @@ import ContentHub from './components/common/ContentHub';
 import StaffManagement from './components/common/StaffManagement'; 
 import PaymentManagement from './components/common/PaymentManagement';
 
+// System Admin CRM Setup
+import CrmManagement from './components/admin/CrmManagement';
+
+// 🔥 NEW: Coordinator CRM Dashboard (For Manager & Staff)
+import CoordinatorDashboard from './pages/ClassCoordinator/CoordinatorDashboard';
+
 // Department Dashboards (Mangers & Staff)
-// * මේ ෆයිල්ස් ඔයා තාම හදලා නැත්නම්, ඒවා පස්සේ හදලා import කරන්න. දැනට ManagerDashboard පාවිච්චි කරමු.
 import ManagerDashboard from './pages/class_coordinator/manager/ManagerDashboard';
-// import FinanceDashboard from './pages/finance/manager/FinanceDashboard';
-// import CallCenterDashboard from './pages/call_center/manager/CallCenterDashboard';
-// import DeliveryDashboard from './pages/delivery/manager/DeliveryDashboard';
-// import TechDashboard from './pages/technical/manager/TechDashboard';
 
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -44,29 +45,24 @@ export default function App() {
     window.location.href = '/login';
   };
 
-  // 🔥 Role සහ Department එක මත පදනම් වෙලා හරියටම යන්න ඕනේ ලින්ක් එක හොයනවා 🔥
   const getDashboardLink = (user) => {
     if (!user) return '/login';
     
     const role = user?.role?.toUpperCase();
     const dept = user?.department;
 
-    // Student / User
     if (role === 'STUDENT' || role === 'USER') return '/student/dashboard';
     
-    // Managers & Assistant Managers
-    if (role === 'MANAGER' || role === 'ASS MANAGER') {
+    if (role === 'MANAGER' || role === 'ASS MANAGER' || role === 'STAFF') {
         if (dept === 'Finance') return '/finance/dashboard';
         if (dept === 'Class Coordination') return '/coordinator/dashboard';
         if (dept === 'Call Center') return '/call-center/dashboard';
         if (dept === 'Technical') return '/technical/dashboard';
         if (dept === 'Delivery') return '/delivery/dashboard';
         
-        // Department එකක් හරියටම නැත්නම් Default Manager Dashboard එකට යවනවා
         return '/manager/dashboard';
     }
 
-    // System Admins / Directors
     return '/admin/dashboard'; 
   };
 
@@ -86,16 +82,14 @@ export default function App() {
           element={loggedInUser ? <Navigate to={getDashboardLink(loggedInUser)} /> : <Login setLoggedInUser={setLoggedInUser} />} 
         />
 
-        {/* ✅ ADMIN & STAFF ROUTES (These use the MainLayout) ✅ */}
+        {/* ✅ ADMIN & STAFF ROUTES ✅ */}
         <Route element={loggedInUser && loggedInUser.role.toUpperCase() !== 'STUDENT' && loggedInUser.role.toUpperCase() !== 'USER' ? <MainLayout loggedInUser={loggedInUser} handleLogout={handleLogout} /> : <Navigate to="/login" />}>
             
-            {/* Core Admin Routes */}
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
             
-            {/* Manager Routes (Department wise) */}
-            <Route path="/manager/dashboard" element={<ManagerDashboard />} /> {/* Default / Fallback */}
-            <Route path="/coordinator/dashboard" element={<ManagerDashboard />} /> {/* අනාගතයේදී CoordinatorManagerDashboard එකට මාරු කරන්න */}
-            <Route path="/finance/dashboard" element={<ManagerDashboard />} /> {/* අනාගතයේදී FinanceDashboard එකට මාරු කරන්න */}
+            <Route path="/manager/dashboard" element={<ManagerDashboard />} /> 
+            <Route path="/coordinator/dashboard" element={<ManagerDashboard />} /> 
+            <Route path="/finance/dashboard" element={<ManagerDashboard />} /> 
             <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
             <Route path="/technical/dashboard" element={<ManagerDashboard />} />
             <Route path="/delivery/dashboard" element={<ManagerDashboard />} />
@@ -104,15 +98,21 @@ export default function App() {
             <Route path="/admin/content-hub" element={<ContentHub loggedInUser={loggedInUser} />} />
             <Route path="/admin/staff" element={<StaffManagement loggedInUser={loggedInUser} />} />
             <Route path="/admin/payments" element={<PaymentManagement loggedInUser={loggedInUser} />} />
+            
+            {/* System Admin CRM Configuration */}
+            <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
+
+            {/* 🔥 NEW: Active CRM Interface for Staff & Managers 🔥 */}
+            <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
+
         </Route>
 
-        {/* ✅ STUDENT ROUTES (Standalone - NO MainLayout) ✅ */}
+        {/* ✅ STUDENT ROUTES ✅ */}
         <Route 
           path="/student/dashboard" 
           element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDashboard /> : <Navigate to="/login" />} 
         />
 
-        {/* Catch-all fallback */}
         <Route path="*" element={<Navigate to="/" />} />
 
       </Routes>

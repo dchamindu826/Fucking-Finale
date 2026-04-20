@@ -21,7 +21,7 @@ const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleL
             <aside className={`fixed lg:static top-0 left-0 h-full w-72 bg-black/20 border-r border-white/10 flex flex-col transition-transform duration-300 z-50 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
                 
                 <div className="h-24 flex items-center justify-between px-8 border-b border-white/10">
-                    <img src="/logo.png" alt="IMA Campus" className="h-10 w-auto" />
+                    <img src="/logo.png" alt="Logo" className="w-40 h-auto object-contain drop-shadow-2xl" />
                     <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white/70 bg-white/10 p-2 rounded-xl">
                         <X size={20} />
                     </button>

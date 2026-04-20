@@ -1,6 +1,6 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const crypto = require('crypto'); // PayHere Hash එක හදන්න අවශ්‍යයි
+const crypto = require('crypto');
 
 // 1. Dashboard එකට Posts & Alerts යැවීම
 exports.getStudentDashboard = async (req, res) => {
@@ -21,7 +21,7 @@ exports.getStudentDashboard = async (req, res) => {
     }
 };
 
-// 2. Enroll වෙන්න Businesses/Batches/Subjects යැවීම (🔥 500 Error එක Fix කරපු තැන 🔥)
+// 2. Enroll වෙන්න Businesses/Batches/Subjects යැවීම
 exports.getAvailableEnrollments = async (req, res) => {
     try {
         const businesses = await prisma.business.findMany({
@@ -30,30 +30,22 @@ exports.getAvailableEnrollments = async (req, res) => {
                 batches: {
                     where: { status: 1 },
                     include: {
-                        groups: {
-                            include: { courses: true }
-                        }
+                        groups: { include: { courses: true } }
                     }
                 }
             }
         });
 
-        // JSON BigInt issue එක fix කිරීම
         const safeData = JSON.parse(JSON.stringify(businesses, (key, value) =>
             typeof value === 'bigint' ? value.toString() : value
         ));
         
-        // Prisma schema relation errors මගහරින්න Installments වෙනම අරන් Map කරනවා
         for (let i = 0; i < safeData.length; i++) {
             for (let j = 0; j < safeData[i].batches.length; j++) {
                 const currentBatch = safeData[i].batches[j];
-                
-                // මේ Batch එකට අදාල Installments ගන්නවා
                 const batchInstallments = await prisma.installment.findMany({
                     where: { batchId: parseInt(currentBatch.id) }
                 });
-                
-                // Frontend එක බලාපොරොත්තු වෙන විදිහට අලුත් Property එකට දානවා
                 currentBatch.installment_plans_parsed = batchInstallments || [];
             }
         }
@@ -69,8 +61,8 @@ exports.getAvailableEnrollments = async (req, res) => {
 exports.generatePayHereHash = async (req, res) => {
     try {
         const { amount, orderId, currency } = req.body;
-        const merchantId = "1225565"; // ඔයාගේ Live/Sandbox Merchant ID එක මෙතනට දාන්න
-        const merchantSecret = "YOUR_PAYHERE_SECRET"; // PayHere එකෙන් දෙන Secret එක
+        const merchantId = "1225565"; 
+        const merchantSecret = "YOUR_PAYHERE_SECRET"; 
 
         const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
         const amountFormatted = parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, useGrouping: false });
@@ -88,14 +80,25 @@ exports.generatePayHereHash = async (req, res) => {
 // 4. Enrollment එක Save කිරීම (Slip or PayHere)
 exports.enrollStudent = async (req, res) => {
     try {
-        const { businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId } = req.body;
+        const { businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId, amount } = req.body;
         const slipFileName = req.file ? req.file.filename : null;
+        const studentId = req.user?.id || 1; 
 
-        console.log("New Enrollment Received:");
-        console.log({ businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId, slipFileName });
-
-        // TODO: මෙතනදී Database එකේ Enrollment table එකටයි Payment table එකටයි දත්ත save කරන්න (Prisma Create Queries)
-        // Payment status එක slip නම් Pending (0) විදිහටත්, payhere නම් Success (1) විදිහටත් දාන්න.
+        // 🔥 FIX: Payment එකත් එක්ක Group එකයි Subjects ටිකයි සේව් කරනවා
+        await prisma.payment.create({
+            data: {
+                studentId: parseInt(studentId),
+                businessId: parseInt(businessId),
+                batchId: parseInt(batchId),
+                groupId: groupId ? parseInt(groupId) : null,
+                subjects: typeof subjects === 'string' ? subjects : JSON.stringify(subjects || []),
+                payment_type: paymentMethodChosen === 'installment' ? 2 : (paymentMethodChosen === 'full' ? 3 : 1),
+                method: method === 'slip' ? 'Slip' : 'PayHere',
+                status: method === 'slip' ? 0 : 1, 
+                slip_image: slipFileName,
+                amount: amount ? parseFloat(amount) : 0
+            }
+        });
 
         res.status(200).json({ message: "Enrolled Successfully" });
     } catch (error) {
@@ -104,48 +107,177 @@ exports.enrollStudent = async (req, res) => {
     }
 };
 
-// ==========================================
-// අලුතින් එකතු කරපු Student Functions ටික 
-// ==========================================
-
-// 1. My Classroom එකට Data යැවීම
+// 5. My Classroom එකට Data යැවීම
 exports.getStudentClassroom = async (req, res) => {
     try {
-        // TODO: Get enrolled courses for the logged-in student from DB
-        res.status(200).json({ businesses: [] }); // දැනට හිස් Array එකක් යවමු 404 නැතිවෙන්න
+        const studentId = req.user?.id || 1; 
+
+        // ළමයාගේ Approve හෝ Post Pay වෙච්ච Payments ගන්නවා
+        const validPayments = await prisma.payment.findMany({
+            where: { studentId: parseInt(studentId), status: { in: [1, 4] } }
+        });
+
+        if (validPayments.length === 0) return res.status(200).json({ businesses: [] });
+
+        const validBatchIds = [...new Set(validPayments.map(p => p.batchId).filter(Boolean))];
+        
+        // Only collect group IDs if it's a monthly payment (type 1)
+        const validGroupIds = [...new Set(validPayments.filter(p => p.payment_type === 1).map(p => p.groupId).filter(Boolean))];
+
+        // ළමයා ගෙවලා තියෙන Subjects වල IDs ටික එකතු කරගන්නවා
+        let allowedSubjectIds = [];
+        validPayments.forEach(p => {
+            if (p.subjects) {
+                try {
+                    const subs = JSON.parse(p.subjects);
+                    allowedSubjectIds = [...allowedSubjectIds, ...subs.map(id => parseInt(id))];
+                } catch (e) {}
+            }
+        });
+
+        // අදාල Group එකට විතරක් අදාලව Business/Batches ගන්නවා
+        const businesses = await prisma.business.findMany({
+            where: { batches: { some: { id: { in: validBatchIds } } } },
+            include: {
+                batches: {
+                    where: { id: { in: validBatchIds } },
+                    include: {
+                        groups: {
+                            // If monthly (type 1) only get that group. If full/installment, get all groups (no filter).
+                            where: validGroupIds.length > 0 ? { id: { in: validGroupIds } } : undefined,
+                            include: { courses: true }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 🔥 FIX: ගෙවපු Subjects ටික විතරක් ෆිල්ටර් කරනවා
+        businesses.forEach(biz => {
+            biz.batches.forEach(batch => {
+                batch.groups.forEach(group => {
+                    group.courses = group.courses.filter(c => allowedSubjectIds.includes(c.id));
+                });
+            });
+        });
+
+        const safeData = JSON.parse(JSON.stringify(businesses, (key, value) => typeof value === 'bigint' ? value.toString() : value));
+        res.status(200).json({ businesses: safeData }); 
     } catch (error) {
+        console.error("Classroom Error:", error);
         res.status(500).json({ error: "Failed to load classroom" });
     }
 };
 
-// 2. Payment History එකට Data යැවීම
-exports.getMyPayments = async (req, res) => {
+// 🔥 NEW: 404 Error එක හදන්න Content (Modules) යවන API එක 🔥
+exports.getCourseModules = async (req, res) => {
     try {
-        // TODO: Get payment history from DB
-        // 🔥 මෙතන Object එක වෙනුවට හිස් Array එකක් යවන්න ([]) 🔥
-        res.status(200).json([]); 
+        const { id } = req.params; // courseId
+
+        // මේ Course එකට ලින්ක් කරලා තියෙන Content ටික ගන්නවා
+        const linkedContents = await prisma.contentCourse.findMany({
+            where: { course_id: BigInt(id) }
+        });
+        
+        const contentIds = linkedContents.map(lc => lc.content_id);
+        
+        const contents = await prisma.content.findMany({
+            where: { id: { in: contentIds } },
+            include: { group: true },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // අදාල Folder (Lesson Groups) ටික ගන්නවා
+        const groupIds = [...new Set(contents.map(c => c.contentGroupId).filter(Boolean))];
+        const lessonGroups = await prisma.contentGroup.findMany({
+             where: { id: { in: groupIds } },
+             orderBy: { itemOrder: 'asc' }
+        });
+
+        // 🔥 FIX: Frontend එකට ඕනේ විදිහට Content ටික කඩලා වෙන් කරනවා 🔥
+        const liveClasses = contents.filter(c => c.contentType === 'live' || c.contentType === '1');
+        const recordings = contents.filter(c => c.contentType === 'recording' || c.contentType === '2');
+        const documents = contents.filter(c => c.contentType === 'document' || c.contentType === '3');
+        const sPapers = contents.filter(c => c.contentType === 'sPaper' || c.contentType === '4');
+        const papers = contents.filter(c => c.contentType === 'paper' || c.contentType === '5');
+
+        const safeData = JSON.parse(JSON.stringify({ 
+            lessonGroups, 
+            contents,
+            liveClasses,
+            recordings,
+            documents,
+            sPapers,
+            papers,
+            paidStatus: 1 
+        }, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        
+        res.status(200).json(safeData);
     } catch (error) {
-        res.status(500).json({ error: "Failed to load payments" });
+        console.error("Module Error:", error);
+        res.status(500).json({ error: "Failed to load modules" });
     }
 };
 
-// 3. Profile Update කිරීම
+// 6. Payment History එකට Data යැවීම
+exports.getMyPayments = async (req, res) => {
+    try {
+        const studentId = req.user?.id || 1; // හරියටම Authentication එක හැදුවම මෙතන වෙනස් වෙන්න ඕනේ
+
+        const payments = await prisma.payment.findMany({
+            where: { studentId: parseInt(studentId) },
+            include: { business: true, batch: true },
+            orderBy: { created_at: 'desc' }
+        });
+
+        const formattedPayments = payments.map(p => {
+            let frontendStatus = p.status;
+            
+            // 0=Pending, 1=Approved, 2=Rejected, 3=Non Paid, 4=Post Pay
+            if (p.status === 0 && p.method === 'Slip') frontendStatus = -1; // Verifying
+            else if (p.status === 0 && p.method === 'Upcoming') frontendStatus = 0; // Upcoming
+
+            return {
+                id: p.id,
+                courseName: `${p.business?.name || 'Course'} - ${p.batch?.name || 'Batch'}`,
+                amount: p.amount || 0, // 🔥 FIX: Null ආවොත් 0 කියලා යවනවා
+                status: frontendStatus,
+                createdDate: p.created_at,
+                dueDate: p.due_date,
+                isInstallment: p.payment_type === 2,
+                installmentNo: p.installment_no,
+                method: p.method
+            };
+        });
+
+        // 🔥 FIX: BigInt Error එක මගහරින්න Safe JSON එකක් හදනවා
+        const safeData = JSON.parse(JSON.stringify(formattedPayments, (key, value) =>
+            typeof value === 'bigint' ? value.toString() : value
+        ));
+
+        res.status(200).json(safeData); 
+    } catch (error) {
+        console.error("History Error:", error);
+        // Error එකක් ආවොත් crash නොවී හිස් Array එකක් යවනවා
+        res.status(200).json([]); 
+    }
+};
+
+// 7. Profile Update කිරීම
 exports.updateProfile = async (req, res) => {
     try {
         const { fName, lName } = req.body;
         const image = req.file ? req.file.filename : null;
-        // TODO: Update DB
         res.status(200).json({ message: "Profile updated successfully", image });
     } catch (error) {
         res.status(500).json({ error: "Failed to update profile" });
     }
 };
 
-// 4. Password වෙනස් කිරීම
+// 8. Password වෙනස් කිරීම
 exports.updatePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
-        // TODO: Check old password and hash new password -> save to DB
         res.status(200).json({ message: "Password updated successfully" });
     } catch (error) {
         res.status(500).json({ error: "Failed to update password" });

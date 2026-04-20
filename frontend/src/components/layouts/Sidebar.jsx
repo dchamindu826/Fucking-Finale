@@ -1,10 +1,9 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
-    LayoutDashboard, Users, CalendarDays, ListTodo, MonitorPlay, 
-    MessageSquare, Banknote, LogOut, HeadphonesIcon, TrendingUp, 
-    PhoneCall, Package, Truck, Settings, ShieldCheck, Wallet 
-} from 'lucide-react'; // අන්තිමට Wallet දැම්මා
+    LayoutDashboard, Users, MonitorPlay, 
+    LogOut, HeadphonesIcon, Wallet, MessageCircle
+} from 'lucide-react'; 
 
 export default function Sidebar({ userRole, loggedInUser, handleLogout, currentBg, setBgImage }) {
   
@@ -26,6 +25,7 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
 
   const isSystemAdmin = roleName === 'SYSTEM_ADMIN' || roleName === 'System Admin' || roleName === 'Director';
   const isManager = roleName === 'MANAGER' || roleName === 'Manager' || roleName === 'ASS MANAGER';
+  const isStaff = !isSystemAdmin && !isManager && roleName !== 'STUDENT' && roleName !== 'user';
   const isStudent = roleName === 'STUDENT' || roleName === 'user';
 
   return (
@@ -53,6 +53,7 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/staff" className={getNavLinkClass}><Users size={18} /> Staff Management</NavLink>
             <NavLink to="/admin/content-hub" className={getNavLinkClass}><MonitorPlay size={18} /> Content Hub</NavLink>
             <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
+            <NavLink to="/admin/crm-setup" className={getNavLinkClass}><HeadphonesIcon size={18} /> CRM Setup (Admin)</NavLink>
           </>
         )}
 
@@ -63,6 +64,16 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/content-hub" className={getNavLinkClass}><MonitorPlay size={18} /> Content Hub</NavLink>
             <NavLink to="/admin/staff" className={getNavLinkClass}><Users size={18} /> Staff Management</NavLink>
             <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
+          </>
+        )}
+
+        {/* 🔥 NEW: Active CRM Workspace (Visible to Admin, Manager, and Staff) 🔥 */}
+        {(isSystemAdmin || isManager || isStaff) && (
+          <>
+            <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Workspace</div>
+            <NavLink to="/workspace/crm" className={getNavLinkClass}>
+              <MessageCircle size={18} /> Coordinator CRM
+            </NavLink>
           </>
         )}
 

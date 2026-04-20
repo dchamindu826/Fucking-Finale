@@ -10,6 +10,8 @@ const app = express();
 app.use(cors()); 
 app.use(express.json()); 
 
+const coordinatorCrmRoutes = require('./routes/coordinatorCrmRoutes');
+
 // Static Folders
 app.use('/documents', express.static(path.join(__dirname, 'storage/documents')));
 app.use('/storage/icons', express.static(path.join(__dirname, 'storage/icons'))); 
@@ -27,6 +29,9 @@ app.use('/api', require('./routes/businessRoutes')); // Business routes (admin &
 app.use('/api/public', require('./routes/publicRoutes')); // Landing page data
 app.use('/api/admin', require('./routes/adminRoutes')); // Overviews
 app.use('/api/admin/payments', require('./routes/paymentRoutes'));
+app.use('/api/admin/crm', require('./routes/crmRoutes'));
+
+app.use('/api/coordinator-crm', coordinatorCrmRoutes);
 
 // ================= SERVER START =================
 const PORT = process.env.PORT || 5000;
