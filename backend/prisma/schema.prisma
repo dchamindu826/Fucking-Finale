@@ -243,6 +243,12 @@ model Lead {
   updatedAt    DateTime      @updatedAt
   
   messages     ChatMessage[]
+
+  phase         Int     @default(1)
+callMethod    String? // direct, whatsapp, 3cx
+callStatus    String  @default("pending") // pending, no_answer, reject, answered
+feedback      String?
+isAutoAssigned Boolean @default(false)
 }
 
 model ChatMessage {
