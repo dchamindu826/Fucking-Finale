@@ -4,6 +4,10 @@ import { Toaster } from 'react-hot-toast';
 
 // Layout & Pages
 import Home from './pages/web/pages/Home'; 
+import AboutUs from './pages/web/pages/AboutUs'; // 🔥 NEW 🔥
+import ContactUs from './pages/web/pages/ContactUs'; // 🔥 NEW 🔥
+import PrivacyPolicy from './pages/web/pages/PrivacyPolicy'; // 🔥 NEW 🔥
+import Terms from './pages/web/pages/Terms'; // 🔥 NEW 🔥
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import MainLayout from "./components/layouts/MainLayout";
@@ -17,7 +21,7 @@ import PaymentManagement from './components/common/PaymentManagement';
 // System Admin CRM Setup
 import CrmManagement from './components/admin/CrmManagement';
 
-// 🔥 NEW: Coordinator CRM Dashboard (For Manager & Staff)
+// Coordinator CRM Dashboard (For Manager & Staff)
 import CoordinatorDashboard from './pages/ClassCoordinator/CoordinatorDashboard';
 
 // Department Dashboards (Mangers & Staff)
@@ -75,6 +79,13 @@ export default function App() {
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home loggedInUser={loggedInUser} />} />
+        
+        {/* 🔥 NEW WEB PAGES ROUTES 🔥 */}
+        <Route path="/about-us" element={<AboutUs />} />
+        <Route path="/contact-us" element={<ContactUs />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<Terms />} />
+
         <Route path="/register" element={<Register />} />
         
         <Route 
@@ -102,7 +113,7 @@ export default function App() {
             {/* System Admin CRM Configuration */}
             <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
 
-            {/* 🔥 NEW: Active CRM Interface for Staff & Managers 🔥 */}
+            {/* Active CRM Interface for Staff & Managers */}
             <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
 
         </Route>

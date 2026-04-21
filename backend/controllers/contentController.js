@@ -84,28 +84,45 @@ exports.updateGroup = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to update group" }); }
 };
 
+// 🔥 FIX: Group eka delete karana function eka 🔥
+exports.deleteGroup = async (req, res) => {
+    try {
+        const { group_id } = req.body;
+        await prisma.group.delete({ 
+            where: { id: parseInt(group_id) } 
+        });
+        res.status(200).json({ message: "Payment Group Deleted" });
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Failed to delete group. Please remove subjects assigned to this group first." }); 
+    }
+};
+
 // ================= SUBJECTS =================
 
 exports.createSubject = async (req, res) => {
     try {
-        const { name, code, stream, streams, description, itemOrder, groupPrices } = req.body;
+        const { name, code, stream, streams, description, itemOrder, groupPrices, isDiscountExcluded, lecturerName } = req.body;
         const parsedPrices = JSON.parse(groupPrices || '[]');
+        const excludeDiscount = isDiscountExcluded === 'true' || isDiscountExcluded === true || isDiscountExcluded === '1';
         
         if (parsedPrices.length === 0) return res.status(400).json({ error: "Please select at least one group" });
 
-        // හැම group එකකටම අදාලව course එකක් DB එකේ හැදෙන්න ඕන
+        // 🔥 FIX: Tute Cover images tika JSON ekata attach karanawa 🔥
+        if (req.files && req.files.length > 0) {
+            parsedPrices.forEach(gp => {
+                const file = req.files.find(f => f.fieldname === `tuteCover_${gp.groupId}`);
+                if (file) gp.tuteCover = file.filename;
+            });
+        }
+
         const coursePromises = parsedPrices.map(gp => {
             return prisma.course.create({
                 data: { 
-                    name, 
-                    code, 
-                    stream, 
-                    streams: JSON.stringify(streams), 
-                    description, 
-                    itemOrder: parseInt(itemOrder || 1), 
-                    price: parseFloat(gp.price || 0), 
-                    groupPrices, 
-                    groupId: parseInt(gp.groupId) // අදාල group එකේ ID එක
+                    name, code, stream, streams: JSON.stringify(streams), description, lecturerName,
+                    itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), 
+                    groupPrices: JSON.stringify(parsedPrices), groupId: parseInt(gp.groupId),
+                    isDiscountExcluded: excludeDiscount
                 }
             });
         });
@@ -120,30 +137,40 @@ exports.createSubject = async (req, res) => {
 
 exports.updateSubject = async (req, res) => {
     try {
-        const { course_id, name, code, stream, streams, description, itemOrder, groupPrices } = req.body;
+        const { course_id, name, code, stream, streams, description, itemOrder, groupPrices, isDiscountExcluded, lecturerName } = req.body;
         const parsedPrices = JSON.parse(groupPrices || '[]');
+        const excludeDiscount = isDiscountExcluded === 'true' || isDiscountExcluded === true || isDiscountExcluded === '1';
 
-        // පරණ Subject එකේ විස්තර ගන්නවා (නම හොයාගන්න)
         const originalCourse = await prisma.course.findUnique({ where: { id: parseInt(course_id) } });
         if (!originalCourse) return res.status(404).json({ error: "Course not found" });
 
-        // තෝරපු හැම group එකකටම update හෝ create කරනවා
+        // 🔥 FIX: Tute Cover images tika JSON ekata attach karanawa 🔥
+        if (req.files && req.files.length > 0) {
+            parsedPrices.forEach(gp => {
+                const file = req.files.find(f => f.fieldname === `tuteCover_${gp.groupId}`);
+                if (file) gp.tuteCover = file.filename;
+            });
+        }
+
         const updatePromises = parsedPrices.map(async (gp) => {
-            // මේ Group එක ඇතුලේ මේ නමින් Subject එකක් කලින් හදලද බලනවා
             const existingCourse = await prisma.course.findFirst({
                 where: { name: originalCourse.name, groupId: parseInt(gp.groupId) }
             });
 
             if (existingCourse) {
-                // තියෙනවා නම් ඒක update කරනවා
+                // Parana image eka thiyagannawa aluth ekak nathnam
+                const existingGpData = JSON.parse(existingCourse.groupPrices || '[]').find(p => parseInt(p.groupId) === parseInt(gp.groupId));
+                if (!gp.tuteCover && existingGpData && existingGpData.tuteCover) {
+                    gp.tuteCover = existingGpData.tuteCover;
+                }
+
                 return prisma.course.update({
                     where: { id: existingCourse.id },
-                    data: { name, code, stream, streams: JSON.stringify(streams), description, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices }
+                    data: { name, code, stream, streams: JSON.stringify(streams), description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), isDiscountExcluded: excludeDiscount }
                 });
             } else {
-                // නැත්නම් අලුතින් ඒ Group එකට හදනවා (කලින් select කරලා නොතිබුණ එකක් නම්)
                 return prisma.course.create({
-                    data: { name, code, stream, streams: JSON.stringify(streams), description, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices, groupId: parseInt(gp.groupId) }
+                    data: { name, code, stream, streams: JSON.stringify(streams), description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), groupId: parseInt(gp.groupId), isDiscountExcluded: excludeDiscount }
                 });
             }
         });
@@ -155,6 +182,45 @@ exports.updateSubject = async (req, res) => {
         res.status(500).json({ error: "Failed to update subject" }); 
     }
 };
+
+// 🔥 NEW: Assign Lecturer Route 🔥
+exports.assignLecturer = async (req, res) => {
+    try {
+        const { subjectName, lecturerName } = req.body;
+        // Update all courses with this name in the batch
+        await prisma.course.updateMany({
+            where: { name: subjectName },
+            data: { lecturerName }
+        });
+        res.status(200).json({ message: "Lecturer Assigned Successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to assign lecturer" });
+    }
+};
+
+
+// ================= DELETE FUNCTIONS (NEW) =================
+exports.deleteBusiness = async (req, res) => {
+    try {
+        await prisma.business.delete({ where: { id: parseInt(req.body.business_id) } });
+        res.status(200).json({ message: "Business Deleted" });
+    } catch (e) { res.status(500).json({ error: "Failed to delete business. Please delete its batches first." }); }
+};
+
+exports.deleteBatch = async (req, res) => {
+    try {
+        await prisma.batch.delete({ where: { id: parseInt(req.body.batch_id) } });
+        res.status(200).json({ message: "Batch Deleted" });
+    } catch (e) { res.status(500).json({ error: "Failed to delete batch. Please delete its groups first." }); }
+};
+
+exports.deleteSubject = async (req, res) => {
+    try {
+        await prisma.course.delete({ where: { id: parseInt(req.body.course_id) } });
+        res.status(200).json({ message: "Subject Deleted" });
+    } catch (e) { res.status(500).json({ error: "Failed to delete subject." }); }
+};
+
 
 // ================= INSTALLMENTS =================
 exports.getInstallments = async (req, res) => {

@@ -5,7 +5,7 @@ const crypto = require('crypto');
 // 1. Dashboard එකට Posts, Alerts සහ Real Stats යැවීම
 exports.getStudentDashboard = async (req, res) => {
     try {
-        const studentId = req.user?.id || 1; 
+        const studentId = req.user?.userId || req.user?.id;
 
         // 1. Real Posts
         const posts = await prisma.post.findMany({
@@ -157,7 +157,7 @@ exports.enrollStudent = async (req, res) => {
     try {
         const { businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId, amount } = req.body;
         const slipFileName = req.file ? req.file.filename : null;
-        const studentId = req.user?.id || 1; 
+        const studentId = req.user?.userId || req.user?.id;
 
         // 🔥 FIX: Payment එකත් එක්ක Group එකයි Subjects ටිකයි සේව් කරනවා
         await prisma.payment.create({
@@ -185,7 +185,7 @@ exports.enrollStudent = async (req, res) => {
 // 5. My Classroom එකට Data යැවීම
 exports.getStudentClassroom = async (req, res) => {
     try {
-        const studentId = req.user?.id || 1; 
+        const studentId = req.user?.userId || req.user?.id;
 
         // ළමයාගේ Approve හෝ Post Pay වෙච්ච Payments ගන්නවා
         const validPayments = await prisma.payment.findMany({
@@ -297,7 +297,7 @@ exports.getCourseModules = async (req, res) => {
 // 6. Payment History එකට Data යැවීම
 exports.getMyPayments = async (req, res) => {
     try {
-        const studentId = req.user?.id || 1; // හරියටම Authentication එක හැදුවම මෙතන වෙනස් වෙන්න ඕනේ
+        const studentId = req.user?.userId || req.user?.id;
 
         const payments = await prisma.payment.findMany({
             where: { studentId: parseInt(studentId) },
@@ -341,7 +341,16 @@ exports.getMyPayments = async (req, res) => {
 // 7. Profile Update කිරීම
 exports.updateProfile = async (req, res) => {
     try {
-        const studentId = req.user?.id || 1; // Auth implementation eka anuwa
+        // 🔥 FIX: Token eken ena ID format 4kma check karanawa! 🔥
+        const rawId = req.user?.userId || req.user?.id || req.userId || req.user;
+        const studentId = parseInt(rawId);
+
+        // ID eka catch une nattam server eka crash wenne nathi wenna error eka gannawa
+        if (!studentId || isNaN(studentId)) {
+            console.error("Auth Error: Could not find User ID in request.", req.user);
+            return res.status(401).json({ error: "User authorization failed. Please relogin." });
+        }
+
         const { addressHouseNo, addressStreet, city, district } = req.body;
         const image = req.file ? req.file.filename : undefined;
 
@@ -352,13 +361,13 @@ exports.updateProfile = async (req, res) => {
             district
         };
 
-        // If your schema doesn't have an image column in the User table yet, 
-        // you only return the filename to localStorage. 
-        // But if it does, you can update it in the DB like this:
-        // if (image) updateData.profileImage = image;
+        // Image ekak upload karala thiyenawanam witharak DB eka update karanawa
+        if (image) {
+             updateData.image = image; 
+        }
 
         await prisma.user.update({
-            where: { id: parseInt(studentId) },
+            where: { id: studentId },
             data: updateData
         });
 

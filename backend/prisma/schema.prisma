@@ -23,10 +23,13 @@ model User {
   role           String   @default("Student")
   department     String?
   businessType   String?
+  
+  image          String?  // 🔥 FIX: Me line eka aluthen danna 🔥
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  payments Payment[] // Added opposite relation
+  payments Payment[] 
   assignedLeads Lead[]        @relation("AssignedLeads")
   sentMessages  ChatMessage[] @relation("SentMessages")
   autoAssignQuota AutoAssignQuota?
@@ -85,19 +88,23 @@ model Group {
 }
 
 model Course {
-  id          Int      @id @default(autoincrement())
-  name        String
-  code        String?
-  stream      String?
-  streams     String?
-  description String?  @db.Text
-  itemOrder   Int      @default(1)
-  courseType  Int      @default(1)
-  price       Float    @default(0)
-  groupPrices String?  @db.Text
-  groupId     Int?
-  group       Group?   @relation(fields: [groupId], references: [id])
-  createdAt   DateTime @default(now())
+  id                 Int      @id @default(autoincrement())
+  name               String
+  code               String?
+  stream             String?
+  streams            String?
+  description        String?  @db.Text
+  itemOrder          Int      @default(1)
+  courseType         Int      @default(1)
+  price              Float    @default(0)
+  groupPrices        String?  @db.Text
+  
+  isDiscountExcluded Boolean  @default(false) 
+  lecturerName       String?  // 🔥 NEW: Me line eka add karanna 🔥
+
+  groupId            Int?
+  group              Group?   @relation(fields: [groupId], references: [id])
+  createdAt          DateTime @default(now())
 }
 
 model Installment {

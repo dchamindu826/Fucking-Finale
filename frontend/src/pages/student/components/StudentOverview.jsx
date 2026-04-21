@@ -12,8 +12,12 @@ export default function StudentOverview() {
     
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
+    // 🔥 FIX: Extract base URL automatically from axios setup 🔥
+    const backendBaseUrl = axios.defaults.baseURL ? axios.defaults.baseURL.replace('/api', '') : 'https://imacampus.online';
+
+    // 🔥 FIX: Use dynamic base URL for images 🔥
     const profilePic = user.image && user.image !== 'default.png' && user.image !== 'null'
-        ? `http://72.62.249.211:5000/storage/images/${user.image}` 
+        ? `${backendBaseUrl}/storage/images/${user.image}` 
         : null;
 
     useEffect(() => {
@@ -117,8 +121,9 @@ export default function StudentOverview() {
                                 <div className="bg-white/5 border border-white/5 rounded-2xl p-8 md:p-10 text-center text-white/50 text-sm md:text-base font-medium">No new updates available.</div>
                             ) : (
                                 data?.posts?.map((post) => {
+                                    // 🔥 FIX: Use dynamic backend URL for post images 🔥
                                     const postImage = post.image && post.image !== 'default.png' && post.image !== 'null' 
-                                        ? `http://72.62.249.211:5000/storage/posts/${post.image}` 
+                                        ? `${backendBaseUrl}/storage/posts/${post.image}` 
                                         : null;
 
                                     return (

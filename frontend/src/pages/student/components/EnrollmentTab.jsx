@@ -21,7 +21,14 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
   const [slipFile, setSlipFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const getImageUrl = (imageName) => (!imageName || imageName === 'default.png' || imageName === 'null') ? '/logo.png' : `http://72.62.249.211:5000/storage/icons/${imageName}`;
+  // Extract base URL automatically
+  const backendBaseUrl = axios.defaults.baseURL ? axios.defaults.baseURL.replace('/api', '') : 'https://imacampus.online';
+
+  // Dynamic base URL for images
+  const getImageUrl = (imageName) => (!imageName || imageName === 'default.png' || imageName === 'null') 
+      ? '/logo.png' 
+      : `${backendBaseUrl}/storage/icons/${imageName}`;
+
   const parseStreams = (streamString) => streamString ? streamString.split(',').map(s => s.trim()).filter(s => s) : [];
   
   const getFilteredBatches = () => selectedBusiness?.batches || [];
@@ -51,24 +58,40 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
     return courses;
   };
 
+  // 🔥 FIX: Check how many ELIGIBLE subjects are selected (excluding 'isDiscountExcluded')
   const getActiveDiscount = () => {
       if (!selectedGroup || !selectedGroup.discount_rules) return null;
       try {
           const rules = JSON.parse(selectedGroup.discount_rules);
           rules.sort((a, b) => b.courseCount - a.courseCount);
+
+          // Only count subjects that are NOT excluded from discounts
+          const eligibleSubjectsCount = getFilteredCourses().filter(c => selectedSubjects.includes(c.id) && !c.isDiscountExcluded).length;
+
           for (let rule of rules) {
-              if (selectedSubjects.length >= rule.courseCount) return { triggerCount: rule.courseCount, newPricePerCourse: rule.pricePerCourse };
+              if (eligibleSubjectsCount >= rule.courseCount) return { triggerCount: rule.courseCount, newPricePerCourse: rule.pricePerCourse };
           }
       } catch (e) {}
       return null;
   };
 
+  // 🔥 FIX: Calculate total by checking if each subject is eligible for the active discount
   const calculateTotal = () => {
     const courses = getFilteredCourses();
     if (!selectedGroup || !courses || selectedSubjects.length === 0) return 0;
+    
     const activeDiscount = getActiveDiscount();
-    if (activeDiscount) return selectedSubjects.length * activeDiscount.newPricePerCourse;
-    return courses.filter(c => selectedSubjects.includes(c.id)).reduce((sum, course) => sum + Number(course.price || 0), 0);
+    let total = 0;
+
+    courses.filter(c => selectedSubjects.includes(c.id)).forEach(course => {
+        if (activeDiscount && !course.isDiscountExcluded) {
+            total += activeDiscount.newPricePerCourse; // Apply discount price
+        } else {
+            total += Number(course.price || 0); // Apply normal price
+        }
+    });
+    
+    return total;
   };
 
   const getOriginalTotal = () => getFilteredCourses().filter(c => selectedSubjects.includes(c.id)).reduce((sum, course) => sum + Number(course.price || 0), 0);
@@ -96,37 +119,33 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
       }
   };
 
-
-const handleFinalSubmit = async () => {
+  const handleFinalSubmit = async () => {
     if (paymentMethod === 'slip' && !slipFile) return toast.error("Please upload your bank slip.");
     
     try {
       setIsSubmitting(true);
       const amountToPay = finalPaymentType === 'installment' ? installmentStepsParsed[0]?.amount : calculateTotal();
-      const orderId = `ORD-${Date.now()}`; // Create a unique order ID
+      const orderId = `ORD-${Date.now()}`;
 
       if (paymentMethod === 'payhere') {
-          // PayHere Payment Logic
-          // 1. Backend එකෙන් Hash එකක් ගන්න
           const hashRes = await axios.post('/student/payhere-hash', { 
               amount: amountToPay, 
               orderId: orderId,
               currency: "LKR"
           });
 
-          // 2. PayHere Object එක හදන්න
           const payment = {
-              sandbox: true, // Live දානකොට false කරන්න
-              merchant_id: "YOUR_PAYHERE_MERCHANT_ID", // මෙතන ඔයාගේ Merchant ID එක දාන්න
-              return_url: "http://localhost:5173/student", // Payment එකෙන් පස්සේ එන තැන
-              cancel_url: "http://localhost:5173/student",
-              notify_url: "http://72.62.249.211:5000/api/student/payhere-notify", // Backend Webhook එක
+              sandbox: true, 
+              merchant_id: "YOUR_PAYHERE_MERCHANT_ID", 
+              return_url: window.location.origin + "/student/dashboard", 
+              cancel_url: window.location.origin + "/student/dashboard",
+              notify_url: `${backendBaseUrl}/api/student/payhere-notify`, 
               order_id: orderId,
               items: "Course Enrollment",
               amount: amountToPay,
               currency: "LKR",
               hash: hashRes.data.hash,
-              first_name: "Student", // User ගේ විස්තර දාන්න (user.fName)
+              first_name: "Student", 
               last_name: "Name",
               email: "student@imacampus.lk",
               phone: "0770000000",
@@ -135,10 +154,8 @@ const handleFinalSubmit = async () => {
               country: "Sri Lanka"
           };
 
-          // PayHere Popup එක Close උනාම හෝ Success උනාම වෙන දේ
           window.payhere.onCompleted = async function onCompleted(orderId) {
               toast.success("Payment successful! Processing enrollment...");
-              // Payment එක හරි ගියාම Backend එකට save කරන්න යවනවා
               await saveEnrollmentToBackend("payhere", orderId);
           };
 
@@ -152,23 +169,18 @@ const handleFinalSubmit = async () => {
               setIsSubmitting(false);
           };
 
-          // PayHere Popup එක අරින්න
           window.payhere.startPayment(payment);
 
       } else {
-          // Slip Upload Logic (කලින් තිබ්බ එකමයි)
           await saveEnrollmentToBackend("slip", null);
       }
     } catch (error) {
       toast.error(error.response?.data?.error || "Error processing request.");
       setIsSubmitting(false);
     }
-};
+  };
 
-// Data DB එකට යවන function එක
-const saveEnrollmentToBackend = async (method, payhereOrderId) => {
-    
-    // 🔥 FIX: Amount එක calculate කරලා ගන්නවා
+  const saveEnrollmentToBackend = async (method, payhereOrderId) => {
     const amountToPay = finalPaymentType === 'installment' 
                         ? installmentStepsParsed[0]?.amount 
                         : calculateTotal();
@@ -180,8 +192,6 @@ const saveEnrollmentToBackend = async (method, payhereOrderId) => {
     formData.append('subjects', JSON.stringify(selectedSubjects));
     formData.append('paymentMethodChosen', finalPaymentType); 
     formData.append('method', method);
-    
-    // 🔥 FIX: Amount එක Backend එකට යවනවා
     formData.append('amount', amountToPay); 
 
     if (payhereOrderId) formData.append('orderId', payhereOrderId);
@@ -200,7 +210,7 @@ const saveEnrollmentToBackend = async (method, payhereOrderId) => {
     } finally {
         setIsSubmitting(false);
     }
-};
+  };
 
   const handleBackNavigation = () => {
     if (selectionLevel > 0) {
@@ -232,7 +242,7 @@ const saveEnrollmentToBackend = async (method, payhereOrderId) => {
                 {/* LEVEL 0 */}
                 {selectionLevel === 0 && (
                     <div className="space-y-8 w-full animate-fade-in">
-                      <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-8 text-center uppercase tracking-wide">Select An Institute</h2>
+                      <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-8 text-center uppercase tracking-wide">All Courses</h2>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {businesses.map(business => (
                           <div key={business.id} onClick={() => { setSelectedBusiness(business); setSelectionLevel(1); }}
@@ -353,7 +363,6 @@ const saveEnrollmentToBackend = async (method, payhereOrderId) => {
                               <div className="space-y-4">
                                  <h4 className="text-sm font-bold text-white/50 mb-4 uppercase tracking-wider">Choose Subjects</h4>
                                  
-                                 {/* OPTIMIZED LIST RENDERING (No heavy transitions) */}
                                  <div className="flex flex-col gap-4">
                                     {getFilteredCourses().map(course => (
                                       <label key={course.id} className={`flex items-center p-5 md:p-6 rounded-2xl cursor-pointer border transition-colors ${
@@ -372,14 +381,20 @@ const saveEnrollmentToBackend = async (method, payhereOrderId) => {
                                               <span className="block font-bold text-white text-lg md:text-xl mb-1">{course.name}</span>
                                               {course.code && <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20 font-bold uppercase tracking-widest">{course.code}</span>}
                                           </div>
-                                          <div className="flex flex-col md:items-end bg-white/5 px-4 py-2 rounded-xl border border-white/5">
-                                              {getActiveDiscount() && selectedSubjects.includes(course.id) ? (
+                                          <div className="flex flex-col md:flex-end bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                                              {/* 🔥 UI FIX: Highlight Excluded vs Included Prices properly 🔥 */}
+                                              {getActiveDiscount() && selectedSubjects.includes(course.id) && !course.isDiscountExcluded ? (
                                                   <>
                                                       <span className="text-white/40 line-through text-xs font-medium mb-0.5">LKR {course.price}</span>
                                                       <span className="text-yellow-400 font-black text-lg md:text-xl flex items-center gap-1.5"><Tag size={14}/> LKR {getActiveDiscount().newPricePerCourse}</span>
                                                   </>
                                               ) : (
-                                                  <span className="text-red-400 font-black text-lg md:text-xl">LKR {course.price}</span>
+                                                  <>
+                                                      {course.isDiscountExcluded && selectedSubjects.includes(course.id) && (
+                                                          <span className="text-orange-400/80 text-[9px] uppercase tracking-widest font-bold mb-0.5">Fixed Price</span>
+                                                      )}
+                                                      <span className="text-red-400 font-black text-lg md:text-xl">LKR {course.price}</span>
+                                                  </>
                                               )}
                                           </div>
                                         </div>

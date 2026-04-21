@@ -17,6 +17,9 @@ export default function MyClassroom() {
     const [openedCourseId, setOpenedCourseId] = useState(null);
     const [activeStream, setActiveStream] = useState('All');
 
+    // 🔥 FIX: Extract base URL automatically from axios setup 🔥
+    const backendBaseUrl = axios.defaults.baseURL ? axios.defaults.baseURL.replace('/api', '') : 'https://imacampus.online';
+
     useEffect(() => {
         axios.get('/student/classroom')
             .then(res => setBusinesses(res.data?.businesses || []))
@@ -24,7 +27,10 @@ export default function MyClassroom() {
             .finally(() => setLoading(false));
     }, []);
 
-    const getImageUrl = (imageName) => imageName && imageName !== 'null' && imageName !== 'default.png' ? `http://72.62.249.211:5000/storage/icons/${imageName}` : '/logo.png';
+    // 🔥 FIX: Use dynamic base URL for images 🔥
+    const getImageUrl = (imageName) => imageName && imageName !== 'null' && imageName !== 'default.png' 
+        ? `${backendBaseUrl}/storage/icons/${imageName}` 
+        : '/logo.png';
 
     const getEnrolledStreams = (business) => {
         if (!business) return [];
@@ -111,7 +117,7 @@ export default function MyClassroom() {
 
             {selectionLevel === 0 && (
                 <div className="glass-card rounded-[2rem] p-6 md:p-10 border-white/10">
-                    <h3 className="text-xl md:text-2xl font-bold text-white mb-8 flex items-center gap-3"><BookOpen className="text-red-500"/> Select Institution</h3>
+                    <h3 className="text-xl md:text-2xl font-bold text-white mb-8 flex items-center gap-3"><BookOpen className="text-red-500"/> Select Course</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {businesses.map(biz => (
                             <div key={biz.id} onClick={() => { setSelectedBusiness(biz); setSelectionLevel(1); }} className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-red-500/50 p-8 rounded-[2rem] flex flex-col items-center cursor-pointer transition-colors group">

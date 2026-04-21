@@ -28,7 +28,7 @@ const uploadPost = multer({ storage: postStorage });
 
 // Content Hub
 router.post('/admin/manager/content-group/add', controller.addContentGroup);
-router.delete('/admin/content-group/delete', controller.deleteContentGroup); // 🔥 ADDED FOLDER DELETE ROUTE
+router.delete('/admin/content-group/delete', controller.deleteContentGroup);
 router.post('/admin/manager/contents/mass-assign', uploadDoc.single('file'), controller.addContentMassAssign);
 router.put('/admin/manager/contents/update', uploadDoc.single('file'), controller.updateContentMassAssign);
 router.delete('/admin/content/delete', controller.deleteContent);
@@ -37,6 +37,8 @@ router.get('/admin/manager/get-contents', controller.getContents);
 // Groups
 router.post('/course-setup/group', controller.createGroup);
 router.put('/course-setup/group/update', controller.updateGroup);
+// 🔥 FIX: Group eka delete karana route eka 🔥
+router.delete('/course-setup/group', controller.deleteGroup); 
 
 // Posts 
 router.post('/admin/manager/post/create', uploadPost.single('image'), controller.createAdminPost);
@@ -63,14 +65,18 @@ router.get('/admin/batches/:bizId', async (req, res) => {
 // Businesses Setup
 router.post('/course-setup/business', uploadIcon.single('logo'), controller.createBusiness);
 router.put('/admin/business/update', uploadIcon.single('logo'), controller.updateBusiness);
+router.delete('/admin/business/delete', controller.deleteBusiness); // 🔥 NEW
 
 // Batches Setup
 router.post('/course-setup/batch', uploadIcon.single('logo'), controller.createBatch);
 router.put('/admin/batch/update', uploadIcon.single('logo'), controller.updateBatch);
+router.delete('/admin/batch/delete', controller.deleteBatch); // 🔥 NEW
 
-// Subjects Setup
-router.post('/course-setup/subject', controller.createSubject);
-router.put('/admin/course/update', controller.updateSubject);
+// Subjects Setup (🔥 FIX: uploadIcon.any() damma images ganna puluwan wenna 🔥)
+router.post('/course-setup/subject', uploadIcon.any(), controller.createSubject);
+router.put('/admin/course/update', uploadIcon.any(), controller.updateSubject);
+router.delete('/admin/course/delete', controller.deleteSubject); 
+router.put('/admin/course/assign-lecturer', controller.assignLecturer); // 🔥 NEW LECTURER ROUTE 🔥
 
 // Installments Setup
 router.post('/course-setup/installment', controller.createInstallment);

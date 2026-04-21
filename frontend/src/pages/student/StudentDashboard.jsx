@@ -10,13 +10,11 @@ import StudentOverview from './components/StudentOverview';
 import DeliveryHub from './components/DeliveryHub';
 import ProfileSettings from './components/ProfileSettings';
 
-// 🔥 CRITICAL FIX: React Component එකට උඩින් මේක දාන්න. (එතකොට API යන්න කලින්ම Token එක අල්ලගන්නවා) 🔥
 const urlParams = new URLSearchParams(window.location.search);
 const ghostToken = urlParams.get('token');
 const isGhostMode = urlParams.get('embedded') === 'true';
 
 if (isGhostMode && ghostToken) {
-    // Iframe එක ඇතුලේදී Axios එකෙන් Manager ගේ Token එක අදින එක නවත්තන්න මෙතනදී LocalStorage එක Hack කරනවා.
     const originalGetItem = Storage.prototype.getItem;
     Storage.prototype.getItem = function(key) {
         if (key === 'token' || key === 'userToken') return ghostToken;
@@ -34,7 +32,6 @@ const StudentDashboard = () => {
   const urlBusinessId = searchParams.get('businessId');
 
   useEffect(() => {
-    // Normal Web Login ekak nam witharak Token eka Save karanawa
     if (!isGhostMode && ghostToken) {
         localStorage.setItem('token', ghostToken);
         localStorage.setItem('userToken', ghostToken); 
@@ -45,7 +42,6 @@ const StudentDashboard = () => {
         localStorage.setItem('businessId', urlBusinessId); 
     }
 
-    // URL එක Clean කරනවා
     if (ghostToken || urlBusinessId) {
         const cleanUrl = isGhostMode ? `${location.pathname}?embedded=true` : location.pathname;
         navigate(cleanUrl, { replace: true });
@@ -58,6 +54,9 @@ const StudentDashboard = () => {
 
   const [businesses, setBusinesses] = useState([]);
   const [alerts, setAlerts] = useState([]); 
+
+  // 🔥 FIX: Background Image State eka gatta 🔥
+  const [bgImage, setBgImage] = useState('/student-bg.jpg'); 
 
   useEffect(() => {
     const fetchData = async () => {
@@ -85,10 +84,25 @@ const StudentDashboard = () => {
   if (loading) return <div className="flex h-screen items-center justify-center text-red-500 font-bold text-xl tracking-wide animate-pulse">Loading Workspace...</div>;
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center p-2 sm:p-4 md:p-8 relative overflow-hidden">
+    // 🔥 FIX: Container eke background eka pass kara + dark overlay ekak damma 🔥
+    <div 
+        className="min-h-screen w-full flex items-center justify-center p-2 sm:p-4 md:p-8 relative overflow-hidden bg-cover bg-center transition-all duration-500"
+        style={{ backgroundImage: `url(${bgImage})` }}
+    >
+      {/* Dark overlay for the background wallpaper */}
+      <div className="absolute inset-0 bg-black/60 z-0"></div>
+
       <div className="glass-container w-full max-w-[1600px] h-[98vh] md:h-[92vh] rounded-3xl md:rounded-[2.5rem] flex overflow-hidden relative z-10">
           
-          <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} handleLogout={handleLogout} />
+          <Sidebar 
+            activeTab={activeTab} 
+            setActiveTab={setActiveTab} 
+            sidebarOpen={sidebarOpen} 
+            setSidebarOpen={setSidebarOpen} 
+            handleLogout={handleLogout} 
+            bgImage={bgImage} 
+            setBgImage={setBgImage} 
+          />
 
           <main className="flex-1 flex flex-col h-full overflow-hidden relative z-10 w-full">
             
@@ -124,14 +138,33 @@ const StudentDashboard = () => {
                     </div>
                 )}
 
-                <div className="w-full h-full animate-fade-in">
-                  {activeTab === 'home' && <StudentOverview />}
-                  {activeTab === 'courses' && <EnrollmentTab businesses={businesses} setActiveTab={setActiveTab} />}
-                  {activeTab === 'history' && <PaymentHistory />}
-                  {activeTab === 'mycourses' && <MyClassroom setActiveTab={setActiveTab} />} 
-                  {activeTab === 'delivery' && <DeliveryHub />} 
-                  {activeTab === 'profile' && <ProfileSettings />}
-                </div>
+                <div className="w-full h-full animate-fade-in relative">
+    {/* display: none (hidden) use karanawa tab destroy karanne nathuwa */}
+    
+    <div className={`h-full ${activeTab === 'home' ? 'block' : 'hidden'}`}>
+        <StudentOverview />
+    </div>
+
+    <div className={`h-full ${activeTab === 'courses' ? 'block' : 'hidden'}`}>
+        <EnrollmentTab businesses={businesses} setActiveTab={setActiveTab} />
+    </div>
+
+    <div className={`h-full ${activeTab === 'history' ? 'block' : 'hidden'}`}>
+        <PaymentHistory />
+    </div>
+
+    <div className={`h-full ${activeTab === 'mycourses' ? 'block' : 'hidden'}`}>
+        <MyClassroom setActiveTab={setActiveTab} />
+    </div>
+
+    <div className={`h-full ${activeTab === 'delivery' ? 'block' : 'hidden'}`}>
+        <DeliveryHub />
+    </div>
+
+    <div className={`h-full ${activeTab === 'profile' ? 'block' : 'hidden'}`}>
+        <ProfileSettings />
+    </div>
+</div>
                 
               </div>
             </div>

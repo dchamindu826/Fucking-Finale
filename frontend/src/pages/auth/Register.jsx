@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
-import { Loader2, Eye, EyeOff, UserPlus } from 'lucide-react';
+import { Loader2, Eye, EyeOff, UserPlus, CheckCircle2, Circle } from 'lucide-react';
 
 const GlassInput = ({ label, name, required, type = "text", placeholder, options, value, onChange }) => (
   <div>
@@ -12,7 +12,8 @@ const GlassInput = ({ label, name, required, type = "text", placeholder, options
     {options ? (
       <div className="relative">
           <select name={name} required={required} value={value} onChange={onChange} className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 text-white focus:border-red-500 focus:bg-black/60 outline-none transition-all text-sm shadow-inner appearance-none cursor-pointer">
-            <option value="" disabled className="bg-slate-900">Select a District</option>
+            {/* 🔥 FIX: Dropdown Placeholder eka dynamic kara 🔥 */}
+            <option value="" disabled className="bg-slate-900">{placeholder || "Select an option"}</option>
             {options.map(opt => <option key={opt} value={opt} className="bg-slate-900">{opt}</option>)}
           </select>
       </div>
@@ -22,28 +23,63 @@ const GlassInput = ({ label, name, required, type = "text", placeholder, options
   </div>
 );
 
+// 🔥 FIX: Password Requirement UI Component eka 🔥
+const PasswordRequirement = ({ met, text }) => (
+    <div className={`flex items-center gap-2 text-[11px] font-bold tracking-wide transition-colors duration-300 ${met ? 'text-green-400' : 'text-white/40'}`}>
+        {met ? <CheckCircle2 size={14} className="shrink-0" /> : <Circle size={14} className="shrink-0" />}
+        {text}
+    </div>
+);
+
 export default function Register() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // 1. අලුතින් confirmPassword state එකට add කළා
   const [formData, setFormData] = useState({
     fName: '', lName: '', phone: '', directPhone: '', nic: '',
     houseNoVal: '', streetNameVal: '', villageVal: '', townVal: '', districtVal: '', 
     password: '', confirmPassword: '' 
   });
 
+  // 🔥 FIX: Password checking state 🔥
+  const [passwordChecks, setPasswordChecks] = useState({
+      length: false,
+      numbers: false,
+      specialChar: false,
+      letters: false
+  });
+
   const districts = ["Ampara", "Anuradhapura", "Badulla", "Batticaloa", "Colombo", "Galle", "Gampaha", "Hambantota", "Jaffna", "Kalutara", "Kandy", "Kegalle", "Kilinochchi", "Kurunegala", "Mannar", "Matale", "Matara", "Monaragala", "Mullaitivu", "Nuwara Eliya", "Polonnaruwa", "Puttalam", "Ratnapura", "Trincomalee", "Vavuniya"];
 
+  const validatePassword = (password) => {
+      const length = password.length >= 8;
+      const numbers = (password.match(/\d/g) || []).length >= 2; // At least 2 numbers
+      const specialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password); // At least 1 special char
+      const letters = /[a-zA-Z]/.test(password); // At least 1 letter
+
+      setPasswordChecks({ length, numbers, specialChar, letters });
+      return length && numbers && specialChar && letters;
+  };
+
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+    
+    // Check password logic as user types
+    if (name === 'password') {
+        validatePassword(value);
+    }
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
 
-    // 2. Passwords දෙක සමානද කියලා Frontend එකෙන්ම Check කරමු
+    // 🔥 Check Strict Password Requirements before submit 🔥
+    if (!validatePassword(formData.password)) {
+        return toast.error("Please ensure your password meets all security requirements!");
+    }
+
     if (formData.password !== formData.confirmPassword) {
         return toast.error("Passwords do not match!");
     }
@@ -61,7 +97,7 @@ export default function Register() {
         city: formData.townVal, 
         district: formData.districtVal,
         password: formData.password,
-        confirmPassword: formData.confirmPassword // දැන් Confirm Password එක හරියටම යවනවා
+        confirmPassword: formData.confirmPassword 
       };
 
       await api.post('/auth/register', payload); 
@@ -95,51 +131,63 @@ export default function Register() {
 
         <form onSubmit={handleRegister} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-            <GlassInput label="First Name" name="fName" required placeholder="Chamindu" value={formData.fName} onChange={handleChange} />
-            <GlassInput label="Last Name" name="lName" required placeholder="Dilshan" value={formData.lName} onChange={handleChange} />
+            <GlassInput label="First Name" name="fName" required placeholder="ඔබගේ මුල් නම - Janith" value={formData.fName} onChange={handleChange} />
+            <GlassInput label="Last Name" name="lName" required placeholder="ඔබගේ දෙනව නම - Karunarathne" value={formData.lName} onChange={handleChange} />
             
-            <GlassInput label="Phone Number" name="phone" type="tel" required placeholder="07********" value={formData.phone} onChange={handleChange} />
-            <GlassInput label="Secondary Number" name="directPhone" type="tel" placeholder="07******** (Optional)" value={formData.directPhone} onChange={handleChange} />
+            <GlassInput label="Phone Number" name="phone" type="tel" required placeholder="දුරකථන අංකය - 0777909030" value={formData.phone} onChange={handleChange} />
+            <GlassInput label="Secondary Number" name="directPhone" type="tel" placeholder="සෘජු දුරකථන ඇමතුම් සදහා - 0711809030" value={formData.directPhone} onChange={handleChange} />
             
             <div className="md:col-span-2">
-              <GlassInput label="National Identity Card (NIC)" name="nic" required placeholder="e.g. 199912345678" value={formData.nic} onChange={handleChange} />
+              <GlassInput label="National Identity Card (NIC)" name="nic" required placeholder="ජාතික හැදුනුම්පත් අංකය නිවැරදිව ඇතුලත් කරන්න " value={formData.nic} onChange={handleChange} />
             </div>
 
-            <GlassInput label="House Number" name="houseNoVal" placeholder="e.g. 123/A (Optional)" value={formData.houseNoVal} onChange={handleChange} />
-            <GlassInput label="Street Name" name="streetNameVal" required placeholder="Main Street" value={formData.streetNameVal} onChange={handleChange} />
+            <GlassInput label="House Number" name="houseNoVal" placeholder="නිවසේ අංකය හෝ නම" value={formData.houseNoVal} onChange={handleChange} />
+            <GlassInput label="Street Name" name="streetNameVal" required placeholder="ලිපිනයේ පළමු කොටස" value={formData.streetNameVal} onChange={handleChange} />
             
             <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-6">
-                <GlassInput label="Village" name="villageVal" required placeholder="Your Village" value={formData.villageVal} onChange={handleChange} />
-                <GlassInput label="Town" name="townVal" required placeholder="Your Town" value={formData.townVal} onChange={handleChange} />
-                <GlassInput label="District" name="districtVal" required options={districts} value={formData.districtVal} onChange={handleChange} />
+                {/* 🔥 FIX: Lane is now optional (Removed required) 🔥 */}
+                <GlassInput label="Lane (Optional)" name="villageVal" placeholder="ලිපිනයේ දෙවන කොටස" value={formData.villageVal} onChange={handleChange} />
+                <GlassInput label="Town" name="townVal" required placeholder="ආසන්නතම නගරය" value={formData.townVal} onChange={handleChange} />
+                
+                {/* 🔥 FIX: Placeholder modified to දිස්ත්‍රික්කය 🔥 */}
+                <GlassInput label="District" name="districtVal" required placeholder="දිස්ත්‍රික්කය" options={districts} value={formData.districtVal} onChange={handleChange} />
             </div>
 
-            {/* 3. Password සහ Confirm Password Fields වෙන වෙනම හැදුවා */}
-            <div className="mt-4 pt-6 border-t border-white/10">
-              <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2 block">Secure Password <span className="text-red-500">*</span></label>
-              <div className="relative group">
-                <input 
-                    type={showPassword ? "text" : "password"} 
-                    name="password" required value={formData.password} onChange={handleChange} 
-                    className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 pr-14 text-white placeholder-white/30 focus:border-red-500 focus:bg-black/60 outline-none transition-all text-sm shadow-inner" 
-                    placeholder="Create a strong password" 
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-4 flex items-center text-white/40 hover:text-white transition-colors">
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
+            <div className="mt-4 pt-6 border-t border-white/10 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+                <div>
+                  <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2 block">Secure Password <span className="text-red-500">*</span></label>
+                  <div className="relative group">
+                    <input 
+                        type={showPassword ? "text" : "password"} 
+                        name="password" required value={formData.password} onChange={handleChange} 
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 pr-14 text-white placeholder-white/30 focus:border-red-500 focus:bg-black/60 outline-none transition-all text-sm shadow-inner" 
+                        placeholder="Create a strong password" 
+                    />
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-4 flex items-center text-white/40 hover:text-white transition-colors">
+                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    </button>
+                  </div>
+                  
+                  {/* 🔥 FIX: Real-time Password Checking UI 🔥 */}
+                  <div className="mt-4 bg-black/20 border border-white/5 p-4 rounded-xl space-y-2">
+                      <PasswordRequirement met={passwordChecks.length} text="Minimum 8 characters long" />
+                      <PasswordRequirement met={passwordChecks.letters} text="Contains at least two letter" />
+                      <PasswordRequirement met={passwordChecks.numbers} text="Contains at least 2 numbers" />
+                      <PasswordRequirement met={passwordChecks.specialChar} text="Contains special character (!@#$)" />
+                  </div>
+                </div>
 
-            <div className="mt-4 pt-6 border-t border-white/10">
-              <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2 block">Confirm Password <span className="text-red-500">*</span></label>
-              <div className="relative group">
-                <input 
-                    type={showPassword ? "text" : "password"} 
-                    name="confirmPassword" required value={formData.confirmPassword} onChange={handleChange} 
-                    className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 pr-14 text-white placeholder-white/30 focus:border-red-500 focus:bg-black/60 outline-none transition-all text-sm shadow-inner" 
-                    placeholder="Re-enter your password" 
-                />
-              </div>
+                <div>
+                  <label className="text-[10px] font-bold text-white/60 uppercase tracking-widest mb-2 block">Confirm Password <span className="text-red-500">*</span></label>
+                  <div className="relative group">
+                    <input 
+                        type={showPassword ? "text" : "password"} 
+                        name="confirmPassword" required value={formData.confirmPassword} onChange={handleChange} 
+                        className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 pr-14 text-white placeholder-white/30 focus:border-red-500 focus:bg-black/60 outline-none transition-all text-sm shadow-inner" 
+                        placeholder="Re-enter your password" 
+                    />
+                  </div>
+                </div>
             </div>
             
           </div>
