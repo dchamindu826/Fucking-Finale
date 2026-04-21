@@ -2,24 +2,99 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
 
-// 1. Dashboard එකට Posts & Alerts යැවීම
+// 1. Dashboard එකට Posts, Alerts සහ Real Stats යැවීම
 exports.getStudentDashboard = async (req, res) => {
     try {
+        const studentId = req.user?.id || 1; 
+
+        // 1. Real Posts
         const posts = await prisma.post.findMany({
             orderBy: { created_at: 'desc' },
             take: 5
         });
 
+        // 2. Real Enrollments
+        const validPayments = await prisma.payment.findMany({
+            where: { studentId: parseInt(studentId), status: { in: [1, 4] } }
+        });
+
+        let enrolledSubjectIds = new Set();
+        validPayments.forEach(p => {
+            if (p.subjects) {
+                try {
+                    const subs = JSON.parse(p.subjects);
+                    subs.forEach(id => enrolledSubjectIds.add(parseInt(id)));
+                } catch (e) {}
+            }
+        });
+
+        // 3. Due Payments & Alerts Logic (Pending Verify ain kala)
+        let alerts = [];
+        let duePaymentsList = [];
+        
+        const pendingPayments = await prisma.payment.findMany({
+            where: { studentId: parseInt(studentId), status: 0 },
+            include: { business: true, batch: true }
+        });
+
+        const today = new Date();
+
+        pendingPayments.forEach(p => {
+            // Include ONLY if it has a due date and is NOT a verifying slip
+            if (p.due_date && p.method !== 'Slip') {
+                const dueDate = new Date(p.due_date);
+                const diffTime = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24)); 
+                const courseName = `${p.business?.name || ''} - ${p.batch?.name || ''}`;
+
+                duePaymentsList.push({
+                    id: p.id,
+                    courseName: courseName,
+                    amount: p.amount || 0,
+                    dueDate: p.due_date,
+                    isInstallment: p.payment_type === 2,
+                    installmentNo: p.installment_no,
+                    diffDays: diffTime
+                });
+
+                // Set pop-up alerts based on how many days left
+                if (diffTime < 0) {
+                    alerts.push({ type: 'locked', msg: `Your payment for ${courseName} is OVERDUE by ${Math.abs(diffTime)} days. Please pay immediately.` });
+                } else if (diffTime <= 1) {
+                    alerts.push({ type: 'danger', msg: `Your payment for ${courseName} is due TOMORROW!` });
+                } else if (diffTime <= 5) {
+                    alerts.push({ type: 'warning', msg: `Your payment for ${courseName} is due in ${diffTime} days.` });
+                }
+            }
+        });
+
+        // Backend stat counts
+        let unlockedVideos = 0;
+        let studyMaterials = 0;
+        if (enrolledSubjectIds.size > 0) {
+            const courseIds = Array.from(enrolledSubjectIds).map(id => BigInt(id));
+            const linkedContents = await prisma.contentCourse.findMany({ where: { course_id: { in: courseIds } } });
+            if (linkedContents.length > 0) {
+                const contentIds = linkedContents.map(lc => lc.content_id);
+                const allContents = await prisma.content.findMany({ where: { id: { in: contentIds } } });
+                unlockedVideos = allContents.filter(c => ['live', 'recording', '1', '2'].includes(c.contentType)).length;
+                studyMaterials = allContents.filter(c => ['document', 'paper', 'sPaper', '3', '4', '5'].includes(c.contentType)).length;
+            }
+        }
+
         res.status(200).json({
-            enrolledCount: 3, 
-            upcomingLive: { title: "Physics Revision", courseName: "2026 AL", link: "https://zoom.us" },
+            enrolledCount: enrolledSubjectIds.size, 
+            upcomingLive: null,
             posts: posts,
-            alerts: []
+            alerts: alerts, // ONLY Due alerts sent
+            duePayments: JSON.parse(JSON.stringify(duePaymentsList, (key, value) => typeof value === 'bigint' ? value.toString() : value)),
+            stats: { unlockedVideos, studyMaterials }
         });
     } catch (error) {
+        console.error("Dashboard Load Error:", error);
         res.status(500).json({ error: "Dashboard load failed" });
     }
 };
+
 
 // 2. Enroll වෙන්න Businesses/Batches/Subjects යැවීම
 exports.getAvailableEnrollments = async (req, res) => {
@@ -266,10 +341,30 @@ exports.getMyPayments = async (req, res) => {
 // 7. Profile Update කිරීම
 exports.updateProfile = async (req, res) => {
     try {
-        const { fName, lName } = req.body;
-        const image = req.file ? req.file.filename : null;
+        const studentId = req.user?.id || 1; // Auth implementation eka anuwa
+        const { addressHouseNo, addressStreet, city, district } = req.body;
+        const image = req.file ? req.file.filename : undefined;
+
+        let updateData = {
+            addressHouseNo,
+            addressStreet,
+            city,
+            district
+        };
+
+        // If your schema doesn't have an image column in the User table yet, 
+        // you only return the filename to localStorage. 
+        // But if it does, you can update it in the DB like this:
+        // if (image) updateData.profileImage = image;
+
+        await prisma.user.update({
+            where: { id: parseInt(studentId) },
+            data: updateData
+        });
+
         res.status(200).json({ message: "Profile updated successfully", image });
     } catch (error) {
+        console.error("Profile Update Error:", error);
         res.status(500).json({ error: "Failed to update profile" });
     }
 };

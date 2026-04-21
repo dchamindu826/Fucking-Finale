@@ -1,63 +1,141 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ContactSidebar from '../../components/CoordinatorCRM/ContactSidebar';
 import ChatArea from '../../components/CoordinatorCRM/ChatArea';
 import RightSidePanel from '../../components/CoordinatorCRM/RightSidePanel';
+import { FaWhatsapp, FaHeadset, FaFilter } from 'react-icons/fa';
+import axios from '../../api/axios';
 
-const CoordinatorDashboard = () => {
-  // 'FREE_SEMINAR' සහ 'AFTER_SEMINAR' අතර මාරු වෙන්න State එක
-  const [crmMode, setCrmMode] = useState('FREE_SEMINAR'); 
+export default function CoordinatorDashboard() {
+  const [user, setUser] = useState(null);
+  const [activeMode, setActiveMode] = useState('CRM'); 
   const [selectedLead, setSelectedLead] = useState(null);
+  
+  const [businesses, setBusinesses] = useState([]);
+  const [batches, setBatches] = useState([]);
+  
+  const [selectedBusiness, setSelectedBusiness] = useState('');
+  const [selectedBatch, setSelectedBatch] = useState('');
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try { setUser(JSON.parse(storedUser)); } catch(e) {}
+    } else {
+      setUser({ role: 'SYSTEM_ADMIN' }); 
+    }
+    fetchBusinessesAndBatches();
+  }, []);
+
+  const fetchBusinessesAndBatches = async () => {
+    try {
+      const res = await axios.get('/admin/manager/batches-full');
+      const allBatches = res.data;
+      setBatches(allBatches);
+      
+      const uniqueBiz = [];
+      const bizMap = new Map();
+      allBatches.forEach(b => {
+        if (b.business && !bizMap.has(b.business.id)) {
+          bizMap.set(b.business.id, true);
+          uniqueBiz.push(b.business);
+        }
+      });
+      setBusinesses(uniqueBiz);
+    } catch (err) {
+      console.error("Error fetching dropdown data:", err);
+    }
+  };
+
+  const isAdmin = user?.role === 'SYSTEM_ADMIN' || user?.role === 'DIRECTOR';
+  const isManager = user?.role === 'MANAGER';
+
+  const displayBatches = selectedBusiness 
+    ? batches.filter(b => b.businessId === parseInt(selectedBusiness))
+    : batches;
 
   return (
-    // ලස්සන Light Gradient Background එකක්
-    <div className="h-screen w-full bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 flex flex-col font-sans">
+    <div className="h-full flex flex-col gap-4 animate-fade-in-up text-slate-300">
       
-      {/* Top Toggle Buttons (Shift වෙන්න පුළුවන් ලොකු Button දෙක) */}
-      <div className="flex justify-center gap-6 mb-4">
-        <button 
-          onClick={() => setCrmMode('FREE_SEMINAR')}
-          className={`px-10 py-3 rounded-2xl font-bold text-lg transition-all duration-300 ease-in-out flex items-center gap-2 ${
-            crmMode === 'FREE_SEMINAR' 
-              ? 'bg-white/60 backdrop-blur-md border-2 border-blue-400 shadow-[0_8px_30px_rgb(0,0,0,0.12)] text-blue-800 scale-105' 
-              : 'bg-white/30 backdrop-blur-sm border border-white/50 text-gray-500 hover:bg-white/50'
-          }`}
-        >
-          <span className="text-2xl">🎓</span> Free Seminar CRM
-        </button>
+      {/* Top Header Buttons */}
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#23303f] p-3 rounded-2xl shadow-md border border-white/5">
         
-        <button 
-          onClick={() => setCrmMode('AFTER_SEMINAR')}
-          className={`px-10 py-3 rounded-2xl font-bold text-lg transition-all duration-300 ease-in-out flex items-center gap-2 ${
-            crmMode === 'AFTER_SEMINAR' 
-              ? 'bg-white/60 backdrop-blur-md border-2 border-purple-400 shadow-[0_8px_30px_rgb(0,0,0,0.12)] text-purple-800 scale-105' 
-              : 'bg-white/30 backdrop-blur-sm border border-white/50 text-gray-500 hover:bg-white/50'
-          }`}
-        >
-          <span className="text-2xl">🚀</span> After Seminar CRM
-        </button>
+        <div className="flex gap-2 p-1 bg-[#1a2430] rounded-full border border-white/5">
+          <button
+            onClick={() => setActiveMode('CRM')}
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 ${
+              activeMode === 'CRM' 
+                ? 'bg-emerald-600 text-white shadow-md' 
+                : 'text-slate-400 hover:bg-white/5'
+            }`}
+          >
+            <FaWhatsapp /> Free Seminar CRM
+          </button>
+          <button
+            onClick={() => setActiveMode('CALL_CAMPAIGN')}
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 ${
+              activeMode === 'CALL_CAMPAIGN' 
+                ? 'bg-[#1a2430] text-slate-400 border border-slate-600' 
+                : 'text-slate-400 hover:bg-white/5'
+            }`}
+          >
+            <FaHeadset /> Call Campaign
+          </button>
+        </div>
+
+        {/* Dynamic DB Filters */}
+        {(isAdmin || isManager) && (
+          <div className="flex items-center gap-3">
+            <FaFilter className="text-slate-500" />
+            {isAdmin && (
+              <select 
+                value={selectedBusiness}
+                onChange={(e) => {
+                  setSelectedBusiness(e.target.value);
+                  setSelectedBatch('');
+                }}
+                className="bg-[#1a2430] border border-white/10 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-emerald-600"
+              >
+                <option value="">All Businesses</option>
+                {businesses.map(biz => (
+                  <option key={biz.id} value={biz.id}>{biz.name}</option>
+                ))}
+              </select>
+            )}
+            <select 
+              value={selectedBatch}
+              onChange={(e) => setSelectedBatch(e.target.value)}
+              className="bg-[#1a2430] border border-white/10 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-emerald-600"
+            >
+              <option value="">Select Batch</option>
+              {displayBatches.map(b => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
-      {/* Main CRM Workspace - Glassmorphism Container */}
-      <div className="flex-1 flex gap-4 overflow-hidden">
-        
-        {/* 1. Contact Sidebar (Left Panel - 25% width) */}
-        <div className="w-1/4 h-full bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] flex flex-col overflow-hidden">
-             <ContactSidebar crmMode={crmMode} selectedLead={selectedLead} onSelectLead={setSelectedLead} />
-        </div>
+      <div className="flex-1 flex gap-4 h-[calc(100%-6rem)] overflow-hidden">
+        <ContactSidebar 
+          activeMode={activeMode} 
+          selectedLead={selectedLead} 
+          setSelectedLead={setSelectedLead}
+          filters={{ selectedBusiness, selectedBatch }}
+        />
 
-        {/* 2. Chat Area (Middle Panel - 50% width) */}
-        <div className="w-2/4 h-full bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] flex flex-col overflow-hidden">
+        {selectedLead ? (
+          <>
             <ChatArea selectedLead={selectedLead} />
-        </div>
-
-        {/* 3. Call Campaign / Right Panel (Right Panel - 25% width) */}
-        <div className="w-1/4 h-full bg-white/40 backdrop-blur-xl border border-white/60 rounded-3xl shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] flex flex-col overflow-hidden">
-            <RightSidePanel selectedLead={selectedLead} crmMode={crmMode} />
-        </div>
-
+            <RightSidePanel selectedLead={selectedLead} activeMode={activeMode} />
+          </>
+        ) : (
+          <div className="flex-1 bg-[#23303f] rounded-2xl flex flex-col items-center justify-center text-slate-500 shadow-xl border border-white/5">
+            <FaWhatsapp className="text-6xl text-slate-600 mb-4 opacity-50" />
+            <h2 className="text-xl font-semibold text-slate-300">Select a lead to start</h2>
+            <p className="text-sm mt-1">Choose a contact from the left panel</p>
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-export default CoordinatorDashboard;
+}

@@ -29,6 +29,7 @@ model User {
   payments Payment[] // Added opposite relation
   assignedLeads Lead[]        @relation("AssignedLeads")
   sentMessages  ChatMessage[] @relation("SentMessages")
+  autoAssignQuota AutoAssignQuota?
 }
 
 model Business {
@@ -228,44 +229,55 @@ model AutoReply {
 model Lead {
   id           Int           @id @default(autoincrement())
   name         String?
-  phone        String        @unique // WhatsApp Number එක
-  source       String        @default("whatsapp") // "whatsapp" හෝ "import"
-  campaignType String        @default("FREE_SEMINAR") // "FREE_SEMINAR" හෝ "AFTER_SEMINAR"
-  status       String        @default("NEW") // "NEW", "OPEN", "CLOSED"
+  phone        String        @unique 
+  source       String        @default("whatsapp") 
+  campaignType String        @default("FREE_SEMINAR") 
+  status       String        @default("NEW") 
   
-  assignedTo   Int?          // Assign කරපු Staff කෙනාගේ ID එක
+  assignedTo   Int?          
   assignedUser User?         @relation("AssignedLeads", fields: [assignedTo], references: [id])
   
   lastMessage  String?       @db.Text
-  unreadCount  Int           @default(0) // කියවපු නැති මැසේජ් ගාණ
+  unreadCount  Int           @default(0) 
   
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   
   messages     ChatMessage[]
 
-  phase         Int     @default(1)
-callMethod    String? // direct, whatsapp, 3cx
-callStatus    String  @default("pending") // pending, no_answer, reject, answered
-feedback      String?
-isAutoAssigned Boolean @default(false)
+  phase        Int           @default(1)
+  callMethod   String?       // direct, whatsapp, 3cx
+  callStatus   String        @default("pending") // pending, no_answer, reject, answered
+  feedback     String?
+  isAutoAssigned Boolean     @default(false)
 }
 
 model ChatMessage {
-  id           Int      @id @default(autoincrement())
-  leadId       Int
-  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  leadId      Int
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   
-  message      String   @db.Text
-  mediaUrl     String?  @db.Text
-  mediaType    String?  // "image", "video", "document", "audio"
+  message     String   @db.Text
+  mediaUrl    String?  @db.Text
+  mediaType   String?  
   
-  direction    String   // "inbound" (ළමයාගෙන් ආපු), "outbound" (අපි යවපු)
-  senderType   String   // "USER", "STAFF", "AI_BOT", "SYSTEM"
+  direction   String   // "inbound", "outbound"
+  senderType  String   // "USER", "STAFF", "AI_BOT", "SYSTEM"
   
-  senderId     Int?     // Staff කෙනෙක් යැව්වා නම් එයාගේ ID එක
-  senderUser   User?    @relation("SentMessages", fields: [senderId], references: [id])
+  senderId    Int?     
+  senderName  String?  @default("System") // 🔥 FIX: Mekath damma lassanata name eka penna
+  senderUser  User?    @relation("SentMessages", fields: [senderId], references: [id])
   
-  isRead       Boolean  @default(false)
-  createdAt    DateTime @default(now())
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model AutoAssignQuota {
+  id          Int      @id @default(autoincrement())
+  staffId     Int      @unique
+  staff       User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  quotaAmount Int      @default(0) // Dawasata assign wenna ona gaana
+  assigned    Int      @default(0) // Danata assign wela thiyena gaana
+  isActive    Boolean  @default(true) // Toggle on/off
+  updatedAt   DateTime @updatedAt
 }

@@ -15,10 +15,6 @@ export default defineConfig({
       'imacampus.online', 
       'www.imacampus.online', 
       'localhost'
-    ],
-    // 🔥 මෙන්න මේ කෑල්ලෙන් තමයි Live Reload (HMR) එක HTTPS හරහා යවන්නේ
-    hmr: {
-        clientPort: 443,
-    }
+    ]
   }
 })

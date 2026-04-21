@@ -1,16 +1,19 @@
 import React from 'react';
-import { LayoutDashboard, BookOpen, Wallet, Video, Settings, LogOut, X, Truck } from 'lucide-react';
+import { LayoutDashboard, BookOpen, Wallet, Video, Settings, LogOut, X, Truck, Image as ImageIcon } from 'lucide-react';
 
-const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) => {
+// 🔥 FIX: bgImage, setBgImage methanata add kala
+const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout, bgImage, setBgImage }) => {
 
     const menuItems = [
         { id: 'home', label: 'Dashboard Overview', icon: LayoutDashboard },
         { id: 'courses', label: 'Enroll in Courses', icon: BookOpen },
         { id: 'mycourses', label: 'My Classrooms', icon: Video },
-        { id: 'delivery', label: 'Delivery Hub', icon: Truck }, // 🔥 අලුත් එක 🔥
+        { id: 'delivery', label: 'Delivery Hub', icon: Truck },
         { id: 'history', label: 'Payment History', icon: Wallet },
         { id: 'profile', label: 'Profile Settings', icon: Settings },
     ];
+
+    const themes = ['/student-bg.jpg', '/bg1.jpg', '/bg2.jpg', '/bg3.jpg'];
 
     return (
         <>
@@ -47,6 +50,23 @@ const Sidebar = ({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleL
                 </nav>
 
                 <div className="p-6 border-t border-white/10">
+                    {/* 🔥 FIX: Wallpaper Buttons 🔥 */}
+                    <div className="mb-4">
+                        <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-center gap-1.5">
+                            <ImageIcon size={12}/> Wallpaper
+                        </p>
+                        <div className="flex justify-center gap-2">
+                            {themes.map((theme, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setBgImage(theme)} // Dan meka wada karanawa
+                                    className={`w-6 h-6 rounded-full border-2 bg-cover bg-center transition-all ${bgImage === theme ? 'border-red-500 scale-110 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'border-white/20 hover:border-white/50'}`}
+                                    style={{ backgroundImage: `url(${theme})` }}
+                                ></button>
+                            ))}
+                        </div>
+                    </div>
+
                     <button onClick={handleLogout} className="w-full flex items-center justify-center gap-3 px-4 py-4 rounded-2xl font-bold text-white/70 hover:bg-red-500/20 hover:text-red-400 transition-all border border-transparent hover:border-red-500/30">
                         <LogOut size={20} strokeWidth={2.5} /> Logout
                     </button>

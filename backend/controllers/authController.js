@@ -84,10 +84,9 @@ exports.loginUser = async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials!" });
     }
 
-    // 3. JWT Token eka generate karanawa
     const token = jwt.sign(
       { userId: user.id, role: user.role, department: user.department, businessType: user.businessType },
-      process.env.JWT_SECRET, // .env eke meka thiyenna ona
+      process.env.JWT_SECRET, 
       { expiresIn: '1d' }
     );
 
@@ -97,6 +96,14 @@ exports.loginUser = async (req, res) => {
       user: {
         id: user.id,
         firstName: user.firstName,
+        lastName: user.lastName, // 🔥 FIX: Miss wecha tika damma
+        phone: user.phone,
+        nic: user.nic,
+        addressHouseNo: user.addressHouseNo,
+        addressStreet: user.addressStreet,
+        city: user.city,
+        district: user.district,
+        image: user.image,
         role: user.role,
         department: user.department
       }

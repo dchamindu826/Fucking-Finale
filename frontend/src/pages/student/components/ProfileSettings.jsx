@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from '../../../api/axios';
-import { User, Lock, Save, Loader2, Camera, Settings } from 'lucide-react';
+import { User, Lock, Save, Loader2, Camera, Settings, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function ProfileSettings() {
@@ -8,14 +8,22 @@ export default function ProfileSettings() {
     const [loading, setLoading] = useState(false);
     const [passLoading, setPassLoading] = useState(false);
 
-    // Passwords
+    const districts = ["Ampara", "Anuradhapura", "Badulla", "Batticaloa", "Colombo", "Galle", "Gampaha", "Hambantota", "Jaffna", "Kalutara", "Kandy", "Kegalle", "Kilinochchi", "Kurunegala", "Mannar", "Matale", "Matara", "Monaragala", "Mullaitivu", "Nuwara Eliya", "Polonnaruwa", "Puttalam", "Ratnapura", "Trincomalee", "Vavuniya"];
+
+    // User Details Form State
+    const [details, setDetails] = useState({
+        addressHouseNo: user.addressHouseNo || '',
+        addressStreet: user.addressStreet || '',
+        city: user.city || '',
+        district: user.district || ''
+    });
+
     const [passwords, setPasswords] = useState({
         currentPassword: '',
         newPassword: '',
         confirmPassword: ''
     });
     
-    // Image Upload
     const [dpFile, setDpFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(user.image && user.image !== 'default.png' && user.image !== 'null' ? `http://72.62.249.211:5000/storage/images/${user.image}` : null);
 
@@ -27,38 +35,46 @@ export default function ProfileSettings() {
         }
     };
 
-    // 🔥 1. Update Profile Picture ONLY 🔥
+    const handleDetailsChange = (e) => {
+        setDetails({ ...details, [e.target.name]: e.target.value });
+    };
+
+    // 🔥 Update Profile Picture & Address Details 🔥
     const handleSaveDetails = async (e) => {
         e.preventDefault();
-        if (!dpFile) return toast.error("Please select a new image to update.");
         
         setLoading(true);
         try {
             const formData = new FormData();
-            formData.append('image', dpFile);
+            if (dpFile) formData.append('image', dpFile);
+            formData.append('addressHouseNo', details.addressHouseNo);
+            formData.append('addressStreet', details.addressStreet);
+            formData.append('city', details.city);
+            formData.append('district', details.district);
 
             const res = await axios.post('/student/profile/update', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
             // Update LocalStorage
-            const updatedUser = { ...user };
+            const updatedUser = { ...user, ...details };
             if (res.data.image) updatedUser.image = res.data.image; 
             
             localStorage.setItem('user', JSON.stringify(updatedUser));
-            toast.success("Profile picture updated successfully!");
+            toast.success("Profile updated successfully!");
             
-            // Reload page to reflect changes on sidebar/header
-            setTimeout(() => window.location.reload(), 1500);
+            if(dpFile) {
+                setTimeout(() => window.location.reload(), 1500);
+            }
             
         } catch (error) {
-            toast.error(error.response?.data?.message || "Failed to update profile picture.");
+            toast.error(error.response?.data?.message || "Failed to update profile.");
         } finally {
             setLoading(false);
         }
     };
 
-    // 🔥 2. Update Password 🔥
+    // 🔥 Update Password 🔥
     const handleSavePassword = async (e) => {
         e.preventDefault();
         if (passwords.newPassword !== passwords.confirmPassword) {
@@ -136,9 +152,35 @@ export default function ProfileSettings() {
                             </div>
                         </div>
 
+                        {/* Editable Address Fields */}
+                        <div className="pt-6 mt-6 border-t border-white/10">
+                            <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><MapPin size={16} className="text-emerald-400"/> Delivery Address</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-2 block">House Number</label>
+                                    <input type="text" name="addressHouseNo" value={details.addressHouseNo} onChange={handleDetailsChange} placeholder="e.g. 123/A" className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-red-500 transition-all text-sm shadow-inner" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-2 block">Street Name</label>
+                                    <input type="text" name="addressStreet" value={details.addressStreet} onChange={handleDetailsChange} placeholder="Main Street" className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-red-500 transition-all text-sm shadow-inner" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-2 block">City / Town</label>
+                                    <input type="text" name="city" value={details.city} onChange={handleDetailsChange} placeholder="Your City" className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-red-500 transition-all text-sm shadow-inner" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-white/70 uppercase tracking-widest mb-2 block">District</label>
+                                    <select name="district" value={details.district} onChange={handleDetailsChange} className="w-full bg-black/30 border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-red-500 transition-all text-sm shadow-inner cursor-pointer appearance-none">
+                                        <option value="" disabled className="bg-slate-900">Select District</option>
+                                        {districts.map(d => <option key={d} value={d} className="bg-slate-900">{d}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="pt-4 border-t border-white/5">
                             <button type="submit" disabled={loading} className="bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-bold py-3.5 px-8 rounded-xl transition-all shadow-[0_0_15px_rgba(239,68,68,0.4)] disabled:opacity-70 flex items-center justify-center gap-2 text-sm uppercase tracking-widest w-full sm:w-auto">
-                                {loading ? <Loader2 size={18} className="animate-spin"/> : <><Save size={18}/> Update Image</>}
+                                {loading ? <Loader2 size={18} className="animate-spin"/> : <><Save size={18}/> Update Profile</>}
                             </button>
                         </div>
                     </form>

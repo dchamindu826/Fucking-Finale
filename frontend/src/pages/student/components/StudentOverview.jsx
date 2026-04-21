@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import axios from "../../../api/axios";
-import { Loader2, Bell, AlertTriangle, Lock, Calendar, Clock, CheckCircle, ChevronRight, Play, User, Image as ImageIcon, X } from 'lucide-react';
+import { Loader2, Bell, AlertTriangle, Lock, Calendar, Clock, CheckCircle, ChevronRight, Play, User, Image as ImageIcon, X, CalendarDays } from 'lucide-react';
 import AIChatWidget from './AIChatWidget';
+import toast from 'react-hot-toast'; // For Popups
 
 export default function StudentOverview() {
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [currentTime, setCurrentTime] = useState(new Date());
-    
-    // Image Modal State
     const [selectedImage, setSelectedImage] = useState(null); 
     
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -24,7 +23,17 @@ export default function StudentOverview() {
 
     useEffect(() => {
         axios.get('/student/dashboard')
-            .then(res => setData(res.data))
+            .then(res => {
+                setData(res.data);
+                // 🔥 Trigger Pop-up Toast for ALERTS 🔥
+                if (res.data?.alerts) {
+                    res.data.alerts.forEach(alert => {
+                        if(alert.type === 'locked') toast.error(alert.msg, { duration: 8000 });
+                        else if(alert.type === 'danger') toast.error(alert.msg, { duration: 6000 });
+                        else toast(alert.msg, { icon: '⚠️', duration: 5000 });
+                    });
+                }
+            })
             .catch(err => console.error(err))
             .finally(() => setLoading(false));
     }, []);
@@ -36,12 +45,14 @@ export default function StudentOverview() {
         return 'Good Evening';
     };
 
+    const formatDate = (ds) => ds ? new Date(ds).toISOString().split('T')[0] : 'N/A';
+
     if (loading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-red-500" size={40} /></div>;
 
     return (
         <div className="w-full max-w-6xl mx-auto pb-20 relative px-2 sm:px-0">
             
-            {/* --- TOP GREETING CARD --- */}
+            {/* --- TOP GREETING CARD (ORIGINAL COLORS) --- */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 md:mb-8 gap-5 glass-card p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem]">
                 <div>
                     <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white mb-3 tracking-tight">
@@ -54,7 +65,6 @@ export default function StudentOverview() {
                 </div>
                 
                 <div className="bg-white/5 border border-white/10 px-5 md:px-6 py-3.5 md:py-4 rounded-2xl flex items-center gap-4 w-full lg:w-auto shadow-sm">
-                    {/* PROFILE PIC ANIMATION */}
                     <div className="relative w-14 h-14 md:w-16 md:h-16 flex items-center justify-center shrink-0">
                         <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-red-600 via-orange-500 to-yellow-400 animate-[spin_3s_linear_infinite] shadow-[0_0_15px_rgba(239,68,68,0.5)]"></div>
                         <div className="absolute inset-1 bg-[#0a0f1c] rounded-full z-10"></div>
@@ -75,7 +85,7 @@ export default function StudentOverview() {
                 
                 <div className="lg:col-span-2 space-y-6 md:space-y-8">
                     
-                    {/* --- UPCOMING LIVE CARD --- */}
+                    {/* --- UPCOMING LIVE CARD (ORIGINAL COLORS) --- */}
                     {data?.upcomingLive && (
                         <div className="glass-card bg-gradient-to-br from-red-600/10 to-red-900/10 border-red-500/30 rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 relative overflow-hidden">
                             <div className="relative z-10 w-full sm:w-auto text-center sm:text-left">
@@ -95,7 +105,7 @@ export default function StudentOverview() {
                         </div>
                     )}
 
-                    {/* --- LATEST UPDATES / POSTS SECTION --- */}
+                    {/* --- LATEST UPDATES / POSTS SECTION (ORIGINAL COLORS) --- */}
                     <div className="glass-card rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8">
                         <h3 className="text-lg md:text-xl font-bold text-white mb-5 md:mb-6 flex items-center gap-3">
                             <div className="bg-white/10 border border-white/10 p-2 md:p-2.5 rounded-lg md:rounded-xl"><Bell className="text-yellow-400 w-5 h-5 md:w-6 md:h-6"/></div>
@@ -113,8 +123,6 @@ export default function StudentOverview() {
 
                                     return (
                                         <div key={post.id} className="bg-black/20 border border-white/10 rounded-[1.2rem] md:rounded-[1.5rem] p-4 md:p-5 hover:bg-black/30 transition-all flex flex-col sm:flex-row gap-4 md:gap-6 shadow-lg">
-                                            
-                                            {/* Clickable Image Area (Responsive Size) */}
                                             {postImage && (
                                                 <div 
                                                     onClick={() => setSelectedImage(postImage)}
@@ -125,16 +133,10 @@ export default function StudentOverview() {
                                                         alt={post.title} 
                                                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                                     />
-                                                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
-                                                        <span className="text-white text-[10px] md:text-xs font-bold bg-black/60 px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl flex items-center gap-1.5 md:gap-2"><ImageIcon size={14}/> View Image</span>
-                                                    </div>
                                                 </div>
                                             )}
 
-                                            {/* Content Area */}
                                             <div className="flex-1 flex flex-col min-w-0">
-                                                
-                                                {/* Title & Date Row */}
                                                 <div className="flex flex-col xl:flex-row xl:justify-between xl:items-start gap-2 md:gap-3 mb-3 md:mb-4">
                                                     <h4 className="text-lg md:text-xl font-bold text-white leading-snug group-hover:text-red-400 transition-colors pr-2">{post.title}</h4>
                                                     <div className="flex flex-row xl:flex-col items-center xl:items-end shrink-0 gap-3 xl:gap-1.5">
@@ -147,13 +149,11 @@ export default function StudentOverview() {
                                                     </div>
                                                 </div>
                                                 
-                                                {/* Scrollable 'Iframe-like' Description Box */}
                                                 <div className="bg-[#0a0f1c]/50 border border-white/5 rounded-xl p-3 md:p-4 overflow-y-auto custom-scrollbar max-h-[120px] md:max-h-[160px] shadow-inner flex-1">
                                                     <p className="text-slate-300 text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-medium">
                                                         {post.caption || post.description}
                                                     </p>
                                                 </div>
-
                                             </div>
                                         </div>
                                     );
@@ -163,38 +163,54 @@ export default function StudentOverview() {
                     </div>
                 </div>
 
-                {/* --- ALERTS SECTION --- */}
+                {/* --- ALERTS & DUE PAYMENTS SECTION (ORIGINAL COLORS) --- */}
                 <div className="space-y-6 md:space-y-8">
                     <div className="glass-card rounded-[1.5rem] md:rounded-[2rem] p-5 md:p-8">
                         <h3 className="text-lg md:text-xl font-bold text-white mb-5 md:mb-6 flex items-center gap-3">
                             <div className="bg-white/10 border border-white/10 p-2 md:p-2.5 rounded-lg md:rounded-xl"><AlertTriangle className="text-red-500 w-5 h-5 md:w-6 md:h-6"/></div>
-                            Tasks & Alerts
+                            Tasks & Due Payments
                         </h3>
                         <div className="space-y-4">
-                            {data?.alerts?.length === 0 ? (
+                            {data?.duePayments?.length === 0 ? (
                                 <div className="bg-white/5 border border-white/5 rounded-2xl p-6 md:p-8 text-center shadow-sm">
                                     <div className="w-12 h-12 md:w-16 md:h-16 bg-white/5 border border-white/10 rounded-xl md:rounded-2xl flex items-center justify-center mx-auto mb-3 md:mb-4">
                                         <CheckCircle className="text-yellow-400 w-6 h-6 md:w-8 md:h-8"/>
                                     </div>
                                     <p className="text-white font-bold text-base md:text-lg">You're all caught up!</p>
-                                    <p className="text-xs md:text-sm text-white/50 mt-1 font-medium">No pending tasks or dues.</p>
+                                    <p className="text-xs md:text-sm text-white/50 mt-1 font-medium">No due payments right now.</p>
                                 </div>
                             ) : (
-                                data?.alerts?.map((alert, idx) => (
-                                    <div key={idx} className={`p-4 md:p-5 rounded-2xl border bg-black/20 ${alert.type === 'locked' ? 'border-red-500/50' : 'border-red-400/30'}`}>
-                                        <div className="flex items-start gap-3 md:gap-4">
-                                            <div className={`p-2.5 md:p-3 rounded-xl shrink-0 bg-white/5 ${alert.type === 'locked' ? 'text-red-500' : 'text-yellow-400'}`}>
-                                                {alert.type === 'locked' ? <Lock size={18} className="md:w-5 md:h-5"/> : <AlertTriangle size={18} className="md:w-5 md:h-5"/>}
-                                            </div>
-                                            <div>
-                                                <p className="text-xs md:text-sm font-medium text-white/80 leading-relaxed mb-2 md:mb-3">{alert.msg}</p>
-                                                <button className={`text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center gap-1 md:gap-1.5 transition-all ${alert.type === 'locked' ? 'text-red-400 hover:text-red-300' : 'text-yellow-400 hover:text-yellow-300'}`}>
-                                                    Resolve Now <ChevronRight size={12} className="md:w-3.5 md:h-3.5" strokeWidth={3}/>
-                                                </button>
+                                data?.duePayments?.map((p, idx) => {
+                                    const isLate = p.diffDays < 0;
+                                    return (
+                                        <div key={idx} className={`bg-black/30 border p-4 md:p-5 rounded-2xl flex flex-col relative overflow-hidden transition-all ${isLate ? 'border-red-500/50' : 'border-white/10'}`}>
+                                            <div className={`absolute top-0 left-0 w-1.5 h-full ${isLate ? 'bg-red-500' : 'bg-yellow-400'}`}></div>
+                                            <div className="pl-2">
+                                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                                                    <h4 className="text-sm font-bold text-white">{p.courseName}</h4>
+                                                    {p.isInstallment && p.installmentNo && (
+                                                        <span className="text-[9px] uppercase font-bold bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded border border-orange-500/30 w-max shrink-0">
+                                                            Phase {p.installmentNo}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                
+                                                <p className={`text-xs mt-2 flex items-center gap-1.5 font-bold ${isLate ? 'text-red-400' : 'text-white/50'}`}>
+                                                    <CalendarDays size={12}/> 
+                                                    {p.dueDate ? `Due: ${formatDate(p.dueDate)}` : 'Pending'}
+                                                    {isLate && <AlertTriangle size={12} className="ml-1"/>}
+                                                </p>
+                                                
+                                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end mt-3 pt-3 border-t border-white/10 gap-3">
+                                                    <div>
+                                                        <span className="text-[10px] font-bold text-white/40 block mb-0.5 uppercase tracking-widest">Amount</span>
+                                                        <span className="text-lg font-black text-white">LKR {parseFloat(p.amount).toFixed(2)}</span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))
+                                    )
+                                })
                             )}
                         </div>
                     </div>
@@ -203,7 +219,6 @@ export default function StudentOverview() {
             
             <AIChatWidget />
 
-            {/* 🔥 RESPONSIVE IMAGE POPUP MODAL (LIGHTBOX) 🔥 */}
             {selectedImage && (
                 <div 
                     className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200"
@@ -215,11 +230,9 @@ export default function StudentOverview() {
                     >
                         <X size={20} className="sm:w-6 sm:h-6" />
                     </button>
-                    
                     <img 
                         src={selectedImage} 
                         alt="Post Full View" 
-                        // Added safe max-width and max-height for mobile
                         className="max-w-[95vw] sm:max-w-full max-h-[85vh] sm:max-h-[90vh] object-contain rounded-xl sm:rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)] border border-white/10 animate-in zoom-in-95 duration-300" 
                         onClick={(e) => e.stopPropagation()} 
                     />

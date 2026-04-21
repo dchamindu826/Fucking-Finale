@@ -53,7 +53,7 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/staff" className={getNavLinkClass}><Users size={18} /> Staff Management</NavLink>
             <NavLink to="/admin/content-hub" className={getNavLinkClass}><MonitorPlay size={18} /> Content Hub</NavLink>
             <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
-            <NavLink to="/admin/crm-setup" className={getNavLinkClass}><HeadphonesIcon size={18} /> CRM Setup (Admin)</NavLink>
+            <NavLink to="/admin/crm-setup" className={getNavLinkClass}><HeadphonesIcon size={18} /> CRM Setup </NavLink>
           </>
         )}
 
