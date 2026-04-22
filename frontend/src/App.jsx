@@ -14,7 +14,8 @@ import MainLayout from "./components/layouts/MainLayout";
 
 // Dashboards & Modules
 import AdminDashboard from './pages/admin/AdminDashboard';
-import ContentHub from './components/common/ContentHub';
+// 👇 Updated path to the new folder structure 👇
+import ContentHub from './components/common/contenthub/ContentHub';
 import StaffManagement from './components/common/StaffManagement'; 
 import PaymentManagement from './components/common/PaymentManagement';
 

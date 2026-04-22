@@ -2,14 +2,12 @@ const express = require('express');
 const router = express.Router();
 const studentController = require('../controllers/studentController');
 const multer = require('multer');
-const jwt = require('jsonwebtoken'); // 🔥 FIX: JWT import karanna
+const jwt = require('jsonwebtoken');
 
 const uploadImage = multer({ dest: 'storage/images/' });
 const uploadDocument = multer({ dest: 'storage/documents/' });
 
-// 🔥 FIX: Token eka kiyawana Auth Middleware eka 🔥
 const verifyToken = (req, res, next) => {
-    // Frontend eken evana Authorization header eken token eka gannawa
     const token = req.headers.authorization?.split(' ')[1];
     
     if (!token) {
@@ -17,7 +15,6 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
-        // Token eka hari da balala eke thiyena data (userId) req.user ekata danawa
         const verified = jwt.verify(token, process.env.JWT_SECRET);
         req.user = verified; 
         next();
@@ -26,18 +23,24 @@ const verifyToken = (req, res, next) => {
     }
 };
 
-// 🔥 FIX: Dan hama route ekakatama 'verifyToken' eka mada danna ona 🔥
 router.get('/dashboard', verifyToken, studentController.getStudentDashboard);
 router.get('/available-enrollments', verifyToken, studentController.getAvailableEnrollments);
+router.get('/my-enrolled-subjects', verifyToken, studentController.getMyEnrolledSubjects); // 🔥 අලුත් Route එක
+
 router.post('/payhere-hash', verifyToken, studentController.generatePayHereHash);
-router.post('/enroll-with-slip', verifyToken, uploadDocument.single('slipImage'), studentController.enrollStudent);
+
+// 🔥 FIX: Slips 4ක් වෙනකම් Upload කරන්න පුළුවන් වෙන්න array(4) දැම්මා
+router.post('/enroll-with-slip', verifyToken, uploadDocument.array('slipImages', 4), studentController.enrollStudent);
+router.post('/upload-due-slip', verifyToken, uploadDocument.array('slipImages', 4), studentController.uploadDueSlip);
 
 router.get('/classroom', verifyToken, studentController.getStudentClassroom);
 router.get('/module/:id', verifyToken, studentController.getCourseModules);
 router.get('/my-payments', verifyToken, studentController.getMyPayments);
 
-// Profile routes walatath token eka aniwaren ona!
 router.post('/profile/update', verifyToken, uploadImage.single('image'), studentController.updateProfile);
 router.post('/profile/password', verifyToken, studentController.updatePassword);
+
+//payhere
+router.post('/payhere-notify', studentController.payhereNotify);
 
 module.exports = router;

@@ -2,18 +2,16 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
 
-// 1. Dashboard එකට Posts, Alerts සහ Real Stats යැවීම
+// 1. Dashboard
 exports.getStudentDashboard = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id;
 
-        // 1. Real Posts
         const posts = await prisma.post.findMany({
             orderBy: { created_at: 'desc' },
             take: 5
         });
 
-        // 2. Real Enrollments
         const validPayments = await prisma.payment.findMany({
             where: { studentId: parseInt(studentId), status: { in: [1, 4] } }
         });
@@ -28,7 +26,6 @@ exports.getStudentDashboard = async (req, res) => {
             }
         });
 
-        // 3. Due Payments & Alerts Logic (Pending Verify ain kala)
         let alerts = [];
         let duePaymentsList = [];
         
@@ -40,7 +37,6 @@ exports.getStudentDashboard = async (req, res) => {
         const today = new Date();
 
         pendingPayments.forEach(p => {
-            // Include ONLY if it has a due date and is NOT a verifying slip
             if (p.due_date && p.method !== 'Slip') {
                 const dueDate = new Date(p.due_date);
                 const diffTime = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24)); 
@@ -56,7 +52,6 @@ exports.getStudentDashboard = async (req, res) => {
                     diffDays: diffTime
                 });
 
-                // Set pop-up alerts based on how many days left
                 if (diffTime < 0) {
                     alerts.push({ type: 'locked', msg: `Your payment for ${courseName} is OVERDUE by ${Math.abs(diffTime)} days. Please pay immediately.` });
                 } else if (diffTime <= 1) {
@@ -67,7 +62,6 @@ exports.getStudentDashboard = async (req, res) => {
             }
         });
 
-        // Backend stat counts
         let unlockedVideos = 0;
         let studyMaterials = 0;
         if (enrolledSubjectIds.size > 0) {
@@ -85,7 +79,7 @@ exports.getStudentDashboard = async (req, res) => {
             enrolledCount: enrolledSubjectIds.size, 
             upcomingLive: null,
             posts: posts,
-            alerts: alerts, // ONLY Due alerts sent
+            alerts: alerts,
             duePayments: JSON.parse(JSON.stringify(duePaymentsList, (key, value) => typeof value === 'bigint' ? value.toString() : value)),
             stats: { unlockedVideos, studyMaterials }
         });
@@ -95,8 +89,7 @@ exports.getStudentDashboard = async (req, res) => {
     }
 };
 
-
-// 2. Enroll වෙන්න Businesses/Batches/Subjects යැවීම
+// 2. Enroll Businesses
 exports.getAvailableEnrollments = async (req, res) => {
     try {
         const businesses = await prisma.business.findMany({
@@ -132,12 +125,39 @@ exports.getAvailableEnrollments = async (req, res) => {
     }
 };
 
-// 3. PayHere Hash Generate කිරීම
+// 🔥 NEW: ළමයා දැනටමත් ගෙවලා තියෙන subjects වල IDs ගන්නවා (Cart එකටයි Already Paid පෙන්නන්නයි)
+exports.getMyEnrolledSubjects = async (req, res) => {
+    try {
+        const studentId = req.user?.userId || req.user?.id;
+        const validPayments = await prisma.payment.findMany({
+            where: { studentId: parseInt(studentId), status: { in: [0, 1, 4] } } // Pending + Approved
+        });
+
+        let enrolled = [];
+        validPayments.forEach(p => {
+            if (p.subjects) {
+                try { enrolled.push(...JSON.parse(p.subjects).map(Number)); } catch(e){}
+            }
+        });
+
+        res.status(200).json(enrolled);
+    } catch (error) {
+        res.status(500).json([]);
+    }
+};
+
+// 3. PayHere Hash (Updated to strictly use your .env variables)
 exports.generatePayHereHash = async (req, res) => {
     try {
         const { amount, orderId, currency } = req.body;
-        const merchantId = "1225565"; 
-        const merchantSecret = "YOUR_PAYHERE_SECRET"; 
+        
+        // Fetching directly from your .env file
+        const merchantId = process.env.PAYHERE_MERCHANT_ID; 
+        const merchantSecret = process.env.PAYHERE_SECRET; 
+
+        if (!merchantId || !merchantSecret) {
+            return res.status(500).json({ error: "PayHere credentials missing in server .env" });
+        }
 
         const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
         const amountFormatted = parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, useGrouping: false });
@@ -152,14 +172,41 @@ exports.generatePayHereHash = async (req, res) => {
     }
 };
 
-// 4. Enrollment එක Save කිරීම (Slip or PayHere)
+// 🔥 NEW: PayHere Notify Webhook (Required for PayHere to confirm success)
+exports.payhereNotify = async (req, res) => {
+    try {
+        const { merchant_id, order_id, payhere_amount, payhere_currency, status_code, md5sig } = req.body;
+        const merchantSecret = process.env.PAYHERE_SECRET;
+
+        const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
+        const hashString = merchant_id + order_id + payhere_amount + payhere_currency + status_code + hashedSecret;
+        const localMd5sig = crypto.createHash('md5').update(hashString).digest('hex').toUpperCase();
+
+        if (localMd5sig === md5sig && status_code === "2") {
+            // PayHere successfully verified the payment!
+            console.log(`[PayHere] Payment successfully verified for Order ID: ${order_id}`);
+            // (Your frontend is already saving the enrollment to the DB, so we just acknowledge it here)
+        }
+        
+        // You MUST return a 200 OK so PayHere knows the webhook was received
+        res.status(200).send("OK");
+    } catch (error) {
+        console.error("PayHere Notify Error:", error);
+        res.status(500).send("Webhook Error");
+    }
+};
+
+// 4. Enrollment එක Save කිරීම (Direct Checkout with Multiple Slips & Remark)
 exports.enrollStudent = async (req, res) => {
     try {
-        const { businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId, amount } = req.body;
-        const slipFileName = req.file ? req.file.filename : null;
         const studentId = req.user?.userId || req.user?.id;
+        const { businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId, amount, remark } = req.body;
+        
+        // Slips ගොඩක් එනවා නම් ඒවා කමා (,) දාලා string එකක් කරනවා DB එකට දාන්න
+        const slipFileNames = req.files && req.files.length > 0 
+            ? req.files.map(f => f.filename).join(',') 
+            : null;
 
-        // 🔥 FIX: Payment එකත් එක්ක Group එකයි Subjects ටිකයි සේව් කරනවා
         await prisma.payment.create({
             data: {
                 studentId: parseInt(studentId),
@@ -170,8 +217,9 @@ exports.enrollStudent = async (req, res) => {
                 payment_type: paymentMethodChosen === 'installment' ? 2 : (paymentMethodChosen === 'full' ? 3 : 1),
                 method: method === 'slip' ? 'Slip' : 'PayHere',
                 status: method === 'slip' ? 0 : 1, 
-                slip_image: slipFileName,
-                amount: amount ? parseFloat(amount) : 0
+                slip_image: slipFileNames,
+                amount: amount ? parseFloat(amount) : 0,
+                remark: remark || null // 🔥 අලුත් Remark Field එක
             }
         });
 
@@ -182,12 +230,11 @@ exports.enrollStudent = async (req, res) => {
     }
 };
 
-// 5. My Classroom එකට Data යැවීම
+// 5. My Classroom
 exports.getStudentClassroom = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id;
 
-        // ළමයාගේ Approve හෝ Post Pay වෙච්ච Payments ගන්නවා
         const validPayments = await prisma.payment.findMany({
             where: { studentId: parseInt(studentId), status: { in: [1, 4] } }
         });
@@ -195,11 +242,8 @@ exports.getStudentClassroom = async (req, res) => {
         if (validPayments.length === 0) return res.status(200).json({ businesses: [] });
 
         const validBatchIds = [...new Set(validPayments.map(p => p.batchId).filter(Boolean))];
-        
-        // Only collect group IDs if it's a monthly payment (type 1)
         const validGroupIds = [...new Set(validPayments.filter(p => p.payment_type === 1).map(p => p.groupId).filter(Boolean))];
 
-        // ළමයා ගෙවලා තියෙන Subjects වල IDs ටික එකතු කරගන්නවා
         let allowedSubjectIds = [];
         validPayments.forEach(p => {
             if (p.subjects) {
@@ -210,7 +254,6 @@ exports.getStudentClassroom = async (req, res) => {
             }
         });
 
-        // අදාල Group එකට විතරක් අදාලව Business/Batches ගන්නවා
         const businesses = await prisma.business.findMany({
             where: { batches: { some: { id: { in: validBatchIds } } } },
             include: {
@@ -218,7 +261,6 @@ exports.getStudentClassroom = async (req, res) => {
                     where: { id: { in: validBatchIds } },
                     include: {
                         groups: {
-                            // If monthly (type 1) only get that group. If full/installment, get all groups (no filter).
                             where: validGroupIds.length > 0 ? { id: { in: validGroupIds } } : undefined,
                             include: { courses: true }
                         }
@@ -227,7 +269,6 @@ exports.getStudentClassroom = async (req, res) => {
             }
         });
 
-        // 🔥 FIX: ගෙවපු Subjects ටික විතරක් ෆිල්ටර් කරනවා
         businesses.forEach(biz => {
             biz.batches.forEach(batch => {
                 batch.groups.forEach(group => {
@@ -244,12 +285,10 @@ exports.getStudentClassroom = async (req, res) => {
     }
 };
 
-// 🔥 NEW: 404 Error එක හදන්න Content (Modules) යවන API එක 🔥
+// 6. Course Modules
 exports.getCourseModules = async (req, res) => {
     try {
-        const { id } = req.params; // courseId
-
-        // මේ Course එකට ලින්ක් කරලා තියෙන Content ටික ගන්නවා
+        const { id } = req.params; 
         const linkedContents = await prisma.contentCourse.findMany({
             where: { course_id: BigInt(id) }
         });
@@ -262,14 +301,12 @@ exports.getCourseModules = async (req, res) => {
             orderBy: { createdAt: 'desc' }
         });
 
-        // අදාල Folder (Lesson Groups) ටික ගන්නවා
         const groupIds = [...new Set(contents.map(c => c.contentGroupId).filter(Boolean))];
         const lessonGroups = await prisma.contentGroup.findMany({
              where: { id: { in: groupIds } },
              orderBy: { itemOrder: 'asc' }
         });
 
-        // 🔥 FIX: Frontend එකට ඕනේ විදිහට Content ටික කඩලා වෙන් කරනවා 🔥
         const liveClasses = contents.filter(c => c.contentType === 'live' || c.contentType === '1');
         const recordings = contents.filter(c => c.contentType === 'recording' || c.contentType === '2');
         const documents = contents.filter(c => c.contentType === 'document' || c.contentType === '3');
@@ -294,7 +331,7 @@ exports.getCourseModules = async (req, res) => {
     }
 };
 
-// 6. Payment History එකට Data යැවීම
+// 7. Payment History
 exports.getMyPayments = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id;
@@ -307,15 +344,13 @@ exports.getMyPayments = async (req, res) => {
 
         const formattedPayments = payments.map(p => {
             let frontendStatus = p.status;
-            
-            // 0=Pending, 1=Approved, 2=Rejected, 3=Non Paid, 4=Post Pay
-            if (p.status === 0 && p.method === 'Slip') frontendStatus = -1; // Verifying
-            else if (p.status === 0 && p.method === 'Upcoming') frontendStatus = 0; // Upcoming
+            if (p.status === 0 && p.method === 'Slip') frontendStatus = -1; 
+            else if (p.status === 0 && p.method === 'Upcoming') frontendStatus = 0; 
 
             return {
                 id: p.id,
                 courseName: `${p.business?.name || 'Course'} - ${p.batch?.name || 'Batch'}`,
-                amount: p.amount || 0, // 🔥 FIX: Null ආවොත් 0 කියලා යවනවා
+                amount: p.amount || 0, 
                 status: frontendStatus,
                 createdDate: p.created_at,
                 dueDate: p.due_date,
@@ -325,7 +360,6 @@ exports.getMyPayments = async (req, res) => {
             };
         });
 
-        // 🔥 FIX: BigInt Error එක මගහරින්න Safe JSON එකක් හදනවා
         const safeData = JSON.parse(JSON.stringify(formattedPayments, (key, value) =>
             typeof value === 'bigint' ? value.toString() : value
         ));
@@ -333,38 +367,26 @@ exports.getMyPayments = async (req, res) => {
         res.status(200).json(safeData); 
     } catch (error) {
         console.error("History Error:", error);
-        // Error එකක් ආවොත් crash නොවී හිස් Array එකක් යවනවා
         res.status(200).json([]); 
     }
 };
 
-// 7. Profile Update කිරීම
+// 8. Profile
 exports.updateProfile = async (req, res) => {
     try {
-        // 🔥 FIX: Token eken ena ID format 4kma check karanawa! 🔥
         const rawId = req.user?.userId || req.user?.id || req.userId || req.user;
         const studentId = parseInt(rawId);
 
-        // ID eka catch une nattam server eka crash wenne nathi wenna error eka gannawa
         if (!studentId || isNaN(studentId)) {
-            console.error("Auth Error: Could not find User ID in request.", req.user);
             return res.status(401).json({ error: "User authorization failed. Please relogin." });
         }
 
         const { addressHouseNo, addressStreet, city, district } = req.body;
         const image = req.file ? req.file.filename : undefined;
 
-        let updateData = {
-            addressHouseNo,
-            addressStreet,
-            city,
-            district
-        };
+        let updateData = { addressHouseNo, addressStreet, city, district };
 
-        // Image ekak upload karala thiyenawanam witharak DB eka update karanawa
-        if (image) {
-             updateData.image = image; 
-        }
+        if (image) { updateData.image = image; }
 
         await prisma.user.update({
             where: { id: studentId },
@@ -378,12 +400,42 @@ exports.updateProfile = async (req, res) => {
     }
 };
 
-// 8. Password වෙනස් කිරීම
 exports.updatePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         res.status(200).json({ message: "Password updated successfully" });
     } catch (error) {
         res.status(500).json({ error: "Failed to update password" });
+    }
+};
+
+// 🔥 NEW: Handle Due Slip Uploads from Payment History
+exports.uploadDueSlip = async (req, res) => {
+    try {
+        const { paymentId, remark } = req.body;
+        
+        // Mul slips tika join karala gannawa
+        const slipFileNames = req.files && req.files.length > 0 
+            ? req.files.map(f => f.filename).join(',') 
+            : null;
+
+        if (!slipFileNames) {
+            return res.status(400).json({ error: "No slips provided" });
+        }
+
+        await prisma.payment.update({
+            where: { id: parseInt(paymentId) },
+            data: {
+                slip_image: slipFileNames,
+                method: 'Slip',
+                status: 0, // Reset to pending so Admin sees it in Pending Tab
+                remark: remark || null
+            }
+        });
+
+        res.status(200).json({ message: "Slip uploaded successfully" });
+    } catch (error) {
+        console.error("Upload Due Slip Error:", error);
+        res.status(500).json({ error: "Failed to upload slip" });
     }
 };

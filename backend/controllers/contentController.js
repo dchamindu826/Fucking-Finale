@@ -8,6 +8,8 @@ const getTypeInt = (typeStr) => {
     }
 };
 
+const safeStr = (val) => Array.isArray(val) ? val[0] : (val || '');
+
 // ================= BUSINESS =================
 exports.createBusiness = async (req, res) => {
     try {
@@ -30,7 +32,15 @@ exports.updateBusiness = async (req, res) => {
     } catch (error) { res.status(500).json({ error: "Failed to update business" }); }
 };
 
-// ================= BATCHES =================
+exports.deleteBusiness = async (req, res) => {
+    try {
+        await prisma.business.delete({ where: { id: parseInt(req.body.business_id) } });
+        res.status(200).json({ message: "Business Deleted" });
+    } catch (e) { res.status(500).json({ error: "Failed to delete business. Please delete its batches first." }); }
+};
+
+
+// ================= BATCHES & LECTURERS =================
 exports.getBatchesByBusiness = async (req, res) => {
     try {
         const batches = await prisma.batch.findMany({
@@ -63,6 +73,28 @@ exports.updateBatch = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to update batch" }); }
 };
 
+exports.deleteBatch = async (req, res) => {
+    try {
+        await prisma.batch.delete({ where: { id: parseInt(req.body.batch_id) } });
+        res.status(200).json({ message: "Batch Deleted" });
+    } catch (e) { res.status(500).json({ error: "Failed to delete batch. Please delete its groups first." }); }
+};
+
+exports.updateBatchLecturers = async (req, res) => {
+    try {
+        const { batch_id, lecturers } = req.body;
+        const updated = await prisma.batch.update({
+            where: { id: parseInt(batch_id) },
+            data: { lecturers: JSON.stringify(lecturers || []) }
+        });
+        res.status(200).json(updated);
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Failed to update lecturers" }); 
+    }
+};
+
+
 // ================= GROUPS =================
 exports.createGroup = async (req, res) => {
     try {
@@ -84,7 +116,6 @@ exports.updateGroup = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to update group" }); }
 };
 
-// 🔥 FIX: Group eka delete karana function eka 🔥
 exports.deleteGroup = async (req, res) => {
     try {
         const { group_id } = req.body;
@@ -98,17 +129,31 @@ exports.deleteGroup = async (req, res) => {
     }
 };
 
-// ================= SUBJECTS =================
 
+// ================= SUBJECTS =================
 exports.createSubject = async (req, res) => {
     try {
-        const { name, code, stream, streams, description, itemOrder, groupPrices, isDiscountExcluded, lecturerName } = req.body;
+        const name = safeStr(req.body.name);
+        const code = safeStr(req.body.code);
+        const stream = safeStr(req.body.stream);
+        const description = safeStr(req.body.description);
+        const lecturerName = safeStr(req.body.lecturerName);
+        const itemOrder = safeStr(req.body.itemOrder);
+        const groupPrices = safeStr(req.body.groupPrices);
+        const isDiscountExcluded = safeStr(req.body.isDiscountExcluded);
+        let streamsStr = safeStr(req.body.streams);
+
+        try {
+            if (typeof streamsStr === 'string' && !streamsStr.startsWith('[')) {
+                streamsStr = JSON.stringify([streamsStr]);
+            }
+        } catch(e) {}
+
         const parsedPrices = JSON.parse(groupPrices || '[]');
-        const excludeDiscount = isDiscountExcluded === 'true' || isDiscountExcluded === true || isDiscountExcluded === '1';
+        const excludeDiscount = isDiscountExcluded === 'true' || isDiscountExcluded === '1';
         
         if (parsedPrices.length === 0) return res.status(400).json({ error: "Please select at least one group" });
 
-        // 🔥 FIX: Tute Cover images tika JSON ekata attach karanawa 🔥
         if (req.files && req.files.length > 0) {
             parsedPrices.forEach(gp => {
                 const file = req.files.find(f => f.fieldname === `tuteCover_${gp.groupId}`);
@@ -119,7 +164,7 @@ exports.createSubject = async (req, res) => {
         const coursePromises = parsedPrices.map(gp => {
             return prisma.course.create({
                 data: { 
-                    name, code, stream, streams: JSON.stringify(streams), description, lecturerName,
+                    name, code, stream, streams: streamsStr, description, lecturerName,
                     itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), 
                     groupPrices: JSON.stringify(parsedPrices), groupId: parseInt(gp.groupId),
                     isDiscountExcluded: excludeDiscount
@@ -137,14 +182,30 @@ exports.createSubject = async (req, res) => {
 
 exports.updateSubject = async (req, res) => {
     try {
-        const { course_id, name, code, stream, streams, description, itemOrder, groupPrices, isDiscountExcluded, lecturerName } = req.body;
+        const course_id = safeStr(req.body.course_id);
+        const name = safeStr(req.body.name);
+        const code = safeStr(req.body.code);
+        const stream = safeStr(req.body.stream);
+        const description = safeStr(req.body.description);
+        const lecturerName = safeStr(req.body.lecturerName);
+        const itemOrder = safeStr(req.body.itemOrder);
+        const groupPrices = safeStr(req.body.groupPrices);
+        const isDiscountExcluded = safeStr(req.body.isDiscountExcluded);
+        const batch_id = safeStr(req.body.batch_id); 
+        let streamsStr = safeStr(req.body.streams);
+
+        try {
+            if (typeof streamsStr === 'string' && !streamsStr.startsWith('[')) {
+                streamsStr = JSON.stringify([streamsStr]);
+            }
+        } catch(e) {}
+
         const parsedPrices = JSON.parse(groupPrices || '[]');
-        const excludeDiscount = isDiscountExcluded === 'true' || isDiscountExcluded === true || isDiscountExcluded === '1';
+        const excludeDiscount = isDiscountExcluded === 'true' || isDiscountExcluded === '1';
 
         const originalCourse = await prisma.course.findUnique({ where: { id: parseInt(course_id) } });
         if (!originalCourse) return res.status(404).json({ error: "Course not found" });
 
-        // 🔥 FIX: Tute Cover images tika JSON ekata attach karanawa 🔥
         if (req.files && req.files.length > 0) {
             parsedPrices.forEach(gp => {
                 const file = req.files.find(f => f.fieldname === `tuteCover_${gp.groupId}`);
@@ -158,7 +219,6 @@ exports.updateSubject = async (req, res) => {
             });
 
             if (existingCourse) {
-                // Parana image eka thiyagannawa aluth ekak nathnam
                 const existingGpData = JSON.parse(existingCourse.groupPrices || '[]').find(p => parseInt(p.groupId) === parseInt(gp.groupId));
                 if (!gp.tuteCover && existingGpData && existingGpData.tuteCover) {
                     gp.tuteCover = existingGpData.tuteCover;
@@ -166,16 +226,31 @@ exports.updateSubject = async (req, res) => {
 
                 return prisma.course.update({
                     where: { id: existingCourse.id },
-                    data: { name, code, stream, streams: JSON.stringify(streams), description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), isDiscountExcluded: excludeDiscount }
+                    data: { name, code, stream, streams: streamsStr, description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), isDiscountExcluded: excludeDiscount }
                 });
             } else {
                 return prisma.course.create({
-                    data: { name, code, stream, streams: JSON.stringify(streams), description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), groupId: parseInt(gp.groupId), isDiscountExcluded: excludeDiscount }
+                    data: { name, code, stream, streams: streamsStr, description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), groupId: parseInt(gp.groupId), isDiscountExcluded: excludeDiscount }
                 });
             }
         });
 
         await Promise.all(updatePromises);
+
+        // 🔥 Untick karapu groups database eken delete karana code eka 🔥
+        if (batch_id) {
+            const batchGroups = await prisma.group.findMany({ where: { batchId: parseInt(batch_id) }, select: { id: true } });
+            const batchGroupIds = batchGroups.map(g => g.id);
+            const allExistingCourses = await prisma.course.findMany({ where: { name: originalCourse.name, groupId: { in: batchGroupIds } } });
+            
+            const incomingGroupIds = parsedPrices.map(gp => parseInt(gp.groupId));
+            const coursesToDelete = allExistingCourses.filter(c => !incomingGroupIds.includes(c.groupId));
+            
+            for (const c of coursesToDelete) {
+                await prisma.course.delete({ where: { id: c.id } });
+            }
+        }
+
         res.status(200).json({ message: "Updated across groups" });
     } catch (e) { 
         console.error(e);
@@ -183,11 +258,16 @@ exports.updateSubject = async (req, res) => {
     }
 };
 
-// 🔥 NEW: Assign Lecturer Route 🔥
+exports.deleteSubject = async (req, res) => {
+    try {
+        await prisma.course.delete({ where: { id: parseInt(req.body.course_id) } });
+        res.status(200).json({ message: "Subject Deleted" });
+    } catch (e) { res.status(500).json({ error: "Failed to delete subject." }); }
+};
+
 exports.assignLecturer = async (req, res) => {
     try {
         const { subjectName, lecturerName } = req.body;
-        // Update all courses with this name in the batch
         await prisma.course.updateMany({
             where: { name: subjectName },
             data: { lecturerName }
@@ -196,29 +276,6 @@ exports.assignLecturer = async (req, res) => {
     } catch (error) {
         res.status(500).json({ error: "Failed to assign lecturer" });
     }
-};
-
-
-// ================= DELETE FUNCTIONS (NEW) =================
-exports.deleteBusiness = async (req, res) => {
-    try {
-        await prisma.business.delete({ where: { id: parseInt(req.body.business_id) } });
-        res.status(200).json({ message: "Business Deleted" });
-    } catch (e) { res.status(500).json({ error: "Failed to delete business. Please delete its batches first." }); }
-};
-
-exports.deleteBatch = async (req, res) => {
-    try {
-        await prisma.batch.delete({ where: { id: parseInt(req.body.batch_id) } });
-        res.status(200).json({ message: "Batch Deleted" });
-    } catch (e) { res.status(500).json({ error: "Failed to delete batch. Please delete its groups first." }); }
-};
-
-exports.deleteSubject = async (req, res) => {
-    try {
-        await prisma.course.delete({ where: { id: parseInt(req.body.course_id) } });
-        res.status(200).json({ message: "Subject Deleted" });
-    } catch (e) { res.status(500).json({ error: "Failed to delete subject." }); }
 };
 
 
@@ -245,6 +302,7 @@ exports.createInstallment = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to create installment" }); }
 };
 
+
 // ================= FOLDERS (CONTENT GROUPS) =================
 exports.addContentGroup = async (req, res) => {
     try {
@@ -262,6 +320,7 @@ exports.deleteContentGroup = async (req, res) => {
         res.status(200).json({ message: "Folder Deleted" });
     } catch (e) { res.status(500).json({ error: "Failed to delete folder. Delete contents first." }); }
 };
+
 
 // ================= CONTENT & MASS ASSIGN =================
 exports.addContentMassAssign = async (req, res) => {
@@ -305,7 +364,6 @@ exports.deleteContent = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to delete" }); }
 };
 
-// 🔥 අලුතින් හැදුව GET CONTENTS (Course එකට අදාල Content ගන්නවා) 🔥
 exports.getContents = async (req, res) => {
     try {
         const { batchId, courseCode, courseId } = req.query;
@@ -328,12 +386,10 @@ exports.getContents = async (req, res) => {
     } catch (e) { console.error(e); res.status(500).json({ error: "Failed to fetch contents" }); }
 };
 
+
 // ================= BATCHES FULL DATA =================
 exports.getBatchesFull = async (req, res) => {
     try {
-        // මෙතනදී Manager කෙනෙක් login වෙලා ඉන්නවනම් එයාගේ ID එක ගන්න ඕනේ (උදා: req.user.id)
-        // දැනට මම ඔක්කොම යවන විදිහට තියන්නම්, ඔයා authentication හැදුවම මෙතන filter කරන්න.
-        
         const batches = await prisma.batch.findMany({ 
             include: { 
                 business: true, 
@@ -351,12 +407,12 @@ exports.getBatchesFull = async (req, res) => {
     }
 };
 
+
 // ================= POSTS =================
 exports.createAdminPost = async (req, res) => {
     try {
         const { title, description, businessId, batchId } = req.body;
         
-        // Handle "all" strings correctly to null for BigInt DB fields
         const finalBizId = (businessId === 'all' || !businessId) ? null : BigInt(businessId);
         const finalBatchId = (batchId === 'all' || !batchId) ? null : BigInt(batchId);
 

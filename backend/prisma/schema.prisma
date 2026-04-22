@@ -70,6 +70,7 @@ model Batch {
   createdAt   DateTime @default(now())
 
   payments Payment[] // Added opposite relation
+  lecturers String? @db.Text
 }
 
 model Group {
@@ -191,7 +192,10 @@ model Payment {
   // 🔥 අලුතින් එකතු කරපු Fields (අදාල මාසේ සහ සබ්ජෙක්ට්ස් මතක තියාගන්න)
   groupId    Int?
   group      Group?    @relation(fields: [groupId], references: [id])
+  
+  // 👇 මේ ලයින් දෙක හරියටම මේ විදිහට හදාගන්න 👇
   subjects   String?   @db.Text
+  remark     String?   @db.Text
 }
 
 model CrmSetting {

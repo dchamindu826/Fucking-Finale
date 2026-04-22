@@ -70,7 +70,8 @@ router.delete('/admin/business/delete', controller.deleteBusiness); // 🔥 NEW
 // Batches Setup
 router.post('/course-setup/batch', uploadIcon.single('logo'), controller.createBatch);
 router.put('/admin/batch/update', uploadIcon.single('logo'), controller.updateBatch);
-router.delete('/admin/batch/delete', controller.deleteBatch); // 🔥 NEW
+router.delete('/admin/batch/delete', controller.deleteBatch);
+router.put('/admin/batch/lecturers', controller.updateBatchLecturers);
 
 // Subjects Setup (🔥 FIX: uploadIcon.any() damma images ganna puluwan wenna 🔥)
 router.post('/course-setup/subject', uploadIcon.any(), controller.createSubject);

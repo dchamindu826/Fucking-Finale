@@ -9,39 +9,92 @@ exports.getPayments = async (req, res) => {
             orderBy: { created_at: 'desc' }
         });
 
+        const allCourses = await prisma.course.findMany({
+            select: { id: true, name: true, price: true, code: true }
+        });
+        const courseMap = {};
+        allCourses.forEach(c => courseMap[c.id] = c);
+
+        const allInstallments = await prisma.installment.findMany();
         const today = new Date();
 
         const formattedPayments = await Promise.all(rawPayments.map(async (p) => {
             let currentStatus = 'Pending';
             
-            // Monthly Non-Paid Logic
-            if (p.payment_type === 1 && p.status === 1 && p.valid_until && new Date(p.valid_until) < today) {
+            // 🔥 Status Identification Logic
+            if (p.status === 5) {
+                currentStatus = 'Trash'; // 5 = Deleted/Trash
+            }
+            else if (p.payment_type === 1 && p.status === 1 && p.valid_until && new Date(p.valid_until) < today) {
                 currentStatus = 'Non Paid';
                 await prisma.payment.update({ where: { id: p.id }, data: { status: 3 } });
             } 
             else if (p.status === 0 && p.method === 'Upcoming') {
-                currentStatus = 'Upcoming'; // 🔥 FIX: Upcoming ඒවා වෙනම ටැබ් එකකට යවන්න
+                currentStatus = 'Upcoming';
             }
-            else if (p.status === 0) currentStatus = 'Pending';
-            else if (p.status === 1) currentStatus = 'Approved';
+            else if (p.status === 0) {
+                currentStatus = 'Pending';
+            }
+            else if (p.status === 1) {
+                // Free Card & Discount Identification
+                if (p.amount === 0 && p.remark && p.remark.includes('Free Card')) {
+                    currentStatus = 'Free Card';
+                } else if (p.remark && p.remark.includes('Custom Breakdown')) {
+                    currentStatus = 'Discount';
+                } else {
+                    currentStatus = 'Approved';
+                }
+            }
             else if (p.status === 2) currentStatus = 'Rejected';
             else if (p.status === 3) currentStatus = 'Non Paid';
             else if (p.status === 4) currentStatus = 'Post Pay';
 
+            let systemTotal = 0;
+            let parsedSubjects = [];
+            let totalPhases = 1;
+
+            if (p.subjects) {
+                try {
+                    const subIds = JSON.parse(p.subjects);
+                    parsedSubjects = subIds.map(id => {
+                        const course = courseMap[parseInt(id)];
+                        if (course) systemTotal += parseFloat(course.price || 0);
+                        return course || { id, name: 'Unknown Course', price: 0 };
+                    });
+
+                    if (p.payment_type === 2) {
+                        const plan = allInstallments.find(i => i.batchId === p.batchId && i.subjectCount <= subIds.length);
+                        if (plan && plan.details) {
+                            try {
+                                const parsedDetails = JSON.parse(plan.details);
+                                totalPhases = parsedDetails.length;
+                            } catch(e) {}
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            const slips = p.slip_image ? p.slip_image.split(',') : [];
+
             return {
                 id: p.id,
+                studentId: p.studentId,
                 studentName: p.student ? `${p.student.firstName} ${p.student.lastName}` : 'Unknown',
                 studentNo: p.student?.id ? `STU-${p.student.id}` : 'STU-000',
                 business: p.business?.name || 'N/A',
                 batch: p.batch?.name || 'N/A',
                 amount: p.amount || 0,
+                systemTotal: systemTotal, 
+                subjectsList: parsedSubjects, 
                 type: p.payment_type === 1 ? 'Monthly' : (p.payment_type === 2 ? 'Installment' : 'Full'),
                 method: p.method || 'Slip',
                 status: currentStatus,
                 date: p.created_at ? new Date(p.created_at).toISOString().split('T')[0] : '-',
                 dueDate: p.due_date ? new Date(p.due_date).toISOString().split('T')[0] : null,
                 installmentNo: p.installment_no || 1,
-                slipUrl: p.slip_image || null,
+                totalPhases: totalPhases,
+                slips: slips,
+                remark: p.remark || '',
                 daysLeft: p.post_pay_days || 0
             };
         }));
@@ -57,21 +110,43 @@ exports.getPayments = async (req, res) => {
     }
 };
 
-// 2. Standard Approve/Reject
+// 2. Action (Approve, Reject, Free Card, Discount, Trash)
 exports.paymentAction = async (req, res) => {
     try {
-        const { paymentId, action } = req.body;
-        const newStatus = action === 'Approve' ? 1 : 2; 
+        const { paymentId, action, customAmount, remark } = req.body;
+        let updateData = {};
 
-        let updateData = { status: newStatus };
+        // 🔥 Trash Logic
+        if (action === 'Trash') {
+            updateData.status = 5; 
+        } else if (action === 'Reject') {
+            updateData.status = 2;
+        } else if (action === 'Approve') {
+            updateData.status = 1;
+        } else if (action === 'Free Card') {
+            updateData.status = 1;
+            updateData.amount = 0;
+            if (!remark) return res.status(400).json({ error: "Remark is required for Free Card" });
+        } else if (action === 'Discount') {
+            updateData.status = 1;
+            updateData.amount = parseFloat(customAmount || 0);
+            if (!remark) return res.status(400).json({ error: "Remark is required for Discount" });
+        }
 
-        if (action === 'Approve') {
+        if (['Approve', 'Free Card', 'Discount'].includes(action)) {
             const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
             if (payRecord && payRecord.payment_type === 1) { 
                 let validDate = new Date();
                 validDate.setDate(validDate.getDate() + 30);
                 updateData.valid_until = validDate;
             }
+            
+            if (remark) {
+                updateData.remark = payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`;
+            }
+        } else if (remark && action !== 'Trash') {
+             const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
+             updateData.remark = payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`;
         }
 
         await prisma.payment.update({
@@ -79,11 +154,13 @@ exports.paymentAction = async (req, res) => {
             data: updateData
         });
 
-        res.status(200).json({ message: `Payment ${action}d successfully` });
+        res.status(200).json({ message: `Payment processed as ${action}` });
     } catch (error) {
         res.status(500).json({ error: "Action failed" });
     }
 };
+
+// ... Pahalin thibba `approveInstallment`, `grantPostPay` tika ehemama thiyaganna ...
 
 // 3. 🔥 FIX: Approve Installment & Prevent Duplicates 🔥
 exports.approveInstallment = async (req, res) => {
