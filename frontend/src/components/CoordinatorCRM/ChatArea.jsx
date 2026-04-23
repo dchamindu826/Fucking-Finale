@@ -28,7 +28,6 @@ export default function ChatArea({ selectedLead }) {
   const [isSending, setIsSending] = useState(false);
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
   
-  // 🔥 FIX: Store UI Reactions Locally until refreshed
   const [localReactions, setLocalReactions] = useState({});
 
   const [showQuickReplies, setShowQuickReplies] = useState(false);
@@ -75,7 +74,6 @@ export default function ChatArea({ selectedLead }) {
       reader.readAsDataURL(file);
   };
 
-  // 🔥 FIX: Reaction now attaches to the specific message UI
   const handleReaction = async (msg, emoji) => {
       if (!msg.metaMessageId) return toast.error("Cannot react: This is an older message.");
       try {
@@ -103,8 +101,9 @@ export default function ChatArea({ selectedLead }) {
       formData.append('leadId', targetLeadId);
       formData.append('senderName', user.firstName || 'Staff');
       
-      // Clean up text to send ONLY the actual text to Meta
-      formData.append('message', textToSend.replace(/^\[Replying to: ".*?"\]\n\n/, ''));
+      // 🔥 FIX: Clean eka Meta ekata, Quote eka Database ekata 🔥
+      const cleanMessage = textToSend.replace(/^\[Replying to: ".*?"\]\n\n/, '');
+      formData.append('message', cleanMessage); 
       
       if (replyingTo) {
           if (replyingTo.metaMessageId) {
@@ -112,8 +111,12 @@ export default function ChatArea({ selectedLead }) {
           } else {
               toast.error("Native reply disabled for older messages", { duration: 2000 });
           }
-          // 🔥 FIX: Tell backend to save the quote block ONLY locally for CRM UI
-          formData.append('localUIMessage', `[Replying to: "${replyingTo.message?.substring(0, 30)}..."]\n\n${textToSend}`); 
+          
+          // Me text eka thama Backend eke DB ekata yanne (UI eke pennanna)
+          const quotedText = replyingTo.message ? replyingTo.message.replace(/\n/g, ' ').substring(0, 30) : 'Media Message';
+          formData.append('crmMessage', `[Replying to: "${quotedText}..."]\n\n${cleanMessage}`); 
+      } else {
+          formData.append('crmMessage', cleanMessage); 
       }
 
       if (selectedFile) formData.append('media', selectedFile);
@@ -166,7 +169,9 @@ export default function ChatArea({ selectedLead }) {
       if (!msg.mediaUrl) return null;
       const url = msg.mediaUrl.startsWith('http') ? msg.mediaUrl : `${BACKEND_URL}${msg.mediaUrl}`; 
       
-      if (msg.mediaUrl.endsWith('.webp')) return <img src={url} alt="sticker" className="max-w-[150px] w-full bg-transparent mb-1 drop-shadow-md" />;
+      if (msg.mediaType?.includes('webp') || msg.mediaUrl.endsWith('.webp')) {
+          return <img src={url} alt="sticker" className="max-w-[130px] w-full bg-transparent drop-shadow-md mb-1" />;
+      }
       if (msg.mediaType?.includes('image')) return <img src={url} alt="img" className="max-w-[300px] w-full rounded-lg mb-2 object-cover border border-black/10" />;
       if (msg.mediaType?.includes('video')) return <video src={url} controls className="max-w-[300px] w-full rounded-lg mb-2" />;
       if (msg.mediaType?.includes('audio')) return <audio src={url} controls className="max-w-[300px] w-full mb-2" />;
@@ -176,11 +181,9 @@ export default function ChatArea({ selectedLead }) {
       return <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 bg-black/10 rounded-lg mb-2 text-xs font-bold hover:underline"><FaFilePdf className="text-red-500 text-lg"/> View Document</a>;
   };
 
-  // 🔥 FIX: Cleaned up Quotes Parser
   const renderMessageText = (text) => {
       if (!text) return null;
 
-      // Extract quoted text if exists
       let quotedText = null;
       let actualMessage = text;
 
@@ -195,9 +198,9 @@ export default function ChatArea({ selectedLead }) {
       if (quotedText) {
           return (
               <div className="flex flex-col w-full min-w-[200px]">
-                  <div className="bg-black/10 dark:bg-black/30 border-l-4 border-emerald-500 rounded-lg p-2 mb-2 shadow-sm w-full">
-                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold block mb-0.5">Quoted Message</span>
-                      <span className="text-[11px] text-slate-700 dark:text-slate-300 line-clamp-2 italic">{quotedText}</span>
+                  <div className="bg-black/10 dark:bg-black/30 border-l-4 border-emerald-500 rounded p-2.5 mb-1.5 shadow-sm w-full relative overflow-hidden">
+                      <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold block mb-0.5">Replying to</span>
+                      <span className="text-[13px] text-slate-700 dark:text-slate-300 line-clamp-2 italic">{quotedText}</span>
                   </div>
                   <span className="whitespace-pre-wrap">{actualMessage}</span>
               </div>
@@ -252,10 +255,9 @@ export default function ChatArea({ selectedLead }) {
 
                 {groupedMessages[dateLabel].map((msg, idx) => {
                     const isOutbound = msg.direction === 'outbound';
-                    const isSticker = msg.mediaUrl && msg.mediaUrl.endsWith('.webp');
-                    const currentReaction = localReactions[msg.id]; // Get local reaction if exists
+                    const isSticker = (msg.mediaUrl && msg.mediaUrl.endsWith('.webp')) || msg.mediaType?.includes('webp');
+                    const currentReaction = localReactions[msg.id]; 
 
-                    // Hide pure [Reaction] texts from chat flow since we show emojis attached to bubble
                     if (msg.message && msg.message.startsWith('[Reaction:') && msg.message.endsWith(']')) return null;
 
                     return (
@@ -282,7 +284,6 @@ export default function ChatArea({ selectedLead }) {
                                 )}
                                 
                                 <div className="relative">
-                                    {/* 🔥 Message Bubble 🔥 */}
                                     <div onDoubleClick={() => setReplyingTo(msg)} className={`px-4 py-3 text-[15px] cursor-pointer ${
                                         isSticker ? 'bg-transparent shadow-none p-0' : 
                                         isOutbound 
@@ -297,8 +298,6 @@ export default function ChatArea({ selectedLead }) {
                                         )}
 
                                         {renderMedia(msg)}
-                                        
-                                        {/* Pass localUIMessage if exists, else message */}
                                         {!isSticker && renderMessageText(msg.message)}
 
                                         {!isSticker && (
@@ -308,7 +307,6 @@ export default function ChatArea({ selectedLead }) {
                                         )}
                                     </div>
                                     
-                                    {/* 🔥 Attached Reaction display bottom corner 🔥 */}
                                     {currentReaction && (
                                         <div className={`absolute -bottom-2 ${isOutbound ? 'left-2' : 'right-2'} bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-600 rounded-full px-1.5 shadow-md text-sm z-10`}>
                                             {currentReaction}
@@ -330,7 +328,7 @@ export default function ChatArea({ selectedLead }) {
         </div>
       </div>
 
-      {/* Input Section (Unchanged logic, just UI adjustments) */}
+      {/* Input Section */}
       <div className={`flex flex-col border-t z-20 ${isDark ? 'bg-[#1e293b] border-slate-700' : 'bg-[#f0f2f5] border-slate-300'}`}>
           {suggestedQRs.length > 0 && (
               <div className="bg-[#0f172a] border-t border-slate-700 p-3 flex gap-2 overflow-x-auto custom-scrollbar shadow-lg">

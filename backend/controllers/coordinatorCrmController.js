@@ -1,6 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const axios = require('axios');
+const fs = require('fs'); // 🔥 ALUTHIN ADD KARANNA
+const path = require('path');
 
 // 1. Get Leads 
 exports.getLeads = async (req, res) => {
@@ -211,8 +213,33 @@ exports.receiveMessage = async (req, res) => {
             let contactData = body.entry[0].changes[0].value.contacts[0];
             let phone = msgData.from; 
             let name = contactData.profile.name; 
-            let messageText = msgData.text ? msgData.text.body : "Media Message";
-            let metaMsgId = msgData.id; // 🔥 Meta ID එක අල්ලගන්නවා
+            let metaMsgId = msgData.id; 
+
+            // Get API Key to download media
+            const settings = await prisma.crmSettings.findFirst({ where: { campaignType: 'FREE_SEMINAR' } });
+            
+            let messageText = msgData.text ? msgData.text.body : "";
+            let inMediaUrl = null;
+            let inMediaType = null;
+
+            // Handle Media Types (Stickers, Images, Audio, Documents)
+            if (msgData.type === 'image' && settings?.metaApiKey) {
+                const mediaInfo = await downloadMetaMedia(msgData.image.id, settings.metaApiKey);
+                if (mediaInfo) { inMediaUrl = mediaInfo.mediaUrl; inMediaType = mediaInfo.mediaType; }
+            } else if (msgData.type === 'sticker' && settings?.metaApiKey) {
+                const mediaInfo = await downloadMetaMedia(msgData.sticker.id, settings.metaApiKey);
+                if (mediaInfo) { inMediaUrl = mediaInfo.mediaUrl; inMediaType = mediaInfo.mediaType; }
+            } else if (msgData.type === 'audio' && settings?.metaApiKey) {
+                const mediaInfo = await downloadMetaMedia(msgData.audio.id, settings.metaApiKey);
+                if (mediaInfo) { inMediaUrl = mediaInfo.mediaUrl; inMediaType = mediaInfo.mediaType; }
+            } else if (msgData.type === 'document' && settings?.metaApiKey) {
+                const mediaInfo = await downloadMetaMedia(msgData.document.id, settings.metaApiKey);
+                if (mediaInfo) { inMediaUrl = mediaInfo.mediaUrl; inMediaType = mediaInfo.mediaType; }
+            }
+
+            if (!messageText && !inMediaUrl) {
+                messageText = "Media Message";
+            }
 
             const existingLead = await prisma.lead.findUnique({ where: { phone } });
             const needsAssignment = !existingLead || !existingLead.assignedTo; 
@@ -220,12 +247,12 @@ exports.receiveMessage = async (req, res) => {
             const lead = await prisma.lead.upsert({
                 where: { phone: phone },
                 update: { 
-                    name: name, lastMessage: messageText, unreadCount: { increment: 1 },
+                    name: name, lastMessage: messageText || 'Received Media', unreadCount: { increment: 1 },
                     status: existingLead?.assignedTo ? 'OPEN' : 'NEW', updatedAt: new Date() 
                 },
                 create: {
                     name: name, phone: phone, source: 'whatsapp', campaignType: 'FREE_SEMINAR', 
-                    lastMessage: messageText, unreadCount: 1, status: 'NEW', phase: 1, callStatus: 'pending', updatedAt: new Date()
+                    lastMessage: messageText || 'Received Media', unreadCount: 1, status: 'NEW', phase: 1, callStatus: 'pending', updatedAt: new Date()
                 }
             });
 
@@ -233,8 +260,8 @@ exports.receiveMessage = async (req, res) => {
 
             await prisma.chatMessage.create({
                 data: {
-                    leadId: lead.id, message: messageText, direction: 'inbound', senderType: 'USER', senderName: name,
-                    metaMessageId: metaMsgId // 🔥 DB එකේ සේව් කරනවා
+                    leadId: lead.id, message: messageText, mediaUrl: inMediaUrl, mediaType: inMediaType, 
+                    direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId 
                 }
             });
         }
@@ -258,10 +285,11 @@ exports.getMessages = async (req, res) => {
     } catch (error) { res.status(500).json({ error: "Failed to fetch messages" }); }
 };
 
-// 10. Send Message (🔥 META ACCOUNT HEALTH CHECK INCLUDED 🔥)
+//10Send Message
 exports.sendMessage = async (req, res) => {
     try {
-        const { leadId, message, senderName, replyToMetaId } = req.body; // 🔥 replyToMetaId අලුතින් ගන්නවා
+        // 🔥 req.body.localUIMessage kiyanne frontend eken ena ara quote karapu box text eka
+        const { leadId, message, senderName, replyToMetaId, localUIMessage } = req.body; 
         
         const lead = await prisma.lead.findUnique({ where: { id: parseInt(leadId) } });
         if (!lead) return res.status(404).json({ error: "Lead not found" });
@@ -278,7 +306,11 @@ exports.sendMessage = async (req, res) => {
 
         const newMsg = await prisma.chatMessage.create({
             data: {
-                leadId: parseInt(leadId), message: message || '', mediaUrl: mediaUrl, mediaType: mediaType,
+                leadId: parseInt(leadId), 
+                // 🔥 Message eka database eke save karaddi localUIMessage eka thiyenawanm eka gannawa, nattan normal eka gannawa
+                message: localUIMessage || message || '', 
+                mediaUrl: mediaUrl, 
+                mediaType: mediaType,
                 direction: 'outbound', senderType: 'STAFF', senderId: req.user?.id || null, senderName: senderName || req.user?.firstName || 'Staff'
             }
         });
@@ -298,7 +330,7 @@ exports.sendMessage = async (req, res) => {
                     to: formattedPhone,
                 };
 
-                // 🔥 NATIVE WHATSAPP REPLY CONTEXT 🔥
+                // WhatsApp Native Reply Context
                 if (replyToMetaId && replyToMetaId !== 'null' && replyToMetaId !== 'undefined') {
                     metaPayload.context = { message_id: replyToMetaId };
                 }
@@ -326,7 +358,6 @@ exports.sendMessage = async (req, res) => {
                     { headers: { 'Authorization': `Bearer ${settings.metaApiKey}`, 'Content-Type': 'application/json' } }
                 );
                 
-                // 🔥 Save the newly generated Meta ID for future replies 🔥
                 if (metaRes.data?.messages?.[0]?.id) {
                     await prisma.chatMessage.update({
                         where: { id: newMsg.id },
@@ -340,6 +371,39 @@ exports.sendMessage = async (req, res) => {
         res.status(201).json(newMsg);
     } catch (error) {
         res.status(500).json({ error: "Failed to send message" });
+    }
+};
+
+// 🔥 Helper: Download Media from Meta API 🔥
+const downloadMetaMedia = async (mediaId, metaApiKey) => {
+    try {
+        const urlRes = await axios.get(`https://graph.facebook.com/v19.0/${mediaId}`, {
+            headers: { 'Authorization': `Bearer ${metaApiKey}` }
+        });
+        const downloadUrl = urlRes.data.url;
+        const mimeType = urlRes.data.mime_type;
+        let ext = mimeType.split('/')[1];
+        if(ext.includes(';')) ext = ext.split(';')[0]; 
+
+        const mediaRes = await axios.get(downloadUrl, {
+            headers: { 'Authorization': `Bearer ${metaApiKey}` },
+            responseType: 'stream'
+        });
+
+        const fileName = `IN_${Date.now()}.${ext}`;
+        const relativePath = `/storage/documents/${fileName}`;
+        const savePath = path.join(process.cwd(), relativePath);
+
+        const writer = fs.createWriteStream(savePath);
+        mediaRes.data.pipe(writer);
+
+        return new Promise((resolve, reject) => {
+            writer.on('finish', () => resolve({ mediaUrl: relativePath, mediaType: mimeType }));
+            writer.on('error', reject);
+        });
+    } catch (err) {
+        console.error("Meta Media Download Error:", err.message);
+        return null;
     }
 };
 

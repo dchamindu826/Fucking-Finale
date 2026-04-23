@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom'; 
 import axios from '../../api/axios';
-import { FaPhoneAlt, FaCheckCircle, FaTimesCircle, FaUserSecret, FaKey, FaMapMarkerAlt, FaGraduationCap, FaCreditCard, FaTimes, FaMonitor } from 'react-icons/fa';
+import { FaPhoneAlt, FaCheckCircle, FaTimesCircle, FaUserSecret, FaKey, FaMapMarkerAlt, FaGraduationCap, FaCreditCard, FaTimes, FaArrowsAlt } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 export default function RightSidePanel({ selectedLead, activeMode }) {
@@ -12,6 +12,9 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
   
   const [ghostIframe, setGhostIframe] = useState(null);
   const [originalAdminSession, setOriginalAdminSession] = useState(null);
+
+  // 🔥 DRAG AND DROP STATE 🔥
+  const [iframePos, setIframePos] = useState({ x: 50, y: 50 });
 
   useEffect(() => {
     if (selectedLead?.phone) fetchStudentData();
@@ -28,13 +31,11 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
     setLoading(false);
   };
 
-  // 🔥 Ghost Login - Uses /admin/ghost-login route and opens in an Iframe
   const handleGhostLogin = async () => {
       if(!window.confirm(`Are you sure you want to log in as ${studentDetails.student.firstName}?`)) return;
       try {
           toast.loading("Initiating Ghost Login...", { id: "ghost" });
           
-          // Ensure this matches your exact backend route!
           const res = await axios.post('/admin/ghost-login', { studentId: studentDetails.student.id });
           
           if (res.data.token) {
@@ -45,7 +46,8 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
               localStorage.setItem('token', res.data.token);
               localStorage.setItem('user', JSON.stringify(res.data.user));
               
-              // Set the frontend URL to open in the iframe
+              // Set initial position centered
+              setIframePos({ x: window.innerWidth / 2 - 450, y: window.innerHeight / 2 - 300 });
               setGhostIframe('/student/dashboard');
               toast.success("Ghost Login Active!", { id: "ghost" });
           }
@@ -79,6 +81,29 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
       if (!payment) return "N/A";
       let typeStr = payment.payment_type === 1 ? "Monthly" : payment.payment_type === 2 ? "Installment" : "Full Payment";
       return `${typeStr} via ${payment.method || 'Slip'}`;
+  };
+
+  // 🔥 DRAG HANDLER LOGIC 🔥
+  const handleDragStart = (e) => {
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startPosX = iframePos.x;
+      const startPosY = iframePos.y;
+
+      const onMouseMove = (moveEvent) => {
+          setIframePos({
+              x: startPosX + (moveEvent.clientX - startX),
+              y: startPosY + (moveEvent.clientY - startY),
+          });
+      };
+
+      const onMouseUp = () => {
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
   };
 
   return (
@@ -207,25 +232,46 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
          </div>
       )}
 
-      {/* 🔥 Ghost Login Full Iframe Modal 🔥 */}
+      {/* 🔥 Ghost Login Floating Resizable Window 🔥 */}
       {ghostIframe && createPortal(
-          <div className="fixed inset-0 z-[99999] bg-[#0f172a]/95 flex flex-col backdrop-blur-lg animate-in fade-in duration-300">
-              <div className="w-full bg-[#1e293b] border-b border-slate-700 px-6 py-4 flex justify-between items-center shadow-xl z-10 shrink-0">
-                  <div className="flex items-center gap-4">
-                      <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
-                          <FaMonitor size={20} />
+          <div className="fixed inset-0 z-[99999] pointer-events-none">
+              <div 
+                  className="absolute pointer-events-auto bg-white flex flex-col shadow-[0_10px_50px_rgba(0,0,0,0.5)] border border-slate-600 rounded-2xl overflow-hidden"
+                  style={{
+                      left: `${iframePos.x}px`,
+                      top: `${iframePos.y}px`,
+                      width: '900px',
+                      height: '600px',
+                      resize: 'both',  // Resizable by user
+                      minWidth: '400px',
+                      minHeight: '300px'
+                  }}
+              >
+                  {/* Draggable Header */}
+                  <div 
+                      onMouseDown={handleDragStart}
+                      className="w-full bg-[#1e293b] border-b border-slate-700 px-4 py-3 flex justify-between items-center z-10 shrink-0 cursor-move"
+                  >
+                      <div className="flex items-center gap-3 pointer-events-none">
+                          <div className="p-1.5 bg-emerald-500/20 rounded-lg text-emerald-400">
+                              <FaArrowsAlt size={16} />
+                          </div>
+                          <div>
+                              <h3 className="text-white font-bold text-sm">Ghost Login Active</h3>
+                              <p className="text-emerald-400 text-[9px] font-bold uppercase tracking-widest">Landscape Dashboard</p>
+                          </div>
                       </div>
-                      <div>
-                          <h3 className="text-white font-bold text-lg">Ghost Login Active</h3>
-                          <p className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest">Viewing student dashboard</p>
-                      </div>
+                      <button 
+                          onMouseDown={(e) => e.stopPropagation()} 
+                          onClick={closeGhostLogin} 
+                          className="flex items-center gap-2 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-3 py-1.5 rounded-lg font-bold transition-all text-xs uppercase tracking-widest"
+                      >
+                          <FaTimes size={12} /> Close
+                      </button>
                   </div>
-                  <button onClick={closeGhostLogin} className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-5 py-2.5 rounded-xl font-bold transition-all text-xs uppercase tracking-widest shadow-lg shadow-red-500/20">
-                      <FaTimes size={16} /> End Session & Close
-                  </button>
-              </div>
-              <div className="flex-1 w-full relative bg-white flex justify-center overflow-hidden">
-                  <div className="w-full max-w-[450px] h-full bg-white shadow-2xl border-x border-slate-200">
+                  
+                  {/* Iframe Content */}
+                  <div className="flex-1 w-full bg-[#f8fafc]">
                       <iframe src={ghostIframe} className="w-full h-full border-none" title="Ghost Login View"></iframe>
                   </div>
               </div>
