@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  // ඔයාගේ අලුත් Base URL එක
-  baseURL: 'https://imacampus.online/api', 
+  // 🔥 FIX: Live Domain එක වෙනුවට කෙලින්ම Server IP එකයි Port එකයි දාන්න!
+  baseURL: 'http://72.62.249.211:5000/api', 
 });
 
 // 🔥 NEW FIX: Frontend eken API yaddi Token eka aniwaren yawana eka 🔥

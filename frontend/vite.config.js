@@ -7,6 +7,14 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  build: {
+    sourcemap: false, // 🔥 මේකෙන් තමයි public source code පේන එක සම්පූර්ණයෙන්ම නවත්තන්නේ
+    rollupOptions: {
+        output: {
+            manualChunks: undefined,
+        },
+    },
+  },
   server: {
     host: '0.0.0.0', 
     port: 5173,

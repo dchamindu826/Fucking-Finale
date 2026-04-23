@@ -4,20 +4,20 @@ import { Toaster } from 'react-hot-toast';
 
 // Layout & Pages
 import Home from './pages/web/pages/Home'; 
-import AboutUs from './pages/web/pages/AboutUs'; // 🔥 NEW 🔥
-import ContactUs from './pages/web/pages/ContactUs'; // 🔥 NEW 🔥
-import PrivacyPolicy from './pages/web/pages/PrivacyPolicy'; // 🔥 NEW 🔥
-import Terms from './pages/web/pages/Terms'; // 🔥 NEW 🔥
+import AboutUs from './pages/web/pages/AboutUs'; 
+import ContactUs from './pages/web/pages/ContactUs'; 
+import PrivacyPolicy from './pages/web/pages/PrivacyPolicy'; 
+import Terms from './pages/web/pages/Terms'; 
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import MainLayout from "./components/layouts/MainLayout";
 
 // Dashboards & Modules
 import AdminDashboard from './pages/admin/AdminDashboard';
-// 👇 Updated path to the new folder structure 👇
 import ContentHub from './components/common/contenthub/ContentHub';
 import StaffManagement from './components/common/StaffManagement'; 
 import PaymentManagement from './components/common/PaymentManagement';
+import StudentDataCenter from './components/common/StudentDataCenter';
 
 // System Admin CRM Setup
 import CrmManagement from './components/admin/CrmManagement';
@@ -27,6 +27,7 @@ import CoordinatorDashboard from './pages/ClassCoordinator/CoordinatorDashboard'
 
 // Department Dashboards (Mangers & Staff)
 import ManagerDashboard from './pages/class_coordinator/manager/ManagerDashboard';
+import DeliveryDashboard from './pages/delivery/DeliveryDashboard'; // 🔥 NEW 🔥
 
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
@@ -81,7 +82,6 @@ export default function App() {
         {/* Public Routes */}
         <Route path="/" element={<Home loggedInUser={loggedInUser} />} />
         
-        {/* 🔥 NEW WEB PAGES ROUTES 🔥 */}
         <Route path="/about-us" element={<AboutUs />} />
         <Route path="/contact-us" element={<ContactUs />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -104,13 +104,16 @@ export default function App() {
             <Route path="/finance/dashboard" element={<ManagerDashboard />} /> 
             <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
             <Route path="/technical/dashboard" element={<ManagerDashboard />} />
-            <Route path="/delivery/dashboard" element={<ManagerDashboard />} />
+            
+            {/* 🔥 Delivery Dashboard Route 🔥 */}
+            <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
 
             {/* Common Panels */}
             <Route path="/admin/content-hub" element={<ContentHub loggedInUser={loggedInUser} />} />
             <Route path="/admin/staff" element={<StaffManagement loggedInUser={loggedInUser} />} />
             <Route path="/admin/payments" element={<PaymentManagement loggedInUser={loggedInUser} />} />
-            
+            <Route path="/admin/student-center" element={<StudentDataCenter loggedInUser={loggedInUser} />} />
+
             {/* System Admin CRM Configuration */}
             <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
 

@@ -25,7 +25,8 @@ export default function ProfileSettings() {
     });
     
     const [dpFile, setDpFile] = useState(null);
-    const [previewUrl, setPreviewUrl] = useState(user.image && user.image !== 'default.png' && user.image !== 'null' ? `http://72.62.249.211:5000/storage/images/${user.image}` : null);
+    // 🔥 FIX: Check local storage image exactly
+    const [previewUrl, setPreviewUrl] = useState(user.image && user.image !== 'default.png' && user.image !== 'null' ? `http://72.62.249.211:5000/images/${user.image}` : null);
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -56,16 +57,16 @@ export default function ProfileSettings() {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
 
-            // Update LocalStorage
+            // Update LocalStorage carefully
             const updatedUser = { ...user, ...details };
+            // 🔥 FIX: Capture new image name from backend
             if (res.data.image) updatedUser.image = res.data.image; 
             
             localStorage.setItem('user', JSON.stringify(updatedUser));
             toast.success("Profile updated successfully!");
             
-            if(dpFile) {
-                setTimeout(() => window.location.reload(), 1500);
-            }
+            // Reload window to update the sidebar image instantly
+            setTimeout(() => window.location.reload(), 1000);
             
         } catch (error) {
             toast.error(error.response?.data?.message || "Failed to update profile.");
@@ -91,7 +92,7 @@ export default function ProfileSettings() {
             toast.success("Password changed successfully!");
             setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
         } catch (error) {
-            toast.error(error.response?.data?.message || "Failed to change password.");
+            toast.error(error.response?.data?.error || "Failed to change password.");
         } finally {
             setPassLoading(false);
         }
@@ -133,7 +134,6 @@ export default function ProfileSettings() {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            {/* Disabled Fields */}
                             <div>
                                 <label className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 block">First Name</label>
                                 <input type="text" value={user.fName || user.firstName || ''} disabled className="w-full bg-white/5 border border-white/5 rounded-2xl p-4 text-white/50 outline-none text-sm cursor-not-allowed" />
@@ -152,7 +152,6 @@ export default function ProfileSettings() {
                             </div>
                         </div>
 
-                        {/* Editable Address Fields */}
                         <div className="pt-6 mt-6 border-t border-white/10">
                             <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2"><MapPin size={16} className="text-emerald-400"/> Delivery Address</h4>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

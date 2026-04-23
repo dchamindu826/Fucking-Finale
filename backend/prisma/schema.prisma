@@ -24,14 +24,14 @@ model User {
   department     String?
   businessType   String?
   
-  image          String?  // 🔥 FIX: Me line eka aluthen danna 🔥
+  image          String?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  payments Payment[] 
-  assignedLeads Lead[]        @relation("AssignedLeads")
-  sentMessages  ChatMessage[] @relation("SentMessages")
+  payments        Payment[] 
+  assignedLeads   Lead[]          @relation("AssignedLeads")
+  sentMessages    ChatMessage[]   @relation("SentMessages")
   autoAssignQuota AutoAssignQuota?
 }
 
@@ -49,11 +49,13 @@ model Business {
   status                           Int         @default(1)
   batches                          Batch[]
   createdAt                        DateTime    @default(now())
-  crmSettings                      CrmSetting? @relation(fields: [crmSettingId], references: [id])
+  
+  // 🔥 FIX: Corrected relation name to CrmSettings (with 's') 🔥
+  crmSettings                      CrmSettings? @relation(fields: [crmSettingId], references: [id])
+  crmSettingId                     Int?
+  
   autoReplies                      AutoReply[]
-
-  payments     Payment[] // Added opposite relation
-  crmSettingId Int?
+  payments                         Payment[]
 }
 
 model Batch {
@@ -69,8 +71,8 @@ model Batch {
   groups      Group[]
   createdAt   DateTime @default(now())
 
-  payments Payment[] // Added opposite relation
-  lecturers String? @db.Text
+  payments    Payment[]
+  lecturers   String?   @db.Text
 }
 
 model Group {
@@ -84,7 +86,6 @@ model Group {
   courses        Course[]
   createdAt      DateTime @default(now())
   
-  // 🔥 මේ අලුත් පේළිය දාන්න
   payments       Payment[] 
 }
 
@@ -101,7 +102,7 @@ model Course {
   groupPrices        String?  @db.Text
   
   isDiscountExcluded Boolean  @default(false) 
-  lecturerName       String?  // 🔥 NEW: Me line eka add karanna 🔥
+  lecturerName       String?
 
   groupId            Int?
   group              Group?   @relation(fields: [groupId], references: [id])
@@ -166,7 +167,6 @@ model ContentCourse {
   created_at DateTime @default(now())
 }
 
-// Added Payment Model to fix P1012 Error
 model Payment {
   id             Int       @id @default(autoincrement())
   amount         Float     @default(0)
@@ -180,107 +180,112 @@ model Payment {
   installment_no Int       @default(1) 
   valid_until    DateTime? 
 
-  created_at DateTime @default(now())
+  created_at     DateTime  @default(now())
 
-  studentId  Int?
-  student    User?     @relation(fields: [studentId], references: [id])
-  businessId Int?
-  business   Business? @relation(fields: [businessId], references: [id])
-  batchId    Int?
-  batch      Batch?    @relation(fields: [batchId], references: [id])
+  studentId      Int?
+  student        User?     @relation(fields: [studentId], references: [id])
+  businessId     Int?
+  business       Business? @relation(fields: [businessId], references: [id])
+  batchId        Int?
+  batch          Batch?    @relation(fields: [batchId], references: [id])
   
-  // 🔥 අලුතින් එකතු කරපු Fields (අදාල මාසේ සහ සබ්ජෙක්ට්ස් මතක තියාගන්න)
-  groupId    Int?
-  group      Group?    @relation(fields: [groupId], references: [id])
+  groupId        Int?
+  group          Group?    @relation(fields: [groupId], references: [id])
   
-  // 👇 මේ ලයින් දෙක හරියටම මේ විදිහට හදාගන්න 👇
-  subjects   String?   @db.Text
-  remark     String?   @db.Text
+  subjects       String?   @db.Text
+  remark         String?   @db.Text
 }
 
-model CrmSetting {
+// ==========================================
+// 🔥 CRM MODULE MODELS 🔥
+// ==========================================
+
+model CrmSettings {
   id           Int        @id @default(autoincrement())
   businessId   Int
-  campaignType String     // "FREE_SEMINAR" or "AFTER_SEMINAR" 
-  batchId      Int?       // Free Seminar එකට Allocate කරන Batch එක
-  metaApiKey   String?    @db.Text // 🔥 FIX: දිග API Keys දාන්න Text කළා
-  waId         String?    
-  waNumId      String?    
-  geminiKeys   String?    @db.Text // 🔥 FIX: Array එකක් යන නිසා Text කළා
-  botMode      String?    @default("OFF") // "AI_ONLY", "AUTO_REPLY_ONLY", "OFF"
-  businesses   Business[]
-
-  @@unique([businessId, campaignType]) 
-}
-
-model KnowledgeBase {
-  id         Int      @id @default(autoincrement())
-  businessId Int
-  fileName   String   @db.Text // 🔥 FIX: දිග නම් තියෙන ෆයිල් වලට 
-  fileType   String
-  uploadedAt DateTime @default(now())
+  campaignType String
+  metaApiKey   String?    @db.Text
+  waId         String?
+  waNumId      String?
+  geminiKeys   Json?      // Array of API keys
+  botMode      String     @default("OFF")
+  batchId      String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  businesses   Business[] // Opposite relation required by Prisma
 }
 
 model AutoReply {
-  id             Int      @id @default(autoincrement())
+  id             Int        @id @default(autoincrement())
   businessId     Int
-  business       Business @relation(fields: [businessId], references: [id])
+  campaignType   String
+  stepOrder      Int
+  message        String     @db.Text
+  attachment     String?
+  attachmentType String?
+  createdAt      DateTime   @default(now())
+  
+  business       Business?  @relation(fields: [businessId], references: [id]) // Relation
+}
 
-  campaignType   String 
-  stepOrder      Int 
-  message        String   @db.Text
-  attachment     String?  @db.Text // 🔥 FIX: දිග ෆයිල් නම් එන්න පුළුවන් නිසා
-  attachmentType String? 
-
-  createdAt      DateTime @default(now())
+model KnowledgeBase {
+  id           Int      @id @default(autoincrement())
+  businessId   Int
+  campaignType String?
+  fileName     String
+  fileUrl      String
+  content      String   @db.Text
+  createdAt    DateTime @default(now())
 }
 
 // ================= CRM MODULE MODELS =================
 
 model Lead {
-  id           Int           @id @default(autoincrement())
-  name         String?
-  phone        String        @unique 
-  source       String        @default("whatsapp") 
-  campaignType String        @default("FREE_SEMINAR") 
-  status       String        @default("NEW") 
+  id             Int           @id @default(autoincrement())
+  name           String?
+  phone          String        @unique 
+  source         String        @default("whatsapp") 
+  campaignType   String        @default("FREE_SEMINAR") 
+  status         String        @default("NEW") 
   
-  assignedTo   Int?          
-  assignedUser User?         @relation("AssignedLeads", fields: [assignedTo], references: [id])
+  assignedTo     Int?          
+  assignedUser   User?         @relation("AssignedLeads", fields: [assignedTo], references: [id])
   
-  lastMessage  String?       @db.Text
-  unreadCount  Int           @default(0) 
+  lastMessage    String?       @db.Text
+  unreadCount    Int           @default(0) 
   
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   
-  messages     ChatMessage[]
+  messages       ChatMessage[]
 
-  phase        Int           @default(1)
-  callMethod   String?       // direct, whatsapp, 3cx
-  callStatus   String        @default("pending") // pending, no_answer, reject, answered
-  feedback     String?
-  isAutoAssigned Boolean     @default(false)
+  phase          Int           @default(1)
+  callMethod     String?       // direct, whatsapp, 3cx
+  callStatus     String        @default("pending") // pending, no_answer, reject, answered
+  feedback       String?
+  isAutoAssigned Boolean       @default(false)
 }
 
 model ChatMessage {
-  id          Int      @id @default(autoincrement())
-  leadId      Int
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  leadId     Int
+  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   
-  message     String   @db.Text
-  mediaUrl    String?  @db.Text
-  mediaType   String?  
+  message    String   @db.Text
+  mediaUrl   String?  @db.Text
+  mediaType  String?  
   
-  direction   String   // "inbound", "outbound"
-  senderType  String   // "USER", "STAFF", "AI_BOT", "SYSTEM"
+  direction  String   // "inbound", "outbound"
+  senderType String   // "USER", "STAFF", "AI_BOT", "SYSTEM"
   
-  senderId    Int?     
-  senderName  String?  @default("System") // 🔥 FIX: Mekath damma lassanata name eka penna
-  senderUser  User?    @relation("SentMessages", fields: [senderId], references: [id])
+  senderId   Int?      
+  senderName String?  @default("System")
+  senderUser User?    @relation("SentMessages", fields: [senderId], references: [id])
   
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  metaMessageId  String?
 }
 
 model AutoAssignQuota {

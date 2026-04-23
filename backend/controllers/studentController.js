@@ -1,6 +1,8 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken'); // 🔥 FIX: Ghost login error fix
+const bcrypt = require('bcrypt');
 
 // 1. Dashboard
 exports.getStudentDashboard = async (req, res) => {
@@ -385,7 +387,6 @@ exports.updateProfile = async (req, res) => {
         const image = req.file ? req.file.filename : undefined;
 
         let updateData = { addressHouseNo, addressStreet, city, district };
-
         if (image) { updateData.image = image; }
 
         await prisma.user.update({
@@ -393,7 +394,8 @@ exports.updateProfile = async (req, res) => {
             data: updateData
         });
 
-        res.status(200).json({ message: "Profile updated successfully", image });
+        // 🔥 FIX: Return the image name exactly as it was saved
+        res.status(200).json({ message: "Profile updated successfully", image: image || null });
     } catch (error) {
         console.error("Profile Update Error:", error);
         res.status(500).json({ error: "Failed to update profile" });
@@ -437,5 +439,134 @@ exports.uploadDueSlip = async (req, res) => {
     } catch (error) {
         console.error("Upload Due Slip Error:", error);
         res.status(500).json({ error: "Failed to upload slip" });
+    }
+};
+
+// ==========================================
+// 🔥 STUDENT DATA CENTER (ADMIN/STAFF USE) 🔥
+// ==========================================
+
+// 1. Get all students for Data Center
+exports.getStudentsDataCenter = async (req, res) => {
+    try {
+        const students = await prisma.user.findMany({
+            where: {
+                role: {
+                    in: ['Student', 'STUDENT', 'user', 'USER']
+                }
+            },
+            select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+                whatsapp: true,
+                optionalPhone: true,
+                nic: true,
+                addressHouseNo: true,
+                addressStreet: true,
+                city: true,
+                district: true,
+                image: true,
+                role: true,
+                // 🔥 අලුතින්: ළමයාගේ ඇත්තටම Enroll වෙලා තියෙන Payments (Status 1 or 4) ගන්නවා
+                payments: {
+                    where: { status: { in: [1, 4] } },
+                    include: {
+                        business: true,
+                        batch: true
+                    }
+                }
+            },
+            orderBy: { id: 'desc' }
+        });
+
+        // Data ටික ලස්සනට format කරලා යවනවා
+        const formattedStudents = students.map(student => {
+            const enrolledBusinesses = new Set();
+            const enrolledBatches = new Set();
+
+            student.payments.forEach(p => {
+                if (p.business) enrolledBusinesses.add(p.business.name);
+                if (p.batch) enrolledBatches.add(p.batch.name);
+            });
+
+            // We don't need to send all payments back to frontend, just the arrays
+            delete student.payments;
+
+            return {
+                ...student,
+                enrolledBusinesses: Array.from(enrolledBusinesses),
+                enrolledBatches: Array.from(enrolledBatches)
+            };
+        });
+
+        res.status(200).json(formattedStudents);
+    } catch (error) {
+        console.error("Error fetching students data center:", error);
+        res.status(500).json({ error: "Failed to fetch students" });
+    }
+};
+
+// 2. Edit Student Profile (🔥 Updated with ALL fields)
+exports.updateStudentByAdmin = async (req, res) => {
+    try {
+        const { 
+            id, firstName, lastName, phone, whatsapp, optionalPhone, 
+            nic, addressHouseNo, addressStreet, city, district 
+        } = req.body;
+
+        await prisma.user.update({
+            where: { id: parseInt(id) },
+            data: { 
+                firstName, lastName, phone, whatsapp, optionalPhone, 
+                nic, addressHouseNo, addressStreet, city, district 
+            }
+        });
+        res.status(200).json({ message: "Student updated successfully" });
+    } catch (error) {
+        console.error("Update student error:", error);
+        res.status(500).json({ error: "Failed to update student" });
+    }
+};
+
+// 3. Reset Student Password
+exports.resetStudentPassword = async (req, res) => {
+    try {
+        const { studentId, newPassword } = req.body;
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        
+        await prisma.user.update({
+            where: { id: parseInt(studentId) },
+            data: { password: hashedPassword }
+        });
+        
+        res.status(200).json({ message: "Password reset successful" });
+    } catch (error) {
+        console.error("Reset password error:", error);
+        res.status(500).json({ error: "Failed to reset password" });
+    }
+};
+
+// 4. Ghost Login
+exports.ghostLogin = async (req, res) => {
+    try {
+        const { studentId } = req.body;
+        const user = await prisma.user.findUnique({ where: { id: parseInt(studentId) } });
+        
+        if (!user) return res.status(404).json({ error: "Student not found" });
+
+        const token = jwt.sign(
+            { id: user.id, userId: user.id, role: user.role },
+            process.env.JWT_SECRET || "ima_super_secret_token_12345", 
+            { expiresIn: '1d' }
+        );
+
+        delete user.password;
+
+        res.status(200).json({ token, user });
+    } catch (error) {
+        console.error("Ghost login error:", error);
+        res.status(500).json({ error: "Failed to ghost login" });
     }
 };

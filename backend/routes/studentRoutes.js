@@ -3,9 +3,21 @@ const router = express.Router();
 const studentController = require('../controllers/studentController');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
+const path = require('path'); // 🔥 NEW: Extension එක හොයාගන්න
 
-const uploadImage = multer({ dest: 'storage/images/' });
-const uploadDocument = multer({ dest: 'storage/documents/' });
+// 🔥 FIX: Profile Pictures වල Extension එක (.jpg, .png) එක්කම Save වෙන්න හැදුවා
+const imageStorage = multer.diskStorage({
+    destination: (req, file, cb) => { cb(null, 'storage/images/'); },
+    filename: (req, file, cb) => { cb(null, Date.now() + '_' + Math.round(Math.random() * 1E9) + path.extname(file.originalname)); }
+});
+const uploadImage = multer({ storage: imageStorage });
+
+// 🔥 FIX: Due Slips / PDFs වල Extension එක (.pdf, .jpg) එක්කම Save වෙන්න හැදුවා
+const documentStorage = multer.diskStorage({
+    destination: (req, file, cb) => { cb(null, 'storage/documents/'); },
+    filename: (req, file, cb) => { cb(null, Date.now() + '_' + Math.round(Math.random() * 1E9) + path.extname(file.originalname)); }
+});
+const uploadDocument = multer({ storage: documentStorage });
 
 const verifyToken = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];

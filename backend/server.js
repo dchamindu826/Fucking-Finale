@@ -17,6 +17,8 @@ app.use('/documents', express.static(path.join(__dirname, 'storage/documents')))
 app.use('/storage/icons', express.static(path.join(__dirname, 'storage/icons'))); 
 app.use('/storage/posts', express.static(path.join(__dirname, 'storage/posts'))); 
 app.use('/storage/images', express.static(path.join(__dirname, 'storage/images')));
+app.use('/images', express.static(path.join(__dirname, 'storage/images')));
+app.use('/storage/documents', express.static(path.join(__dirname, 'storage/documents')));
 
 // ================= MODULAR ROUTES =================
 // අපි හදපු Routes ටික මෙතනින් ලින්ක් කරනවා. Frontend එකේ URLs පොඩ්ඩක්වත් වෙනස් වෙන්නේ නෑ.

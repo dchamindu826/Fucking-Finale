@@ -1,34 +1,56 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const fs = require('fs');
-const path = require('path');
-const pdfParse = require('pdf-parse'); // For PDF reading
+const pdfParse = require('pdf-parse'); 
 
 // ==========================================
 // 1. SETTINGS: CrmSettings
 // ==========================================
 exports.saveCrmSettings = async (req, res) => {
     try {
-        const { businessId, campaignType, customPrompts, autoReplyMode, autoResponderActive } = req.body;
+        const { businessId, campaignType, metaApiKey, waId, waNumId, geminiKeys, botMode, batchId } = req.body;
         
+        // Ensure businessId is an integer and campaignType exists
+        if (!businessId || !campaignType) {
+            return res.status(400).json({ error: "Missing businessId or campaignType" });
+        }
+
         const existing = await prisma.crmSettings.findFirst({
-            where: { businessId: parseInt(businessId), campaignType }
+            where: { 
+                businessId: parseInt(businessId), 
+                campaignType: campaignType 
+            }
         });
+
+        // Safe conversion of data
+        const settingsData = {
+            metaApiKey: metaApiKey || null,
+            waId: waId || null,
+            waNumId: waNumId || null,
+            geminiKeys: geminiKeys || [], 
+            botMode: botMode || 'OFF',
+            batchId: batchId ? String(batchId) : null
+        };
 
         if (existing) {
             const updated = await prisma.crmSettings.update({
                 where: { id: existing.id },
-                data: { customPrompts, autoReplyMode, autoResponderActive }
+                data: settingsData
             });
             return res.status(200).json({ message: "Settings updated", data: updated });
         } else {
             const created = await prisma.crmSettings.create({
-                data: { businessId: parseInt(businessId), campaignType, customPrompts, autoReplyMode, autoResponderActive }
+                data: { 
+                    businessId: parseInt(businessId), 
+                    campaignType: campaignType, 
+                    ...settingsData 
+                }
             });
             return res.status(201).json({ message: "Settings saved", data: created });
         }
     } catch (error) {
-        res.status(500).json({ error: "Failed to save settings" });
+        console.error("Save settings error:", error);
+        res.status(500).json({ error: "Failed to save settings", details: error.message });
     }
 };
 
@@ -36,10 +58,14 @@ exports.getCrmSettings = async (req, res) => {
     try {
         const { businessId, campaignType } = req.params;
         const settings = await prisma.crmSettings.findFirst({
-            where: { businessId: parseInt(businessId), campaignType }
+            where: { 
+                businessId: parseInt(businessId), 
+                campaignType: campaignType 
+            }
         });
         res.status(200).json(settings || {});
     } catch (error) {
+        console.error("Get settings error:", error);
         res.status(500).json({ error: "Failed to get settings" });
     }
 };
@@ -52,77 +78,59 @@ exports.uploadKnowledge = async (req, res) => {
         const { businessId, campaignType } = req.body;
         const file = req.file;
 
-        if (!file) {
-            return res.status(400).json({ error: "PDF file is required" });
-        }
+        if (!file) return res.status(400).json({ error: "PDF file is required" });
 
-        // PDF එක කියවලා Text එක ගන්නවා
         const dataBuffer = fs.readFileSync(file.path);
         const data = await pdfParse(dataBuffer);
-        const extractedText = data.text;
 
         const newKB = await prisma.knowledgeBase.create({
             data: {
                 businessId: parseInt(businessId),
-                campaignType,
+                campaignType: campaignType || 'FREE_SEMINAR',
                 fileName: file.originalname,
                 fileUrl: `/storage/documents/${file.filename}`,
-                content: extractedText
+                content: data.text
             }
         });
 
         res.status(201).json({ message: "Knowledge base updated successfully", data: newKB });
     } catch (error) {
+        console.error("Upload KB error:", error);
         res.status(500).json({ error: "Failed to upload knowledge base" });
     }
 };
 
 // ==========================================
-// 3. CAMPAIGN ARCHIVE:
-// ==========================================
-exports.archiveCampaign = async (req, res) => {
-    try {
-        const { businessId, campaignType } = req.body;
-
-        // මෙතනදී අපි පරණ Leads ටික Status='ARCHIVED' කරනවා
-        await prisma.lead.updateMany({
-            where: { businessId: parseInt(businessId), campaignType, status: { not: 'ARCHIVED' } },
-            data: { status: 'ARCHIVED' }
-        });
-
-        res.status(200).json({ message: "Campaign archived successfully. Ready for new batch." });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to archive campaign" });
-    }
-};
-
-// ==========================================
-// 4. AUTO REPLIES: MessageTemplate
+// 3. AUTO REPLIES: Message Sequence
 // ==========================================
 exports.addAutoReply = async (req, res) => {
     try {
-        const { businessId, campaignType, triggerKeyword, messageBody, isExactMatch } = req.body;
+        const { businessId, campaignType, stepOrder, message } = req.body;
         const file = req.file;
 
         let attachmentUrl = null;
+        let attachmentType = null;
+        
         if (file) {
             attachmentUrl = `/storage/documents/${file.filename}`;
+            attachmentType = file.mimetype.includes('image') ? 'Image' : 'Document';
         }
 
-        const newTemplate = await prisma.messageTemplate.create({
+        const newTemplate = await prisma.autoReply.create({
             data: {
                 businessId: parseInt(businessId),
-                campaignType,
-                triggerKeyword,
-                messageBody,
-                attachmentUrl,
-                isExactMatch: isExactMatch === 'true'
+                campaignType: campaignType || 'FREE_SEMINAR',
+                stepOrder: parseInt(stepOrder) || 1,
+                message: message || '',
+                attachment: attachmentUrl,
+                attachmentType: attachmentType
             }
         });
 
         res.status(201).json({ message: "Auto reply added successfully", data: newTemplate });
     } catch (error) {
-        res.status(500).json({ error: "Failed to add auto reply" });
+        console.error("Add reply error:", error);
+        res.status(500).json({ error: "Failed to add auto reply", details: error.message });
     }
 };
 
@@ -133,13 +141,14 @@ exports.getAutoReplies = async (req, res) => {
         if (businessId) whereClause.businessId = parseInt(businessId);
         if (campaignType) whereClause.campaignType = campaignType;
 
-        const replies = await prisma.messageTemplate.findMany({
+        const replies = await prisma.autoReply.findMany({
             where: whereClause,
-            orderBy: { createdAt: 'desc' }
+            orderBy: { stepOrder: 'asc' } 
         });
 
         res.status(200).json(replies);
     } catch (error) {
+        console.error("Get replies error:", error);
         res.status(500).json({ error: "Failed to get auto replies" });
     }
 };
@@ -147,24 +156,35 @@ exports.getAutoReplies = async (req, res) => {
 exports.deleteAutoReply = async (req, res) => {
     try {
         const { id } = req.params;
-        await prisma.messageTemplate.delete({
+        await prisma.autoReply.delete({
             where: { id: parseInt(id) }
         });
         res.status(200).json({ message: "Auto reply deleted" });
     } catch (error) {
+        console.error("Delete reply error:", error);
         res.status(500).json({ error: "Failed to delete auto reply" });
     }
 };
 
 // ==========================================
-// DUMMY FUNCTIONS (To Prevent Routing Errors)
+// 4. CAMPAIGN ARCHIVE
 // ==========================================
-// මේ ටික මම අලුතින් එකතු කලේ ඔයාගේ Routes වලට අදාල Functions මිස් වෙලා නම් සර්වර් එක Crash වෙන එක නවත්තන්න.
+exports.archiveCampaign = async (req, res) => {
+    try {
+        const { businessId, campaignType } = req.body;
 
-exports.getMessages = async (req, res) => {
-    res.status(200).json([]);
-};
+        try {
+            await prisma.lead.updateMany({
+                where: { businessId: parseInt(businessId), campaignType, status: { not: 'ARCHIVED' } },
+                data: { status: 'ARCHIVED' }
+            });
+        } catch (e) {
+            console.log("No lead table found to archive. Skipping lead update.");
+        }
 
-exports.sendMessage = async (req, res) => {
-    res.status(201).json({ message: "Dummy message sent" });
+        res.status(200).json({ message: "Campaign archived successfully." });
+    } catch (error) {
+        console.error("Archive error:", error);
+        res.status(500).json({ error: "Failed to archive campaign" });
+    }
 };

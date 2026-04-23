@@ -628,7 +628,7 @@ export default function PaymentManagement({ loggedInUser }) {
                 document.body
             )}
 
-            {/* 🔥 NEW: Iframe / Large Image Viewer Portal 🔥 */}
+            {/* 🔥 NEW: Iframe / Large Image Viewer Portal (WITH DEBUG) 🔥 */}
             {viewSlipUrl && createPortal(
                 <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="relative w-full max-w-4xl h-[85vh] bg-[#15192b] border border-white/10 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
@@ -640,7 +640,19 @@ export default function PaymentManagement({ loggedInUser }) {
                         </div>
                         <div className="flex-1 w-full h-full bg-black/80 flex items-center justify-center p-2 relative">
                             {viewSlipUrl.toLowerCase().endsWith('.pdf') ? (
-                                <iframe src={viewSlipUrl} className="w-full h-full rounded-xl bg-white" title="PDF Viewer"></iframe>
+                                <div className="w-full h-full flex flex-col bg-white rounded-xl overflow-hidden">
+                                    {/* 🔥 DEBUG URL BAR: මේ ලින්ක් එක ක්ලික් කරලා බලන්න PDF එක කෙලින්ම load වෙනවද කියලා 🔥 */}
+                                    <div className="bg-yellow-100 text-black p-3 text-xs font-bold break-all flex justify-between items-center">
+                                        <span>DEBUG URL: <a href={viewSlipUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline ml-2">{viewSlipUrl}</a></span>
+                                        <span className="text-red-500">Iframe එකේ පේන්නේ නැත්නම් ලින්ක් එක ක්ලික් කරලා බලන්න.</span>
+                                    </div>
+                                    <iframe 
+                                        src={viewSlipUrl} 
+                                        className="w-full flex-1" 
+                                        title="PDF Viewer"
+                                        onError={(e) => console.error("Iframe PDF Error:", e)}
+                                    ></iframe>
+                                </div>
                             ) : (
                                 <img src={viewSlipUrl} alt="Enlarged Slip" className="max-w-full max-h-full object-contain rounded-xl" />
                             )}

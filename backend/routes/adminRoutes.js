@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const studentController = require('../controllers/studentController');
 
 // Admin Overview
 router.get('/overview', async (req, res) => {
@@ -21,5 +22,13 @@ router.get('/manager/overview', async (req, res) => {
       res.status(500).json({ error: "Failed to load manager overview" });
   }
 });
+
+// ==========================================
+// 🔥 STUDENT DATA CENTER ROUTES 🔥
+// ==========================================
+router.get('/students-data-center', studentController.getStudentsDataCenter);
+router.put('/students/update', studentController.updateStudentByAdmin);
+router.post('/students/reset-password', studentController.resetStudentPassword);
+router.post('/ghost-login', studentController.ghostLogin);
 
 module.exports = router;

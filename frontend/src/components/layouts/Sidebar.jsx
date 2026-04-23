@@ -1,31 +1,39 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { 
     LayoutDashboard, Users, MonitorPlay, 
-    LogOut, HeadphonesIcon, Wallet, MessageCircle
+    LogOut, HeadphonesIcon, Wallet, MessageCircle, Database, Truck, Image as ImageIcon,
+    Package, Clock, CheckCircle, Archive
 } from 'lucide-react'; 
 
 export default function Sidebar({ userRole, loggedInUser, handleLogout, currentBg, setBgImage }) {
-  
+  const location = useLocation();
   const displayName = loggedInUser?.firstName || 'User';
   const roleName = loggedInUser?.role || 'Staff';
 
-  const themes = [
-    { id: 1, file: '/adminglass.jpg', color: 'bg-blue-500' },
-    { id: 2, file: '/bg1.jpg', color: 'bg-emerald-500' },
-    { id: 3, file: '/bg2.jpg', color: 'bg-purple-500' },
-    { id: 4, file: '/bg3.jpg', color: 'bg-orange-500' },
-    { id: 5, file: '/bg4.jpg', color: 'bg-red-500' },
-  ];
+  const themes = ['/adminglass.jpg', '/bg1.jpg', '/bg2.jpg', '/bg3.jpg', '/bg4.jpg'];
 
   const getNavLinkClass = ({ isActive }) => 
     isActive 
       ? "flex items-center gap-4 px-4 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-bold transition-all shadow-xl backdrop-blur-md text-sm"
       : "flex items-center gap-4 px-4 py-3.5 hover:bg-white/5 rounded-2xl font-medium text-white/60 hover:text-white transition-all border border-transparent text-sm";
 
+  // URL query parameters check කරන්න (Tabs සඳහා)
+  const queryParams = new URLSearchParams(location.search);
+  const activeTab = queryParams.get('tab') || 'overview';
+
+  // Active Tab එකට අදාල Class එක
+  const getTabLinkClass = (tabName) => 
+    activeTab === tabName && location.pathname.includes('/delivery/dashboard')
+      ? "flex items-center gap-4 px-4 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-bold transition-all shadow-xl backdrop-blur-md text-sm"
+      : "flex items-center gap-4 px-4 py-3.5 hover:bg-white/5 rounded-2xl font-medium text-white/60 hover:text-white transition-all border border-transparent text-sm";
+
+
   const isSystemAdmin = roleName === 'SYSTEM_ADMIN' || roleName === 'System Admin' || roleName === 'Director';
-  const isManager = roleName === 'MANAGER' || roleName === 'Manager' || roleName === 'ASS MANAGER';
-  const isStaff = !isSystemAdmin && !isManager && roleName !== 'STUDENT' && roleName !== 'user';
+  const isDeliveryDept = loggedInUser?.department === 'Delivery';
+  // 🔥 FIX: Delivery Department නෙවෙයි නම් විතරක් General Manager දේවල් පෙන්වන්න
+  const isManager = (roleName === 'MANAGER' || roleName === 'Manager' || roleName === 'ASS MANAGER') && !isDeliveryDept;
+  const isStaff = !isSystemAdmin && !isManager && !isDeliveryDept && roleName !== 'STUDENT' && roleName !== 'user';
   const isStudent = roleName === 'STUDENT' || roleName === 'user';
 
   return (
@@ -37,12 +45,6 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
       <div className="mx-4 mb-4 bg-black/40 border border-white/10 rounded-3xl p-5 flex flex-col items-center justify-center shrink-0 shadow-2xl">
         <h3 className="text-white font-bold text-base truncate w-full text-center">Hello, {displayName}</h3>
         <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mt-1">{roleName}</p>
-        
-        <div className="flex items-center gap-2 mt-4 bg-black/40 p-1.5 rounded-full border border-white/5">
-          {themes.map((theme) => (
-            <button key={theme.id} onClick={() => setBgImage(theme.file)} className={`w-4 h-4 rounded-full transition-all ${theme.color} ${currentBg === theme.file ? 'ring-2 ring-white scale-125' : 'opacity-40 hover:opacity-100'}`} />
-          ))}
-        </div>
       </div>
         
       <nav className="flex-1 flex flex-col gap-1.5 px-4 overflow-y-auto custom-scrollbar pb-4 mt-2">
@@ -53,7 +55,23 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/staff" className={getNavLinkClass}><Users size={18} /> Staff Management</NavLink>
             <NavLink to="/admin/content-hub" className={getNavLinkClass}><MonitorPlay size={18} /> Content Hub</NavLink>
             <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
+            <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
             <NavLink to="/admin/crm-setup" className={getNavLinkClass}><HeadphonesIcon size={18} /> CRM Setup </NavLink>
+            
+            {/* Admin ට Delivery එකට යන්න Link එකක් */}
+            <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Logistics & Delivery</div>
+            <NavLink to="/delivery/dashboard?tab=overview" className={getNavLinkClass}><Truck size={18} /> Delivery Hub</NavLink>
+          </>
+        )}
+
+        {/* 🔥 FIX: Delivery Department අයට පේන සුවිශේෂී මෙනු එක 🔥 */}
+        {isDeliveryDept && !isSystemAdmin && (
+          <>
+           <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-2 pl-2 tracking-widest">Delivery Dashboard</div>
+           <NavLink to="/delivery/dashboard?tab=overview" className={() => getTabLinkClass('overview')}><Package size={18} /> Overview</NavLink>
+           <NavLink to="/delivery/dashboard?tab=pending" className={() => getTabLinkClass('pending')}><Clock size={18} /> Pending & Holds</NavLink>
+           <NavLink to="/delivery/dashboard?tab=delivered" className={() => getTabLinkClass('delivered')}><CheckCircle size={18} /> Delivered</NavLink>
+           <NavLink to="/delivery/dashboard?tab=stock" className={() => getTabLinkClass('stock')}><Archive size={18} /> Tute Stock</NavLink>
           </>
         )}
 
@@ -64,16 +82,19 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/content-hub" className={getNavLinkClass}><MonitorPlay size={18} /> Content Hub</NavLink>
             <NavLink to="/admin/staff" className={getNavLinkClass}><Users size={18} /> Staff Management</NavLink>
             <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
+            <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
           </>
         )}
 
-        {/* 🔥 NEW: Active CRM Workspace (Visible to Admin, Manager, and Staff) 🔥 */}
         {(isSystemAdmin || isManager || isStaff) && (
           <>
             <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Workspace</div>
             <NavLink to="/workspace/crm" className={getNavLinkClass}>
-              <MessageCircle size={18} /> Coordinator CRM
+              <MessageCircle size={18} /> Free Seminar CRM
             </NavLink>
+            {!isSystemAdmin && !isManager && (
+                <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
+            )}
           </>
         )}
 
@@ -85,10 +106,27 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
         )}
       </nav>
 
-      <div className="p-4 border-t border-white/10 shrink-0">
-        <button onClick={handleLogout} className="w-full py-3.5 bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/30 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 text-xs uppercase tracking-widest">
-          <LogOut size={18} /> Secure Logout
-        </button>
+      {/* Footer Section */}
+      <div className="p-6 border-t border-white/10 shrink-0">
+          <div className="mb-4">
+              <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-2 flex items-center justify-center gap-1.5">
+                  <ImageIcon size={12}/> Wallpaper
+              </p>
+              <div className="flex justify-center gap-2">
+                  {themes.map((theme, i) => (
+                      <button
+                          key={i}
+                          onClick={() => setBgImage(theme)} 
+                          className={`w-6 h-6 rounded-full border-2 bg-cover bg-center transition-all ${currentBg === theme ? 'border-blue-500 scale-110 shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-white/20 hover:border-white/50'}`}
+                          style={{ backgroundImage: `url(${theme})` }}
+                      ></button>
+                  ))}
+              </div>
+          </div>
+
+          <button onClick={handleLogout} className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl font-bold text-white/70 hover:bg-red-500/20 hover:text-red-400 transition-colors border border-transparent hover:border-red-500/30">
+              <LogOut size={18} strokeWidth={2.5} /> Secure Logout
+          </button>
       </div>
     </div>
   );
