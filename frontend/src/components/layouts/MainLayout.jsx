@@ -12,7 +12,8 @@ export default function MainLayout({ loggedInUser, handleLogout }) {
   }, [bgImage]);
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 md:p-6 font-sans overflow-hidden">
+    // p-4 වෙනුවට p-2 sm:p-4 පාවිච්චි කළා ඉඩ ඉතුරු කරගන්න
+    <div className="relative min-h-screen flex items-center justify-center p-2 sm:p-4 lg:p-6 font-sans overflow-hidden">
       
       {/* 🚀 Dynamic Background Image 🚀 */}
       <div className="absolute inset-0 z-0 fixed transition-all duration-1000 ease-in-out">
@@ -20,9 +21,9 @@ export default function MainLayout({ loggedInUser, handleLogout }) {
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[8px]"></div>
       </div>
 
-      <div className="relative z-10 w-full max-w-[100%] xl:max-w-[98%] h-[95vh] bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex overflow-hidden transition-all duration-500">
+      {/* h-[95vh] එක responsive කළා h-[98vh] lg:h-[95vh] විදිහට */}
+      <div className="relative z-10 w-full max-w-[100%] xl:max-w-[98%] h-[98vh] lg:h-[95vh] bg-slate-900/40 backdrop-blur-2xl border border-white/10 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex overflow-hidden transition-all duration-500">
         
-        {/* Sidebar එකට props විදිහට ඔක්කොම යවනවා */}
         <Sidebar 
             userRole={loggedInUser?.role} 
             loggedInUser={loggedInUser} 
@@ -31,9 +32,8 @@ export default function MainLayout({ loggedInUser, handleLogout }) {
             setBgImage={setBgImage}
         />
         
-        {/* Main Content Area (Header එක අයින් කරලා Full Height දුන්නා) */}
         <div className="flex-1 flex flex-col overflow-hidden relative">
-          <div className="flex-1 overflow-y-auto custom-scrollbar p-6 relative z-10">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-4 lg:p-6 relative z-10">
             <Outlet />
           </div>
         </div>

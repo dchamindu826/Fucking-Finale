@@ -38,7 +38,7 @@ body::before {
 /* 🚀 FIX: Lag Free Glassmorphism 🚀 */
 .glass-container {
   background: rgba(10, 15, 30, 0.65);
-  backdrop-filter: blur(20px); /* Only the main container has blur now */
+  backdrop-filter: blur(20px); 
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -46,7 +46,6 @@ body::before {
 }
 
 .glass-card {
-  /* Removed backdrop-filter from here to completely eliminate scroll lag! */
   background: rgba(255, 255, 255, 0.05); 
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
@@ -60,27 +59,21 @@ body::before {
   border-color: rgba(239, 68, 68, 0.4); 
 }
 
-.animate-fade-in-up {
-  animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  opacity: 0;
-}
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+/* 🔥 FIX: Auto-Scale UI for 125% Windows Display Scale & Laptops 🔥 */
+@media (max-width: 1536px), (max-height: 900px) {
+  html {
+    font-size: 14px; /* Default is 16px. This shrinks the entire UI by ~12.5% */
+  }
 }
 
-.animate-bounce-slow {
-  animation: bounceSlow 4s ease-in-out infinite alternate;
-}
-@keyframes bounceSlow {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-15px); }
+@media (max-width: 1280px), (max-height: 768px) {
+  html {
+    font-size: 12px; /* Further shrinks on very small screens */
+  }
 }
 
-.animate-bounce-x {
-  animation: bounceX 1.5s ease-in-out infinite alternate;
-}
-@keyframes bounceX {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(5px); }
+/* 🔥 FIX: Global Modal Scroll - Prevents modals from bleeding out 🔥 */
+.modal-content, [role="dialog"] > div, .fixed.inset-0 > div > div {
+  max-height: 90vh !important;
+  overflow-y: auto !important;
 }

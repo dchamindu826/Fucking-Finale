@@ -4,6 +4,7 @@ const coordinatorCrmController = require('../controllers/coordinatorCrmControlle
 const multer = require('multer');
 const path = require('path');
 
+// Multer Storage Configuration
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, 'storage/documents'),
     filename: (req, file, cb) => cb(null, 'CHAT_' + Date.now() + path.extname(file.originalname))
@@ -22,12 +23,21 @@ router.post('/reset-password', coordinatorCrmController.resetStudentPassword);
 
 router.get('/messages/:leadId', coordinatorCrmController.getMessages);
 router.post('/messages', upload.single('media'), coordinatorCrmController.sendMessage);
+router.post('/messages/react', coordinatorCrmController.sendReaction);
 
-// 🔥 NEW: Meta Templates Fetch Route
+// 🔥 Meta Templates Routes with Multer 🔥
 router.get('/meta-templates', coordinatorCrmController.getMetaTemplates);
+router.post('/meta-templates', upload.single('media'), coordinatorCrmController.createMetaTemplate);
+router.delete('/meta-templates/:name', coordinatorCrmController.deleteMetaTemplate);
 
+// Broadcast & Leads
+router.post('/broadcast', upload.single('media'), coordinatorCrmController.sendBroadcast);
+router.get('/all-leads', coordinatorCrmController.getAllCampaignLeads);
+
+// Webhook
 router.get('/webhook', coordinatorCrmController.verifyWebhook); 
 router.post('/webhook', coordinatorCrmController.receiveMessage);
-router.post('/messages/react', coordinatorCrmController.sendReaction); // 🔥 Reactions Route
+
+router.get('/campaign-stats', coordinatorCrmController.getCampaignStats);
 
 module.exports = router;

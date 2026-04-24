@@ -265,6 +265,10 @@ model Lead {
   callStatus     String        @default("pending") // pending, no_answer, reject, answered
   feedback       String?
   isAutoAssigned Boolean       @default(false)
+
+  autoReplyStep     Int     @default(0)
+  sequenceCompleted Boolean @default(false)
+  followUpSent      Boolean @default(false)
 }
 
 model ChatMessage {

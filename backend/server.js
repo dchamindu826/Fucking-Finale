@@ -11,6 +11,7 @@ app.use(cors());
 app.use(express.json()); 
 
 const coordinatorCrmRoutes = require('./routes/coordinatorCrmRoutes');
+const teamRoutes = require('./routes/teamRoutes');
 
 // Static Folders
 app.use('/documents', express.static(path.join(__dirname, 'storage/documents')));
@@ -19,6 +20,7 @@ app.use('/storage/posts', express.static(path.join(__dirname, 'storage/posts')))
 app.use('/storage/images', express.static(path.join(__dirname, 'storage/images')));
 app.use('/images', express.static(path.join(__dirname, 'storage/images')));
 app.use('/storage/documents', express.static(path.join(__dirname, 'storage/documents')));
+
 
 // ================= MODULAR ROUTES =================
 // අපි හදපු Routes ටික මෙතනින් ලින්ක් කරනවා. Frontend එකේ URLs පොඩ්ඩක්වත් වෙනස් වෙන්නේ නෑ.
@@ -34,6 +36,7 @@ app.use('/api/admin/payments', require('./routes/paymentRoutes'));
 app.use('/api/admin/crm', require('./routes/crmRoutes'));
 
 app.use('/api/coordinator-crm', coordinatorCrmRoutes);
+app.use('/api/team', teamRoutes);
 
 // ================= SERVER START =================
 const PORT = process.env.PORT || 5000;

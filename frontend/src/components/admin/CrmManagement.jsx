@@ -117,6 +117,7 @@ export default function CrmManagement() {
     const handleAddReply = async (e) => {
         e.preventDefault();
         const formData = new FormData();
+        // 🔥 FIX: Ensure businessId is correctly passed
         formData.append('businessId', selectedBusiness);
         formData.append('campaignType', activeTab);
         formData.append('stepOrder', stepOrder);
@@ -124,6 +125,7 @@ export default function CrmManagement() {
         if (attachment) formData.append('attachment', attachment);
 
         try {
+            // 🔥 URL eke API endpoint eka harida kiyala aniwaren balanna
             await axios.post('/admin/crm/auto-reply', formData);
             toast.success("Auto Reply Step Added!");
             setNewMessage(''); setAttachment(null);

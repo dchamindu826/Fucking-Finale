@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { 
     LayoutDashboard, Users, MonitorPlay, 
     LogOut, HeadphonesIcon, Wallet, MessageCircle, Database, Truck, Image as ImageIcon,
-    Package, Clock, CheckCircle, Archive
+    Package, Clock, CheckCircle, Archive, UserPlus
 } from 'lucide-react'; 
 
 export default function Sidebar({ userRole, loggedInUser, handleLogout, currentBg, setBgImage }) {
@@ -18,26 +18,25 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
       ? "flex items-center gap-4 px-4 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-bold transition-all shadow-xl backdrop-blur-md text-sm"
       : "flex items-center gap-4 px-4 py-3.5 hover:bg-white/5 rounded-2xl font-medium text-white/60 hover:text-white transition-all border border-transparent text-sm";
 
-  // URL query parameters check කරන්න (Tabs සඳහා)
   const queryParams = new URLSearchParams(location.search);
   const activeTab = queryParams.get('tab') || 'overview';
 
-  // Active Tab එකට අදාල Class එක
   const getTabLinkClass = (tabName) => 
     activeTab === tabName && location.pathname.includes('/delivery/dashboard')
       ? "flex items-center gap-4 px-4 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-bold transition-all shadow-xl backdrop-blur-md text-sm"
       : "flex items-center gap-4 px-4 py-3.5 hover:bg-white/5 rounded-2xl font-medium text-white/60 hover:text-white transition-all border border-transparent text-sm";
 
-
   const isSystemAdmin = roleName === 'SYSTEM_ADMIN' || roleName === 'System Admin' || roleName === 'Director';
   const isDeliveryDept = loggedInUser?.department === 'Delivery';
-  // 🔥 FIX: Delivery Department නෙවෙයි නම් විතරක් General Manager දේවල් පෙන්වන්න
   const isManager = (roleName === 'MANAGER' || roleName === 'Manager' || roleName === 'ASS MANAGER') && !isDeliveryDept;
-  const isStaff = !isSystemAdmin && !isManager && !isDeliveryDept && roleName !== 'STUDENT' && roleName !== 'user';
+  
+  // 🔥 Aluth Caller Role Eka 🔥
+  const isCaller = roleName === 'CALLER' || roleName === 'Caller';
+  const isStaff = !isSystemAdmin && !isManager && !isDeliveryDept && !isCaller && roleName !== 'STUDENT' && roleName !== 'user';
   const isStudent = roleName === 'STUDENT' || roleName === 'user';
 
   return (
-    <div className="w-[280px] bg-white/5 border-r border-white/10 flex flex-col justify-between relative z-20 backdrop-blur-xl transition-all shrink-0 h-full">
+    <div className="w-[17.5rem] bg-white/5 border-r border-white/10 flex flex-col justify-between relative z-20 backdrop-blur-xl transition-all shrink-0 h-full">
       <div className="flex items-center justify-center pt-8 pb-6 w-full shrink-0">
         <img src="/logo.png" alt="Logo" className="w-40 h-auto object-contain drop-shadow-2xl" />
       </div>
@@ -58,13 +57,11 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
             <NavLink to="/admin/crm-setup" className={getNavLinkClass}><HeadphonesIcon size={18} /> CRM Setup </NavLink>
             
-            {/* Admin ට Delivery එකට යන්න Link එකක් */}
             <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Logistics & Delivery</div>
             <NavLink to="/delivery/dashboard?tab=overview" className={getNavLinkClass}><Truck size={18} /> Delivery Hub</NavLink>
           </>
         )}
 
-        {/* 🔥 FIX: Delivery Department අයට පේන සුවිශේෂී මෙනු එක 🔥 */}
         {isDeliveryDept && !isSystemAdmin && (
           <>
            <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-2 pl-2 tracking-widest">Delivery Dashboard</div>
@@ -86,13 +83,16 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
           </>
         )}
 
-        {(isSystemAdmin || isManager || isStaff) && (
+        {/* 🔥 CALLERS, ADMIN, MANAGER, STAFF Okkotama CRM eka penenawa 🔥 */}
+        {(isSystemAdmin || isManager || isStaff || isCaller) && (
           <>
             <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Workspace</div>
             <NavLink to="/workspace/crm" className={getNavLinkClass}>
               <MessageCircle size={18} /> Free Seminar CRM
             </NavLink>
-            {!isSystemAdmin && !isManager && (
+            
+            {/* Caller ta Student Data center eka penne NA */}
+            {!isSystemAdmin && !isManager && !isCaller && (
                 <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
             )}
           </>

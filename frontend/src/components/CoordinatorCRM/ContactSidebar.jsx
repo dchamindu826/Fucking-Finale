@@ -4,10 +4,12 @@ import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquar
 import toast from 'react-hot-toast';
 
 export default function ContactSidebar({ activeMode, selectedLead, setSelectedLead, filters }) {
-  const userRole = JSON.parse(localStorage.getItem('user'))?.role?.toUpperCase();
-  const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER'].includes(userRole);
+  // 🔥 ROBUST ROLE CHECKER 🔥
+  const rawRole = JSON.parse(localStorage.getItem('user'))?.role || '';
+  const userRole = rawRole.toUpperCase().replace(' ', '_');
+  const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
 
-  const [activeTab, setActiveTab] = useState('ALL'); 
+  const [activeTab, setActiveTab] = useState('NEW'); 
   const [leads, setLeads] = useState([]);
   const [tabCounts, setTabCounts] = useState({ NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
   const [loading, setLoading] = useState(false);
@@ -25,26 +27,20 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   const [masterToggle, setMasterToggle] = useState(true);
   const [csvFile, setCsvFile] = useState(null);
 
-  // 🔥 NEW: Search Query State 🔥
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 🔥 FIX: Added 'showLoading' param for silent background refreshes
   const fetchLeads = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
-      // 🔥 FIX: Token එක අරගෙන Headers වලට දාලා යවනවා
       const token = localStorage.getItem('token');
-      
       const response = await axios.get(`/coordinator-crm/leads`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
+        headers: { Authorization: `Bearer ${token}` },
         params: { 
           tab: activeTab, 
           campaignType: 'FREE_SEMINAR', 
           staffPhase: phaseFilter, 
           status: statusFilter, 
-          staffId: staffFilter // මේක හිස් නම් All Staff
+          staffId: staffFilter
         }
       });
       setLeads(response.data.leads || []);
@@ -58,11 +54,13 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   const fetchCoordinatorsAndQuotas = async () => {
     try {
       const [staffRes, quotaRes] = await Promise.all([ axios.get('/admin/staff'), axios.get('/coordinator-crm/leads/auto-assign-quotas') ]);
-      const coords = staffRes.data.filter(s => s.role === 'Coordinator');
+      
+      const coords = staffRes.data.filter(s => s.role === 'Coordinator' || s.role === 'CALLER');
       setCoordinators(coords);
+
       const merged = coords.map(c => {
         const q = quotaRes.data.find(x => x.staffId === c.id);
-        return { staffId: c.id, name: c.firstName, quotaAmount: q ? q.quotaAmount : 0, isActive: q ? q.isActive : false };
+        return { staffId: c.id, name: `${c.firstName} (${c.role})`, quotaAmount: q ? q.quotaAmount : 0, isActive: q ? q.isActive : false };
       });
       setAutoAssignData(merged);
     } catch (error) { console.error("Data load error", error); }
@@ -70,15 +68,10 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
 
   useEffect(() => { fetchCoordinatorsAndQuotas(); }, []);
 
-  // 🔥 FIX: Background Polling (Every 10s) to bring new messages to top automatically
   useEffect(() => { 
       fetchLeads(true); 
       setCheckedLeads([]); 
-
-      const interval = setInterval(() => {
-          fetchLeads(false); // Silent fetch
-      }, 10000);
-
+      const interval = setInterval(() => { fetchLeads(false); }, 10000);
       return () => clearInterval(interval);
   }, [activeTab, staffFilter, phaseFilter, statusFilter]);
 
@@ -129,17 +122,16 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
     reader.readAsText(csvFile);
   };
 
-  // 🔥 NEW: Search Filter Logic 🔥
   const filteredLeads = leads.filter(lead => {
       const searchLower = searchQuery.toLowerCase();
       return lead.phone.includes(searchLower) || (lead.name && lead.name.toLowerCase().includes(searchLower));
   });
 
   const tabs = [
-    { id: 'ALL', label: 'All', count: tabCounts.ALL },
     { id: 'NEW', label: 'New', count: tabCounts.NEW },
     { id: 'IMPORTED', label: 'Import', count: tabCounts.IMPORTED },
-    { id: 'ASSIGNED', label: 'Assigned', count: tabCounts.ASSIGNED }
+    { id: 'ASSIGNED', label: 'Assigned', count: tabCounts.ASSIGNED },
+    { id: 'ALL', label: 'All', count: tabCounts.ALL }
   ];
 
   return (
@@ -158,7 +150,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
              {isManager && (
                 <select onChange={(e) => handleBulkAction('ASSIGN', e.target.value)} className="flex-1 bg-white/10 border-none text-white text-xs font-bold rounded-lg p-2 outline-none">
                   <option value="">Assign To...</option>
-                  {coordinators.map(c => <option key={c.id} value={c.id} className="text-black">{c.firstName}</option>)}
+                  {coordinators.map(c => <option key={c.id} value={c.id} className="text-black">{c.firstName} ({c.role === 'CALLER' ? 'Team' : 'Staff'})</option>)}
                 </select>
              )}
           </div>
@@ -178,7 +170,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
             <input 
                 type="text" 
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)} // 🔥 Search Bar Fixed 🔥
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by number or name..." 
                 className="w-full bg-[#0f172a] border border-slate-700 rounded-xl py-2.5 pl-10 pr-4 text-base text-slate-200 focus:outline-none focus:border-emerald-600 placeholder-slate-600 shadow-inner" 
             />
@@ -194,7 +186,6 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
 
           {activeTab === 'ASSIGNED' && (
             <div className="flex gap-2 mt-4">
-              {/* 🔥 FIX: isManager කෑල්ල අයින් කළා, දැන් Staff ටත් පේනවා 🔥 */}
               <select onChange={e=>setStaffFilter(e.target.value)} className="w-1/3 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
                 <option value="">All Staff</option>
                 {coordinators.map(c => <option key={c.id} value={c.id}>{c.firstName}</option>)}
@@ -217,7 +208,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
         </div>
       )}
 
-      {/* LEAD LIST (Using filteredLeads now) */}
+      {/* LEAD LIST */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 bg-[#1a2430]">
         {loading && leads.length === 0 ? ( <div className="flex justify-center mt-10"><div className="animate-spin h-8 w-8 border-4 border-emerald-600 border-t-transparent rounded-full"></div></div> ) 
         : filteredLeads.length === 0 ? ( <div className="text-center text-slate-600 text-sm mt-10 font-medium">No contacts found.</div> ) : (
@@ -272,8 +263,8 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
                      <input name="count" type="number" placeholder="Lead Count" required className="bg-[#1a2430] border border-slate-700 text-slate-300 rounded-lg p-2 text-xs outline-none" />
                   </div>
                   <select name="staffId" required className="w-full bg-[#1a2430] border border-slate-700 text-slate-300 rounded-lg p-2 mb-3 text-xs outline-none">
-                     <option value="">Select Coordinator...</option>
-                     {coordinators.map(c => <option key={c.id} value={c.id}>{c.firstName}</option>)}
+                     <option value="">Select Coordinator / Team...</option>
+                     {coordinators.map(c => <option key={c.id} value={c.id}>{c.firstName} ({c.role === 'CALLER' ? 'Team' : 'Staff'})</option>)}
                   </select>
                   <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-2 rounded-lg text-xs uppercase tracking-widest">Assign Selected Leads</button>
                </form>
@@ -287,14 +278,14 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
                     </label>
                   </div>
 
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-2 mb-4 max-h-[150px] overflow-y-auto custom-scrollbar pr-1">
                      {autoAssignData.map((staff, idx) => (
                         <div key={staff.staffId} className="flex items-center justify-between bg-[#1a2430] p-2 rounded-lg border border-slate-700">
                            <div className="flex items-center gap-2">
                               <input type="checkbox" checked={staff.isActive} onChange={(e) => {
                                     let newData = [...autoAssignData]; newData[idx].isActive = e.target.checked; setAutoAssignData(newData);
                               }} className="accent-blue-600"/>
-                              <span className="text-xs font-bold text-slate-300">{staff.name}</span>
+                              <span className="text-xs font-bold text-slate-300 truncate w-32">{staff.name}</span>
                            </div>
                            <input type="number" value={staff.quotaAmount} onChange={(e) => {
                                  let newData = [...autoAssignData]; newData[idx].quotaAmount = parseInt(e.target.value) || 0; setAutoAssignData(newData);

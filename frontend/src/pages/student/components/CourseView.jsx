@@ -12,7 +12,6 @@ export default function CourseView({ courseId, onBack }) {
 
     useEffect(() => {
         axios.get(`/student/module/${courseId}`).then(res => {
-            console.log("🔥 DEBUG: Backend Data received ->", res.data); // <--- අවුලක් ආවොත් F12 ගහල බලන්න පුළුවන්
             setData(res.data);
             if (res.data?.lessonGroups) {
                 const initialOpen = {};
@@ -26,7 +25,26 @@ export default function CourseView({ courseId, onBack }) {
     }, [courseId]);
 
     const toggleFolder = (folderId) => setOpenFolders(prev => ({ ...prev, [folderId]: !prev[folderId] }));
-    const getEmbedUrl = (url) => url ? url.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/').replace('/view', '/preview').replace('/rec/share/', '/rec/play/') : '';
+    
+    // 🔥 ROBUST YOUTUBE & DRIVE EXTRACTOR 🔥
+    const getEmbedUrl = (url) => {
+        if (!url) return '';
+        try {
+            if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+                const match = url.match(regExp);
+                if (match && match[2].length === 11) {
+                    return `https://www.youtube.com/embed/${match[2]}?rel=0&modestbranding=1`;
+                }
+            }
+            if (url.includes('drive.google.com') && url.includes('/view')) {
+                return url.replace('/view', '/preview');
+            }
+            return url; 
+        } catch(e) {
+            return url;
+        }
+    };
 
     if (loading) return <div className="flex justify-center items-center py-40"><Loader2 className="animate-spin text-red-500" size={50} /></div>;
 
@@ -83,8 +101,8 @@ export default function CourseView({ courseId, onBack }) {
             <div className="w-full md:w-auto flex shrink-0 border-t border-white/5 md:border-0 pt-3 md:pt-0">
                 {activeTab === 'live' && <a href={item.link} target="_blank" rel="noreferrer" className="w-full md:w-max bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-colors shadow-lg shadow-red-600/30"><Video size={18}/> Join Live</a>}
                 {activeTab === 'recordings' && <button onClick={() => setPlayingVideo(item)} className="w-full md:w-max bg-white/10 hover:bg-red-600 text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 border border-white/10 hover:border-transparent transition-all"><MonitorPlay size={18} className='text-red-400'/> Play Video</button>}
-                {activeTab === 'documents' && <a href={`http://72.62.249.211:5000/documents/${item.fileName}`} target="_blank" rel="noreferrer" download className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 border border-white/10"><FileText size={18} className="text-yellow-400"/> Download PDF</a>}
-                {activeTab === 'sPapers' && <a href={`http://72.62.249.211:5000/documents/${item.fileName}`} target="_blank" rel="noreferrer" className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 border border-white/10"><FileSignature size={18} className="text-blue-400"/> View Paper</a>}
+                {activeTab === 'documents' && <a href={`https://imacampus.online/api/storage/documents/${item.fileName}`} target="_blank" rel="noreferrer" download className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 border border-white/10"><FileText size={18} className="text-yellow-400"/> Download PDF</a>}
+                {activeTab === 'sPapers' && <a href={`https://imacampus.online/api/storage/documents/${item.fileName}`} target="_blank" rel="noreferrer" className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 border border-white/10"><FileSignature size={18} className="text-blue-400"/> View Paper</a>}
             </div>
         </div>
     );
@@ -109,7 +127,6 @@ export default function CourseView({ courseId, onBack }) {
             </div>
 
             <div className="glass-card p-4 md:p-8 rounded-[2rem] min-h-[400px] border border-white/10">
-                {/* 🔥 FIX: '1' විතරක් නෙවෙයි, String ආවත් වැඩ කරන විදිහට හැදුවා */}
                 {String(data?.paidStatus) !== '1' ? (
                     <div className="text-center py-20 px-4">
                         <Lock size={48} className="text-red-500 mx-auto mb-4" />
@@ -119,17 +136,30 @@ export default function CourseView({ courseId, onBack }) {
                 ) : renderContentRows()}
             </div>
 
-            {/* Video Player Modal */}
+            {/* 🔥 SECURE VIDEO PLAYER MODAL 🔥 */}
             {playingVideo && (
-                <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-6 animate-fade-in">
+                <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-2 sm:p-6 animate-fade-in" onContextMenu={(e) => e.preventDefault()}>
                     <div className="w-full max-w-5xl h-[40vh] sm:h-[80vh] bg-black rounded-2xl relative overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
-                        <div className="absolute top-0 left-0 w-full h-[55px] bg-[#000000] z-[50] shadow-xl flex items-center px-6">
+                        
+                        {/* Custom Header Bar to mask original video title bar */}
+                        <div className="absolute top-0 left-0 w-full h-[55px] bg-[#000000] z-[50] shadow-xl flex items-center px-6 border-b border-white/10">
                             <span className="text-white/80 font-bold text-sm uppercase tracking-widest flex items-center gap-3">
                                 <MonitorPlay size={18} className="text-red-500"/> {playingVideo.title}
                             </span>
                         </div>
                         <button onClick={() => setPlayingVideo(null)} className="absolute top-3 right-4 z-[70] text-white bg-white/10 p-2 rounded-xl hover:bg-red-600 transition-colors"><X size={20}/></button>
-                        <iframe src={getEmbedUrl(playingVideo.link)} className="w-full h-full border-none pt-[55px]" allowFullScreen title="Player"></iframe>
+                        
+                        {/* YouTube Logo Mask */}
+                        <div className="absolute bottom-0 right-0 w-[150px] h-[70px] bg-transparent z-[60]" onContextMenu={(e) => e.preventDefault()}></div>
+                        
+                        {/* 🔥 FIXED IFRAME: Removed sandbox to allow Zoom, Added allow params for YT 🔥 */}
+                        <iframe 
+                            src={getEmbedUrl(playingVideo.link)} 
+                            className="w-full h-full border-none pt-[55px] pointer-events-auto" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                            allowFullScreen 
+                            title="Player"
+                        ></iframe>
                     </div>
                 </div>
             )}

@@ -11,6 +11,7 @@ import Terms from './pages/web/pages/Terms';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import MainLayout from "./components/layouts/MainLayout";
+import CallCampaignModule from './components/CoordinatorCRM/CallCampaignModule';
 
 // Dashboards & Modules
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -59,6 +60,9 @@ export default function App() {
 
     if (role === 'STUDENT' || role === 'USER') return '/student/dashboard';
     
+    // 🔥 ALUTH TEAM EKE AYATA (Kelinma CRM ekata yanawa) 🔥
+    if (role === 'CALLER') return '/workspace/crm'; 
+    
     if (role === 'MANAGER' || role === 'ASS MANAGER' || role === 'STAFF') {
         if (dept === 'Finance') return '/finance/dashboard';
         if (dept === 'Class Coordination') return '/coordinator/dashboard';
@@ -104,6 +108,7 @@ export default function App() {
             <Route path="/finance/dashboard" element={<ManagerDashboard />} /> 
             <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
             <Route path="/technical/dashboard" element={<ManagerDashboard />} />
+            <Route path="/workspace/call-campaign" element={<CallCampaignModule loggedInUser={loggedInUser} />} />
             
             {/* 🔥 Delivery Dashboard Route 🔥 */}
             <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />

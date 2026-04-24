@@ -227,13 +227,27 @@ export default function ContentHub() {
   }, {});
 
   const getTypeInt = (tabStr) => { switch(tabStr) { case 'live': return 1; case 'recording': return 2; case 'document': return 3; case 'sPaper': return 4; case 'paper': return 5; default: return 1; } };
+  
+  // 🔥 FIX: Bulletproof YouTube & Google Drive URL Extractor 🔥
   const getEmbedUrl = (url) => {
       if (!url) return '';
-      if (url.includes('youtube.com/watch?v=')) return url.replace('watch?v=', 'embed/');
-      if (url.includes('youtu.be/')) return url.replace('youtu.be/', 'youtube.com/embed/');
-      if (url.includes('drive.google.com') && url.includes('/view')) return url.replace('/view', '/preview');
-      return url; 
+      try {
+          if (url.includes('youtube.com') || url.includes('youtu.be')) {
+              const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+              const match = url.match(regExp);
+              if (match && match[2].length === 11) {
+                  return `https://www.youtube.com/embed/${match[2]}?rel=0&modestbranding=1`;
+              }
+          }
+          if (url.includes('drive.google.com') && url.includes('/view')) {
+              return url.replace('/view', '/preview');
+          }
+          return url; 
+      } catch(e) {
+          return url;
+      }
   };
+
   const isMatchedType = (item) => {
       const itemType = item.type ?? item.content_type ?? item.contentType;
       return itemType !== null && (parseInt(itemType) === getTypeInt(contentTab) || itemType.toString() === contentTab);

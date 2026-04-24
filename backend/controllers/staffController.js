@@ -2,20 +2,22 @@ const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
-// 1. Get All Businesses (For the Dropdown)
-exports.getBusinesses = async (req, res) => {
-    try {
-        const businesses = await prisma.business.findMany({
-            select: { id: true, name: true }
-        });
-        res.status(200).json(businesses);
-    } catch (error) {
-        console.error("Fetch Businesses Error:", error);
-        res.status(500).json({ error: "Failed to fetch businesses" });
-    }
+// 🔥 Role Format Fixer Helper 🔥
+const checkIsTopLevel = (role) => {
+    if (!role) return false;
+    const normalized = role.toUpperCase().replace(' ', '_');
+    return normalized === 'SYSTEM_ADMIN' || normalized === 'DIRECTOR';
 };
 
-// 2. Get all staff (With crash prevention)
+// 1. Get All Businesses
+exports.getBusinesses = async (req, res) => {
+    try {
+        const businesses = await prisma.business.findMany({ select: { id: true, name: true } });
+        res.status(200).json(businesses);
+    } catch (error) { res.status(500).json({ error: "Failed to fetch businesses" }); }
+};
+
+// 2. Get all staff 
 exports.getStaff = async (req, res) => {
     try {
         const { role, department, businessType } = req.query; 
@@ -24,9 +26,8 @@ exports.getStaff = async (req, res) => {
             role: { notIn: ['STUDENT', 'USER', 'Student', 'student', 'user'] }
         };
 
-        const isTopLevel = role === 'System Admin' || role === 'Director' || role === 'SYSTEM_ADMIN';
+        const isTopLevel = checkIsTopLevel(role);
 
-        // Manager / Ass Manager visibility logic
         if (!isTopLevel && role) {
             if (department === 'Class Coordination') {
                 whereClause.department = 'Class Coordination';
@@ -41,10 +42,7 @@ exports.getStaff = async (req, res) => {
             select: { id: true, firstName: true, lastName: true, phone: true, nic: true, role: true, department: true, businessType: true }
         });
         res.status(200).json(staff);
-    } catch (error) {
-        console.error("Get Staff Error:", error);
-        res.status(500).json({ error: "Failed to fetch staff" });
-    }
+    } catch (error) { res.status(500).json({ error: "Failed to fetch staff" }); }
 };
 
 // 3. Create new staff
@@ -57,7 +55,7 @@ exports.createStaff = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        const isTopLevel = role === 'System Admin' || role === 'Director';
+        const isTopLevel = checkIsTopLevel(role);
         const isClassCoord = department === 'Class Coordination' || role === 'Coordinator';
 
         const finalDepartment = isTopLevel ? null : (role === 'Coordinator' ? 'Class Coordination' : department);
@@ -68,10 +66,7 @@ exports.createStaff = async (req, res) => {
         });
 
         res.status(201).json({ message: "Staff created successfully", staff: newStaff });
-    } catch (error) {
-        console.error("Create Staff Error:", error);
-        res.status(500).json({ error: "Failed to create staff" });
-    }
+    } catch (error) { res.status(500).json({ error: "Failed to create staff" }); }
 };
 
 // 4. Update staff
@@ -80,7 +75,7 @@ exports.updateStaff = async (req, res) => {
         const { id } = req.params;
         const { firstName, lastName, phone, nic, password, role, department, businessType } = req.body;
         
-        const isTopLevel = role === 'System Admin' || role === 'Director';
+        const isTopLevel = checkIsTopLevel(role);
         const isClassCoord = department === 'Class Coordination' || role === 'Coordinator';
 
         let updateData = { 
@@ -94,15 +89,11 @@ exports.updateStaff = async (req, res) => {
         }
 
         const updatedStaff = await prisma.user.update({
-            where: { id: parseInt(id) },
-            data: updateData
+            where: { id: parseInt(id) }, data: updateData
         });
 
         res.status(200).json({ message: "Staff updated", staff: updatedStaff });
-    } catch (error) {
-        console.error("Update Staff Error:", error);
-        res.status(500).json({ error: "Failed to update staff" });
-    }
+    } catch (error) { res.status(500).json({ error: "Failed to update staff" }); }
 };
 
 // 5. Delete staff
@@ -111,7 +102,5 @@ exports.deleteStaff = async (req, res) => {
         const { id } = req.params;
         await prisma.user.delete({ where: { id: parseInt(id) } });
         res.status(200).json({ message: "Staff deleted successfully" });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to delete staff" });
-    }
+    } catch (error) { res.status(500).json({ error: "Failed to delete staff" }); }
 };
