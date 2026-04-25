@@ -269,7 +269,14 @@ model Lead {
   autoReplyStep     Int     @default(0)
   sequenceCompleted Boolean @default(false)
   followUpSent      Boolean @default(false)
+  paymentIntention String?  @default("NOT_DECIDED") // FULL, MONTHLY, INSTALLMENT, NOT_DECIDED, NEW_INQ
+  enrollmentStatus String?  @default("NON_ENROLLED") // ENROLLED, NON_ENROLLED
+  coordinationRound Int     @default(1) // 1st coordination, 2nd coordination...
+  
+  slaDeadline      DateTime? // 24hr or 5-day lock deadline for New Inquiries
+  isLocked         Boolean   @default(false) // 24 පැය පැනලා lock උනාද කියලා බලන්න
 }
+
 
 model ChatMessage {
   id         Int      @id @default(autoincrement())
