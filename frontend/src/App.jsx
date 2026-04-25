@@ -19,6 +19,7 @@ import ContentHub from './components/common/contenthub/ContentHub';
 import StaffManagement from './components/common/StaffManagement'; 
 import PaymentManagement from './components/common/PaymentManagement';
 import StudentDataCenter from './components/common/StudentDataCenter';
+import AfterSeminarDashboard from './components/AfterSeminarCRM/AfterSeminarDashboard';
 
 // System Admin CRM Setup
 import CrmManagement from './components/admin/CrmManagement';
@@ -123,6 +124,7 @@ export default function App() {
             <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
 
             {/* Active CRM Interface for Staff & Managers */}
+            <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
             <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
 
         </Route>

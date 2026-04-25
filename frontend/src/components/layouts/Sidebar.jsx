@@ -90,6 +90,10 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/workspace/crm" className={getNavLinkClass}>
               <MessageCircle size={18} /> Free Seminar CRM
             </NavLink>
+
+            <NavLink to="/workspace/after-seminar-crm" className={getNavLinkClass}>
+              <HeadphonesIcon size={18} /> After Seminar CRM
+            </NavLink>
             
             {/* Caller ta Student Data center eka penne NA */}
             {!isSystemAdmin && !isManager && !isCaller && (
