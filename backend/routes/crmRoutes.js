@@ -5,13 +5,19 @@ const crmController = require('../controllers/crmController');
 const multer = require('multer');
 const path = require('path');
 
+// Multer Storage Configuration
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, 'storage/documents'),
     filename: (req, file, cb) => cb(null, 'KB_' + Date.now() + path.extname(file.originalname))
 });
-const upload = multer({ storage });
 
-// 1. Settings Routes (CampaignType එකත් URL එකට ගන්නවා)
+// 🔥 UPDATE: Set File Size Limit to 100MB 🔥
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 100 * 1024 * 1024 } // 100 MB Limit
+});
+
+// 1. Settings Routes
 router.post('/settings', crmController.saveCrmSettings);
 router.get('/settings/:businessId/:campaignType', crmController.getCrmSettings);
 
@@ -21,10 +27,11 @@ router.post('/knowledge-base', upload.single('pdfFile'), crmController.uploadKno
 // 3. Campaign Archive
 router.post('/archive', crmController.archiveCampaign);
 
-// 4. Auto Reply Routes (කලින් තිබ්බ ඒවාමයි)
+
+
+// 4. Auto Reply Routes (With 100MB File limit)
 router.post('/auto-reply', upload.single('attachment'), crmController.addAutoReply);
 router.get('/auto-reply', crmController.getAutoReplies);
 router.delete('/auto-reply/:id', crmController.deleteAutoReply);
 
-// 🔥 මම අර Error එක දුන්න පේළි දෙක මෙතනින් සම්පූර්ණයෙන්ම අයින් කළා. මේක සේව් කරන්න!
 module.exports = router;

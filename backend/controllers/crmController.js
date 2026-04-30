@@ -105,6 +105,10 @@ exports.uploadKnowledge = async (req, res) => {
 // ==========================================
 exports.addAutoReply = async (req, res) => {
     try {
+        console.log("--- DEBUG: ADD AUTO REPLY ---");
+        console.log("Body:", req.body);
+        console.log("File:", req.file);
+
         const { businessId, campaignType, stepOrder, message } = req.body;
         const file = req.file;
 
@@ -113,7 +117,15 @@ exports.addAutoReply = async (req, res) => {
         
         if (file) {
             attachmentUrl = `/storage/documents/${file.filename}`;
-            attachmentType = file.mimetype.includes('image') ? 'Image' : 'Document';
+            
+            // 🔥 UPDATE: Video එක අඳුරගන්න කොටස 🔥
+            if (file.mimetype.includes('image')) {
+                attachmentType = 'Image';
+            } else if (file.mimetype.includes('video')) {
+                attachmentType = 'Video';
+            } else {
+                attachmentType = 'Document';
+            }
         }
 
         const newTemplate = await prisma.autoReply.create({

@@ -3,31 +3,37 @@ const router = express.Router();
 const studentController = require('../controllers/studentController');
 const multer = require('multer');
 const jwt = require('jsonwebtoken');
-const path = require('path'); // 🔥 NEW: Extension එක හොයාගන්න
+const path = require('path');
+const { PrismaClient } = require('@prisma/client'); // 🔥 NEW
+const prisma = new PrismaClient(); // 🔥 NEW
 
-// 🔥 FIX: Profile Pictures වල Extension එක (.jpg, .png) එක්කම Save වෙන්න හැදුවා
 const imageStorage = multer.diskStorage({
     destination: (req, file, cb) => { cb(null, 'storage/images/'); },
     filename: (req, file, cb) => { cb(null, Date.now() + '_' + Math.round(Math.random() * 1E9) + path.extname(file.originalname)); }
 });
 const uploadImage = multer({ storage: imageStorage });
 
-// 🔥 FIX: Due Slips / PDFs වල Extension එක (.pdf, .jpg) එක්කම Save වෙන්න හැදුවා
 const documentStorage = multer.diskStorage({
     destination: (req, file, cb) => { cb(null, 'storage/documents/'); },
     filename: (req, file, cb) => { cb(null, Date.now() + '_' + Math.round(Math.random() * 1E9) + path.extname(file.originalname)); }
 });
 const uploadDocument = multer({ storage: documentStorage });
 
-const verifyToken = (req, res, next) => {
+// 🔥 FIX: Verify Token Ekata Multiple Device Block eka damma
+const verifyToken = async (req, res, next) => { // async kara
     const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ error: "Access Denied. No token provided." });
-    }
+    if (!token) return res.status(401).json({ error: "Access Denied. No token provided." });
 
     try {
         const verified = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Check if the session ID in the token matches the one in the DB
+        const user = await prisma.user.findUnique({ where: { id: verified.userId || verified.id } });
+        
+        if (user && user.session_id && user.session_id !== verified.sessionId) {
+            return res.status(401).json({ error: "Logged in from another device. Please log in again." });
+        }
+
         req.user = verified; 
         next();
     } catch (error) {

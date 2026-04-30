@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom'; 
 import axios from '../../api/axios';
-import { FaPhoneAlt, FaCheckCircle, FaTimesCircle, FaUserSecret, FaKey, FaMapMarkerAlt, FaGraduationCap, FaCreditCard, FaTimes, FaArrowsAlt, FaChevronRight, FaChevronLeft } from 'react-icons/fa';
+import { FaPhoneAlt, FaCheckCircle, FaTimesCircle, FaUserSecret, FaKey, FaMapMarkerAlt, FaGraduationCap, FaCreditCard, FaTimes, FaArrowsAlt, FaChevronRight, FaChevronLeft, FaLayerGroup } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 export default function RightSidePanel({ selectedLead, activeMode }) {
@@ -10,6 +10,11 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
   const [showResetModal, setShowResetModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   
+  // 🔥 BATCH ALLOCATION STATE 🔥
+  const [batches, setBatches] = useState([]);
+  const [selectedBatchToAssign, setSelectedBatchToAssign] = useState('');
+  const [isAssigningBatch, setIsAssigningBatch] = useState(false);
+
   // 🔥 DRAG AND DROP STATE 🔥
   const [iframePos, setIframePos] = useState({ x: 50, y: 50 });
   const [ghostIframe, setGhostIframe] = useState(null);
@@ -19,8 +24,25 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
   const [isMinimized, setIsMinimized] = useState(false);
 
   useEffect(() => {
-    if (selectedLead?.phone) fetchStudentData();
+    if (selectedLead?.phone) {
+      fetchStudentData();
+      // Pre-select the batch if lead already has one
+      setSelectedBatchToAssign(selectedLead.batchId || '');
+    }
   }, [selectedLead]);
+
+  useEffect(() => {
+    // Fetch all batches to populate the dropdown
+    const fetchBatches = async () => {
+      try {
+        const res = await axios.get('/admin/manager/batches-full');
+        setBatches(res.data || []);
+      } catch (err) {
+        console.error("Failed to load batches", err);
+      }
+    };
+    fetchBatches();
+  }, []);
 
   const fetchStudentData = async () => {
     setLoading(true);
@@ -31,6 +53,25 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
       console.error("Error fetching student details", error);
     }
     setLoading(false);
+  };
+
+  // 🔥 BATCH ASSIGN HANDLER 🔥
+  const handleAssignBatch = async () => {
+    if (!selectedBatchToAssign) return toast.error("Please select a batch first.");
+    setIsAssigningBatch(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post('/after-seminar-crm/leads/update-batch', {
+        leadId: selectedLead.id,
+        batchId: selectedBatchToAssign
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      
+      toast.success("Batch successfully assigned!");
+    } catch (error) {
+      toast.error("Failed to assign batch.");
+    } finally {
+      setIsAssigningBatch(false);
+    }
   };
 
   const handleGhostLogin = async () => {
@@ -48,7 +89,6 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
               localStorage.setItem('token', res.data.token);
               localStorage.setItem('user', JSON.stringify(res.data.user));
               
-              // Set initial position centered
               setIframePos({ x: window.innerWidth / 2 - 450, y: window.innerHeight / 2 - 300 });
               setGhostIframe('/student/dashboard');
               toast.success("Ghost Login Active!", { id: "ghost" });
@@ -85,7 +125,6 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
       return `${typeStr} via ${payment.method || 'Slip'}`;
   };
 
-  // 🔥 DRAG HANDLER LOGIC 🔥
   const handleDragStart = (e) => {
       const startX = e.clientX;
       const startY = e.clientY;
@@ -112,7 +151,6 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
     <div className={`${isMinimized ? 'w-[70px]' : 'w-[300px] xl:w-[320px]'} transition-all duration-300 ease-in-out bg-[#23303f] rounded-2xl flex flex-col shrink-0 overflow-hidden text-slate-400 border border-white/5 shadow-lg relative`}>
       
       {isMinimized ? (
-         // Minimized View
          <div className="h-full w-full flex flex-col items-center py-6 cursor-pointer hover:bg-white/5 transition-colors group" onClick={() => setIsMinimized(false)} title="Expand Panel">
             <button className="p-2 bg-black/20 group-hover:bg-blue-600/20 rounded-full hover:text-white mb-6 text-slate-500 group-hover:text-blue-400 transition-colors">
                 <FaChevronLeft size={16} />
@@ -122,7 +160,6 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
             </div>
          </div>
       ) : (
-         // Expanded View
          <>
           <div className="bg-[#1a2430] p-6 flex flex-col items-center justify-center border-b border-white/5 relative">
             <button onClick={() => setIsMinimized(true)} className="absolute top-4 right-4 p-2 bg-black/20 rounded-full hover:bg-black/40 hover:text-white transition-colors text-slate-400" title="Minimize Panel">
@@ -139,6 +176,8 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-[#23303f]">
+            
+            {/* LEAD STATUS */}
             <div className="bg-[#1a2430] p-4 rounded-xl border border-white/5 mb-4 shadow-sm">
               <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Lead Status</h3>
               <div className="flex justify-between items-center mb-3">
@@ -151,6 +190,31 @@ export default function RightSidePanel({ selectedLead, activeMode }) {
               </div>
             </div>
 
+            {/* 🔥 BATCH ALLOCATION SECTION 🔥 */}
+            <div className="bg-[#1a2430] p-4 rounded-xl border border-white/5 mb-4 shadow-sm">
+              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+                <FaLayerGroup /> Allocate to Batch
+              </h3>
+              <select 
+                value={selectedBatchToAssign} 
+                onChange={(e) => setSelectedBatchToAssign(e.target.value)}
+                className="w-full mb-3 p-2 text-xs bg-[#0f172a] border border-slate-700 text-slate-300 rounded-lg outline-none focus:border-emerald-600"
+              >
+                <option value="">-- Unassigned (Select Batch) --</option>
+                {batches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+              <button 
+                onClick={handleAssignBatch}
+                disabled={isAssigningBatch}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg text-xs transition-colors shadow-md disabled:opacity-50"
+              >
+                {isAssigningBatch ? 'Saving...' : 'Save Batch'}
+              </button>
+            </div>
+
+            {/* SYSTEM RECORDS */}
             <div className="bg-[#1a2430] p-4 rounded-xl border border-white/5 shadow-sm">
               <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">System Records</h3>
               

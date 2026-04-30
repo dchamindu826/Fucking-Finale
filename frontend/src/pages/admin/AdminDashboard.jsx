@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Loader2 } from 'lucide-react';
+import { Search, Filter, Loader2, Database } from 'lucide-react'; // Database icon added
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../../api/axios';
-
-import StaffManagement from '../../components/common/StaffManagement';
+import toast from 'react-hot-toast'; // Toast for notifications
 
 export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
+  const [isBackingUp, setIsBackingUp] = useState(false);
   const [stats, setStats] = useState(null);
 
   useEffect(() => {
@@ -15,7 +15,6 @@ export default function AdminDashboard() {
         const response = await api.get('/admin/overview'); 
         setStats(response.data);
       } catch (error) {
-        // Backend එක හැදෙනකම් මේ Dummy Data පෙන්නනවා (404 Error ආවත් මේක වැඩ)
         setStats({
           grossRevenue: 1250000, pendingSync: 45, verifiedSales: 850, failed: 12,
           pieData: [{ name: 'Verified', value: 850 }, { name: 'Pending', value: 45 }, { name: 'Failed', value: 12 }], 
@@ -33,6 +32,38 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
+  // 🔥 Database Backup Download Logic 🔥
+  const handleDownloadBackup = async () => {
+    setIsBackingUp(true);
+    const toastId = toast.loading("Generating 100% Database SQL Backup...");
+    
+    try {
+      const response = await api.get('/admin/backup', {
+        responseType: 'blob', // Important: This tells axios to handle binary data
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+
+      // Create a blob link to download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      
+      const dateStr = new Date().toISOString().slice(0, 10);
+      link.setAttribute('download', `IMA_Full_System_Backup_${dateStr}.sql`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+
+      toast.success("Backup Downloaded Successfully!", { id: toastId });
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to download backup!", { id: toastId });
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
   const COLORS = ['#3B82F6', '#10B981', '#EF4444'];
 
   if (loading) return <div className="w-full h-full flex items-center justify-center"><Loader2 size={40} className="animate-spin text-blue-500" /></div>;
@@ -47,8 +78,19 @@ export default function AdminDashboard() {
             <Search size={16} className="absolute left-4 top-3 text-gray-400" />
             <input type="text" placeholder="Search..." className="w-full md:w-64 bg-white/5 border border-white/10 backdrop-blur-md rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-200 focus:border-blue-400 outline-none transition-all" />
           </div>
+          
           <button className="flex items-center justify-center gap-2 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl text-sm hover:bg-white/10 transition-all backdrop-blur-md">
             <Filter size={16} /> All Batches
+          </button>
+
+          {/* 🔥 BACKUP BUTTON 🔥 */}
+          <button 
+            onClick={handleDownloadBackup} 
+            disabled={isBackingUp}
+            className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-emerald-500 border border-emerald-400/30 px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg hover:shadow-emerald-500/30 hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isBackingUp ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />} 
+            {isBackingUp ? 'Backing up...' : 'Download Backup'}
           </button>
         </div>
       </div>
@@ -71,11 +113,9 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* PIE CHART */}
         <div className="bg-slate-800/40 border border-white/10 backdrop-blur-md p-6 rounded-2xl shadow-lg flex flex-col items-center">
           <h3 className="text-xs font-bold text-gray-400 tracking-wider mb-6 w-full">VERIFICATION STATUS</h3>
           <div className="w-full relative">
-            {/* 🔥 මෙතන height එක කෙලින්ම දුන්නා Error එක නැති වෙන්න */}
             <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie data={stats?.pieData} innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value" stroke="none">
@@ -87,11 +127,9 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* BAR CHART */}
         <div className="xl:col-span-2 bg-slate-800/40 border border-white/10 backdrop-blur-md p-6 rounded-2xl shadow-lg flex flex-col">
           <h3 className="text-xs font-bold text-gray-400 tracking-wider mb-6">REVENUE BY COURSE</h3>
           <div className="w-full relative">
-            {/* 🔥 මෙතනත් height එක කෙලින්ම දුන්නා Error එක නැති වෙන්න */}
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={stats?.barData} margin={{ top: 20, right: 10, left: -20, bottom: 5 }}>
                 <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />

@@ -1,5 +1,6 @@
 import React from 'react';
-import { FolderOpen, Layers, BookOpen, Edit3, Trash2, ChevronRight, ChevronDown, GripVertical, CheckCircle, Video, MonitorPlay, FileText, FileSignature, Power, UserPlus, Plus, Users } from 'lucide-react';
+import { FolderOpen, Layers, BookOpen, Edit3, Trash2, ChevronRight, ChevronDown, GripVertical, CheckCircle, Video, MonitorPlay, FileText, FileSignature, Power, UserPlus, Plus, Users, User } from 'lucide-react';
+import api from '../../../api/axios'; // 🔥 Get API config for base URL
 
 export default function ContentHubViews({ state, actions }) {
     const {
@@ -12,15 +13,23 @@ export default function ContentHubViews({ state, actions }) {
         openBusinessDetails, openBatchDetails, openContentsView, getImageUrl, getManagerName, toggleBusinessStatus, toggleBatchStatus, deleteItem,
         setEditData, setEditMode, setSelectedLogoName, setShowBusinessModal, setShowAssignModal, setShowBatchModal, setShowGroupModal, setShowCourseModal,
         setShowLessonGroupModal, setShowContentModal, setPreviewData, setContentType, setPrefilledFolder, setSelectedBatchesForContent,
-        toggleFolder, setBatchTab, setContentTab, isMatchedType, getFolderId, setDiscountRules, setSelectedGroupPrices
+        toggleFolder, setBatchTab, setContentTab, isMatchedType, getFolderId, setDiscountRules, setSelectedGroupPrices, setMassAssignSubjects
     } = actions;
+
+    // 🔥 FIX: Backend API Base URL eka dynamic gannawa
+    const getBaseUrl = () => {
+        let url = api.defaults.baseURL || 'https://imacampus.online/api';
+        return url.endsWith('/') ? url.slice(0, -1) : url;
+    };
 
     return (
         <div className="w-full space-y-6 relative">
+            {/* ... (Business and Batches code eka kalin eka ma thiyenawa) ... */}
+            
             {viewLevel === 'businesses' && isSystemAdmin && (
-                businesses.length === 0 ? <p className="text-center text-slate-400 py-16 bg-slate-800/30 rounded-3xl border border-white/10 backdrop-blur-xl text-lg">No businesses created yet.</p> : 
+                businesses?.length === 0 ? <p className="text-center text-slate-400 py-16 bg-slate-800/30 rounded-3xl border border-white/10 backdrop-blur-xl text-lg">No businesses created yet.</p> : 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {businesses.map((biz) => (
+                {businesses?.map((biz) => (
                     <div key={biz.id} className="group bg-slate-800/40 hover:bg-slate-800/60 border border-white/10 p-6 rounded-3xl flex flex-col gap-6 transition-all backdrop-blur-xl shadow-lg">
                         <div className="flex items-center gap-5">
                             <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center p-2 border border-white/5 group-hover:bg-white/20 transition-colors shrink-0">
@@ -50,9 +59,9 @@ export default function ContentHubViews({ state, actions }) {
             )}
 
             {viewLevel === 'batches' && (
-                batches.length === 0 ? <p className="text-center text-slate-400 py-16 bg-slate-800/30 rounded-3xl border border-white/10 backdrop-blur-xl text-lg">No batches available yet.</p> : 
+                batches?.length === 0 ? <p className="text-center text-slate-400 py-16 bg-slate-800/30 rounded-3xl border border-white/10 backdrop-blur-xl text-lg">No batches available yet.</p> : 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {batches.map((batch) => (
+                {batches?.map((batch) => (
                     <div key={batch.id} className="group bg-slate-800/40 hover:bg-slate-800/60 border border-white/10 p-6 md:p-8 rounded-3xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 transition-all backdrop-blur-xl shadow-lg">
                         <div className="flex items-center gap-6 overflow-hidden w-full sm:w-auto">
                             <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center p-3 border border-white/5 group-hover:bg-white/20 transition-colors shrink-0">
@@ -152,15 +161,38 @@ export default function ContentHubViews({ state, actions }) {
                                             <h3 className="text-xl font-bold text-blue-400 mb-6 flex items-center gap-3 uppercase tracking-wide"><Layers size={24}/> {streamName} Stream</h3>
                                         )}
                                         <div className="grid grid-cols-1 gap-4">
-                                            {groupedSubjects[streamName].map((sub) => (
+                                            {groupedSubjects[streamName].map((sub) => {
+                                                let courseImage = null;
+                                                try {
+                                                    if (sub.groupPrices && sub.groupPrices.length > 0 && sub.groupPrices[0].lecturerImage) {
+                                                        courseImage = sub.groupPrices[0].lecturerImage;
+                                                    }
+                                                } catch(e) {}
+
+                                                return (
                                                 <div key={sub.id} className="bg-white/5 hover:bg-white/10 border border-white/10 p-5 rounded-2xl flex flex-col xl:flex-row justify-between items-start xl:items-center gap-5 transition-colors overflow-hidden">
                                                     <div className="flex items-center gap-4 w-full xl:w-auto overflow-hidden">
                                                         {canManageGroupsAndSubjects && <div className="cursor-move text-slate-500 hover:text-white shrink-0"><GripVertical size={24}/></div>}
+                                                        
                                                         <div className="overflow-hidden">
-                                                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2">
-                                                                <h3 className="text-lg font-bold text-white truncate max-w-[200px] md:max-w-[400px]" title={sub.name}>{sub.name}</h3>
-                                                                {sub.code && <span className="text-sm font-bold text-slate-300 bg-white/10 px-3 py-1 rounded-lg border border-white/10 shrink-0 w-max">{sub.code}</span>}
+                                                            <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-3">
+                                                                {courseImage ? (
+                                                                    <img src={getImageUrl(courseImage)} alt="Lecturer" className="w-12 h-12 rounded-full object-cover border-2 border-white/10 shrink-0" />
+                                                                ) : (
+                                                                    <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shrink-0">
+                                                                        <User size={20} className="text-slate-400" />
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="flex flex-col">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h3 className="text-lg font-bold text-white truncate max-w-[200px] md:max-w-[400px]" title={sub.name}>{sub.name}</h3>
+                                                                        {sub.code && <span className="text-xs font-bold text-slate-300 bg-white/10 px-2 py-0.5 rounded-lg border border-white/10 shrink-0 w-max">{sub.code}</span>}
+                                                                    </div>
+                                                                    {sub.lecturerName && <span className="text-sm font-medium text-blue-400 mt-0.5">{sub.lecturerName}</span>}
+                                                                </div>
                                                             </div>
+                                                            
                                                             <div className="flex flex-wrap gap-2">
                                                                 {sub.groupPrices.map((gp, i) => (
                                                                     <span key={i} className="text-sm font-medium text-blue-300 bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20 flex items-center gap-2 whitespace-nowrap">
@@ -170,13 +202,20 @@ export default function ContentHubViews({ state, actions }) {
                                                             </div>
                                                         </div>
                                                     </div>
+                                                    
                                                     <div className="flex gap-3 items-center w-full xl:w-auto justify-end mt-2 xl:mt-0 shrink-0">
                                                         <button onClick={() => openContentsView(sub)} className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl text-base font-bold flex items-center gap-2 transition-colors shadow-lg shadow-green-500/20"><MonitorPlay size={18}/> Manage Content</button>
                                                         {canManageGroupsAndSubjects && (
                                                             <>
                                                                 <button onClick={() => { 
                                                                     setEditData(sub); setEditMode(true); 
-                                                                    const gPrices = {}; sub.groupPrices.forEach(p => gPrices[p.groupId] = { price: p.price, deliverTute: p.deliverTute || false, tuteName: p.tuteName || '', tuteFile: null }); 
+                                                                    const gPrices = {}; 
+                                                                    sub.groupPrices.forEach(p => {
+                                                                        gPrices[p.groupId] = { 
+                                                                            price: p.price, deliverTute: p.deliverTute === true || p.deliverTute === 'true', 
+                                                                            tuteName: p.tuteName || '', tuteCover: p.tuteCover || null, tuteFile: null 
+                                                                        };
+                                                                    }); 
                                                                     setSelectedGroupPrices(gPrices); setShowCourseModal(true); 
                                                                 }} className="text-blue-400 bg-white/5 hover:bg-blue-600 hover:text-white border border-white/5 p-3 rounded-xl transition-colors"><Edit3 size={20}/></button>
                                                                 <button onClick={() => deleteItem('/admin/course/delete', { course_id: sub.id }, "Subject Deleted")} className="text-red-400 bg-white/5 hover:bg-red-600 hover:text-white border border-white/5 p-3 rounded-xl transition-colors"><Trash2 size={20}/></button>
@@ -184,7 +223,7 @@ export default function ContentHubViews({ state, actions }) {
                                                         )}
                                                     </div>
                                                 </div>
-                                            ))}
+                                                )})}
                                         </div>
                                     </div>
                                 ))}
@@ -234,7 +273,10 @@ export default function ContentHubViews({ state, actions }) {
                                         
                                         {openFolders[folder.id] && (
                                           <div className="border-t border-white/5 bg-black/20 p-4">
-                                              {subjectContents.filter(c => isMatchedType(c) && getFolderId(c) === String(folder.id)).map((content) => (
+                                              {subjectContents
+                                                .filter(c => isMatchedType(c) && getFolderId(c) === String(folder.id))
+                                                .sort((a, b) => (a.itemOrder || 1) - (b.itemOrder || 1)) // 🔥 FIX: Sorted By itemOrder
+                                                .map((content) => (
                                                   <div key={content.id} className="group flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border-b border-white/5 last:border-0 hover:bg-white/5 rounded-2xl transition-colors gap-4">
                                                       <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
                                                           {canManageContent && <GripVertical size={20} className="text-slate-600 cursor-grab hover:text-white shrink-0"/>}
@@ -243,11 +285,28 @@ export default function ContentHubViews({ state, actions }) {
                                                               <span className="text-sm font-medium text-blue-400 mt-1">{content.date ? content.date.split('T')[0] : 'No Date'}</span>
                                                           </div>
                                                       </div>
+
                                                       <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0 mt-2 sm:mt-0">
-                                                          <button onClick={() => setPreviewData(content)} className="bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">PREVIEW</button>
+                                                          {/* 🔥 FIX: Preview URL eka hadanna getBaseUrl() demma 🔥 */}
+                                                          <button onClick={() => {
+                                                              let fileUrl = content.fileName ? `${getBaseUrl()}/storage/documents/${content.fileName}` : content.link;
+                                                              setPreviewData({ ...content, link: fileUrl });
+                                                          }} className="bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">PREVIEW</button>
+                                                          
                                                           {canManageContent && (
                                                               <>
-                                                                  <button onClick={() => { setEditData(content); setEditMode(true); setShowContentModal(true); setContentType(contentTab); }} className="bg-white/5 text-blue-400 hover:bg-blue-500 hover:text-white p-2.5 rounded-xl transition-colors"><Edit3 size={18}/></button>
+                                                                  <button onClick={() => { 
+                                                                      setEditData(content); 
+                                                                      setEditMode(true); 
+                                                                      setShowContentModal(true); 
+                                                                      setContentType(contentTab); 
+                                                                      if(content.assignedCourses && content.assignedCourses.length > 0) {
+                                                                          setMassAssignSubjects(content.assignedCourses);
+                                                                      } else {
+                                                                          setMassAssignSubjects([activeSubject.id]);
+                                                                      }
+                                                                      setSelectedBatchesForContent([activeBatch.id]);
+                                                                  }} className="bg-white/5 text-blue-400 hover:bg-blue-500 hover:text-white p-2.5 rounded-xl transition-colors"><Edit3 size={18}/></button>
                                                                   <button onClick={() => deleteItem('/admin/content/delete', { content_id: content.id }, "Content Deleted")} className="bg-white/5 text-red-400 hover:bg-red-500 hover:text-white p-2.5 rounded-xl transition-colors"><Trash2 size={18}/></button>
                                                               </>
                                                           )}
@@ -265,7 +324,10 @@ export default function ContentHubViews({ state, actions }) {
                         <div className="mt-10">
                             <h4 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4 pl-2">Uncategorized Items</h4>
                             <div className="bg-white/5 border border-white/10 rounded-3xl p-4">
-                                {subjectContents.filter(c => isMatchedType(c) && !getFolderId(c)).map((content) => (
+                                {subjectContents
+                                  .filter(c => isMatchedType(c) && !getFolderId(c))
+                                  .sort((a, b) => (a.itemOrder || 1) - (b.itemOrder || 1)) // 🔥 FIX: Sorted By itemOrder
+                                  .map((content) => (
                                     <div key={content.id} className="group flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border-b border-white/5 last:border-0 hover:bg-white/5 rounded-2xl transition-colors gap-4">
                                         <div className="flex items-center gap-4 w-full sm:w-auto overflow-hidden">
                                             {canManageContent && <GripVertical size={20} className="text-slate-600 cursor-grab hover:text-white shrink-0"/>}
@@ -275,10 +337,26 @@ export default function ContentHubViews({ state, actions }) {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0 mt-2 sm:mt-0">
-                                            <button onClick={() => setPreviewData(content)} className="bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">PREVIEW</button>
+                                            {/* 🔥 FIX: Preview URL eka hadanna getBaseUrl() demma 🔥 */}
+                                            <button onClick={() => {
+                                                let fileUrl = content.fileName ? `${getBaseUrl()}/storage/documents/${content.fileName}` : content.link;
+                                                setPreviewData({ ...content, link: fileUrl });
+                                            }} className="bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-colors">PREVIEW</button>
+                                            
                                             {canManageContent && (
                                                 <>
-                                                    <button onClick={() => { setEditData(content); setEditMode(true); setShowContentModal(true); setContentType(contentTab); }} className="bg-white/5 text-blue-400 hover:bg-blue-500 hover:text-white p-2.5 rounded-xl transition-colors"><Edit3 size={18}/></button>
+                                                    <button onClick={() => { 
+                                                        setEditData(content); 
+                                                        setEditMode(true); 
+                                                        setShowContentModal(true); 
+                                                        setContentType(contentTab); 
+                                                        if(content.assignedCourses && content.assignedCourses.length > 0) {
+                                                            setMassAssignSubjects(content.assignedCourses);
+                                                        } else {
+                                                            setMassAssignSubjects([activeSubject.id]);
+                                                        }
+                                                        setSelectedBatchesForContent([activeBatch.id]);
+                                                    }} className="bg-white/5 text-blue-400 hover:bg-blue-500 hover:text-white p-2.5 rounded-xl transition-colors"><Edit3 size={18}/></button>
                                                     <button onClick={() => deleteItem('/admin/content/delete', { content_id: content.id }, "Content Deleted")} className="bg-white/5 text-red-400 hover:bg-red-500 hover:text-white p-2.5 rounded-xl transition-colors"><Trash2 size={18}/></button>
                                                 </>
                                             )}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Send, UploadCloud, Users, CheckCircle, Plus, Edit3, Trash2, CreditCard, MessageSquare, MonitorPlay, ExternalLink, Ban, BookOpen, Building2 } from 'lucide-react';
+import { X, Send, UploadCloud, Users, CheckCircle, Plus, Edit3, Trash2, CreditCard, MessageSquare, MonitorPlay, ExternalLink, Ban, BookOpen, Building2, User } from 'lucide-react';
 import api from '../../../api/axios'; 
 
 export default function ContentHubModals({ state, actions }) {
@@ -20,8 +20,16 @@ export default function ContentHubModals({ state, actions }) {
         setEditData, setDiscountRules, setSelectedGroupPrices, setShowLecturerModal, handleLecturerSubmit
     } = actions;
 
+    // 🔥 FIX: Backend API Base URL eka dynamic gannawa
+    const getBaseUrl = () => {
+        let url = api.defaults.baseURL || 'https://imacampus.online/api';
+        return url.endsWith('/') ? url.slice(0, -1) : url;
+    };
+
     return (
         <>
+            {/* ... (Anith Modals tika e widiyatama thiyenawa. Pallaha Preview Modal eka witharak wenas kala) ... */}
+            
             {showManagePostsModal && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4 animate-in fade-in duration-200">
                     <div className="bg-slate-800/90 border border-white/10 rounded-[2rem] w-full max-w-5xl shadow-2xl backdrop-blur-2xl flex flex-col max-h-[90vh]">
@@ -112,7 +120,7 @@ export default function ContentHubModals({ state, actions }) {
                             </div>
                             <div className="pt-4 border-t border-white/10 shrink-0">
                                 <button type="submit" disabled={loading} className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-bold py-4 text-base rounded-2xl shadow-lg flex justify-center items-center gap-2 transition-transform hover:scale-[1.01] disabled:opacity-70 disabled:scale-100">
-                                    {loading ? <Loader2 className="animate-spin" size={20}/> : <><Send size={18}/> Publish Post & Send Push Notification</>}
+                                    {loading ? <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"/> : <><Send size={18}/> Publish Post & Send Push Notification</>}
                                 </button>
                             </div>
                         </form>
@@ -155,53 +163,57 @@ export default function ContentHubModals({ state, actions }) {
 
                                 {contentType && (
                                     <>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white/5 p-6 md:p-8 rounded-3xl border border-white/10">
-                                            <div className="md:col-span-2">
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 bg-white/5 p-6 md:p-8 rounded-3xl border border-white/10">
+                                            <div className="md:col-span-3">
                                                 <label className="text-sm font-semibold text-slate-300 mb-2 block">Title *</label>
                                                 <input type="text" name="title" defaultValue={editData?.title} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" />
                                             </div>
+                                            <div className="md:col-span-1">
+                                                <label className="text-sm font-semibold text-slate-300 mb-2 block">Display Order *</label>
+                                                <input type="number" name="itemOrder" defaultValue={editData?.itemOrder || 1} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" />
+                                            </div>
                                             
                                             {(contentType === 'live' || contentType === 'recording') && (
-                                                <div className="md:col-span-2">
+                                                <div className="md:col-span-4">
                                                     <label className="text-sm font-semibold text-slate-300 mb-2 block">URL Link *</label>
                                                     <input type="url" name="link" defaultValue={editData?.link} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" />
                                                 </div>
                                             )}
 
                                             {contentType === 'recording' && (
-                                                <div>
+                                                <div className="md:col-span-4">
                                                     <label className="text-sm font-semibold text-slate-300 mb-2 block">Meeting ID</label>
                                                     <input type="text" name="zoomMeetingId" defaultValue={editData?.meetingId} className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" />
                                                 </div>
                                             )}
 
                                             {(contentType === 'document' || contentType === 'sPaper' || contentType === 'paper') && (
-                                                <div className="md:col-span-2">
+                                                <div className="md:col-span-4">
                                                     <label className="text-sm font-semibold text-slate-300 mb-2 block">File Upload {editMode && <span className="text-green-400 font-normal ml-2">(Leave empty to keep existing)</span>}</label>
                                                     <input type="file" name="file" required={!editMode} className="w-full bg-black/20 border border-white/10 rounded-xl p-2.5 text-slate-400 file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:bg-white/10 file:text-white" />
                                                 </div>
                                             )}
 
-                                            <div>
+                                            <div className="md:col-span-4">
                                                 <label className="text-sm font-semibold text-slate-300 mb-2 block">Date</label>
                                                 <input type={(contentType==='document'||contentType==='sPaper'||contentType==='paper') ? "month":"date"} name="date" defaultValue={editData?.date ? editData.date.split('T')[0] : ''} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" />
                                             </div>
 
                                             {contentType === 'live' && (
                                                 <>
-                                                    <div><label className="text-sm font-semibold text-slate-300 mb-2 block">Start Time</label><input type="time" name="startTime" defaultValue={editData?.startTime} className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
-                                                    <div><label className="text-sm font-semibold text-slate-300 mb-2 block">End Time</label><input type="time" name="endTime" defaultValue={editData?.endTime} className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
+                                                    <div className="md:col-span-2"><label className="text-sm font-semibold text-slate-300 mb-2 block">Start Time</label><input type="time" name="startTime" defaultValue={editData?.startTime} className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
+                                                    <div className="md:col-span-2"><label className="text-sm font-semibold text-slate-300 mb-2 block">End Time</label><input type="time" name="endTime" defaultValue={editData?.endTime} className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
                                                 </>
                                             )}
 
                                             {contentType === 'paper' && (
                                                 <>
-                                                    <div><label className="text-sm font-semibold text-slate-300 mb-2 block">Time (Min) *</label><input type="number" name="paperTime" defaultValue={editData?.paperTime} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
-                                                    <div><label className="text-sm font-semibold text-slate-300 mb-2 block">Questions *</label><input type="number" name="questionCount" defaultValue={editData?.questionCount} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
+                                                    <div className="md:col-span-2"><label className="text-sm font-semibold text-slate-300 mb-2 block">Time (Min) *</label><input type="number" name="paperTime" defaultValue={editData?.paperTime} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
+                                                    <div className="md:col-span-2"><label className="text-sm font-semibold text-slate-300 mb-2 block">Questions *</label><input type="number" name="questionCount" defaultValue={editData?.questionCount} required className="w-full bg-black/20 border border-white/10 focus:border-green-500 rounded-xl p-4 text-white outline-none" /></div>
                                                 </>
                                             )}
                                             
-                                            <div className="md:col-span-2 mt-4">
+                                            <div className="md:col-span-4 mt-4">
                                                 <label className="flex items-center gap-4 cursor-pointer w-max group bg-white/5 p-4 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
                                                     <div className="relative flex items-center justify-center">
                                                         <input type="checkbox" name="isFree" value="1" defaultChecked={editData?.isFree} className="peer w-6 h-6 appearance-none bg-black/40 border-2 border-slate-600 rounded-lg checked:bg-green-500 checked:border-green-500" />
@@ -212,63 +224,63 @@ export default function ContentHubModals({ state, actions }) {
                                             </div>
                                         </div>
 
-                                        {!editMode && (
-                                            <div className="pt-6">
-                                                <div className="flex justify-between items-end mb-6">
-                                                    <h4 className="text-lg font-bold text-white flex items-center gap-3"><BookOpen size={24} className="text-blue-500"/> Assign to Subjects</h4>
-                                                </div>
+                                        <input type="hidden" name="selectedCourses" value={JSON.stringify(massAssignSubjects)} />
+                                        
+                                        <div className="pt-6">
+                                            <div className="flex justify-between items-end mb-6">
+                                                <h4 className="text-lg font-bold text-white flex items-center gap-3"><BookOpen size={24} className="text-blue-500"/> Assign to Subjects</h4>
+                                            </div>
 
-                                                <div className="bg-black/30 p-6 rounded-2xl mb-6 border border-white/10">
-                                                    <label className="text-sm font-semibold text-slate-300 mb-3 block">Share with multiple Batches (Merge Content):</label>
-                                                    <div className="flex flex-wrap gap-4">
-                                                        {batches.map(b => (
-                                                            <label key={`b-sel-${b.id}`} className={`flex items-center gap-3 px-4 py-2 rounded-xl cursor-pointer transition-colors border ${selectedBatchesForContent.includes(b.id) ? 'bg-blue-500/20 border-blue-500/50 text-white' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'}`}>
-                                                                <input type="checkbox" className="hidden" 
-                                                                       checked={selectedBatchesForContent.includes(b.id)} 
-                                                                       onChange={(e) => {
-                                                                           if(e.target.checked) setSelectedBatchesForContent([...selectedBatchesForContent, b.id]);
-                                                                           else setSelectedBatchesForContent(selectedBatchesForContent.filter(id => id !== b.id));
-                                                                       }} 
-                                                                />
-                                                                <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center ${selectedBatchesForContent.includes(b.id) ? 'bg-blue-500 border-blue-500' : 'border-slate-500'}`}>
-                                                                    {selectedBatchesForContent.includes(b.id) && <CheckCircle size={12} className="text-white"/>}
-                                                                </div>
-                                                                <span className="font-bold text-sm">{b.name}</span>
-                                                            </label>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                <div className="bg-white/5 rounded-3xl p-6 md:p-8 border border-white/10 space-y-8">
-                                                    {batches.filter(b => selectedBatchesForContent.includes(b.id)).map(selectedBatch => (
-                                                        <div key={`batch-group-${selectedBatch.id}`} className="mb-6">
-                                                            <h4 className="text-xl font-bold text-blue-400 mb-4 border-b border-white/10 pb-2">{selectedBatch.name}</h4>
-                                                            
-                                                            {selectedBatch.groups?.length === 0 && <p className="text-sm text-slate-500">No groups in this batch.</p>}
-
-                                                            {selectedBatch.groups?.map((group, gIdx) => (
-                                                                <div key={`g-assign-${gIdx}`} className="mb-6 ml-4">
-                                                                    <h5 className="text-base font-bold text-slate-200 mb-4">{group.name} <span className="text-xs font-medium text-slate-400 bg-white/5 px-3 py-1 rounded-lg ml-2 border border-white/5">{group.type === 1 ? 'Monthly' : 'Full'}</span></h5>
-                                                                    
-                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                                                                        {group.courses?.map((course, cIdx) => (
-                                                                            <label key={`c-assign-${cIdx}`} className={`flex items-center gap-4 cursor-pointer p-4 rounded-2xl border transition-colors group ${massAssignSubjects.includes(course.id) ? 'bg-blue-600/20 border-blue-500/50' : 'bg-black/20 border-white/10 hover:border-white/20'}`}>
-                                                                                <div className="relative flex items-center justify-center shrink-0">
-                                                                                    <input type="checkbox" checked={massAssignSubjects.includes(course.id)} onChange={() => toggleMassAssignSubject(course.id)} className="peer w-6 h-6 appearance-none bg-black/40 border-2 border-slate-600 rounded-lg checked:bg-blue-500 checked:border-blue-500" />
-                                                                                    <CheckCircle size={16} className="text-white absolute opacity-0 peer-checked:opacity-100 pointer-events-none"/>
-                                                                                </div>
-                                                                                <span className={`text-base font-bold truncate ${massAssignSubjects.includes(course.id) ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>{course.name}</span>
-                                                                            </label>
-                                                                        ))}
-                                                                        {group.courses?.length === 0 && <p className="text-xs text-slate-500">No subjects in this group.</p>}
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                            <div className="bg-black/30 p-6 rounded-2xl mb-6 border border-white/10">
+                                                <label className="text-sm font-semibold text-slate-300 mb-3 block">Share with multiple Batches (Merge Content):</label>
+                                                <div className="flex flex-wrap gap-4">
+                                                    {batches.map(b => (
+                                                        <label key={`b-sel-${b.id}`} className={`flex items-center gap-3 px-4 py-2 rounded-xl cursor-pointer transition-colors border ${selectedBatchesForContent.includes(b.id) ? 'bg-blue-500/20 border-blue-500/50 text-white' : 'bg-white/5 border-white/5 text-slate-400 hover:bg-white/10'}`}>
+                                                            <input type="checkbox" className="hidden" 
+                                                                   checked={selectedBatchesForContent.includes(b.id)} 
+                                                                   onChange={(e) => {
+                                                                       if(e.target.checked) setSelectedBatchesForContent([...selectedBatchesForContent, b.id]);
+                                                                       else setSelectedBatchesForContent(selectedBatchesForContent.filter(id => id !== b.id));
+                                                                   }} 
+                                                            />
+                                                            <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center ${selectedBatchesForContent.includes(b.id) ? 'bg-blue-500 border-blue-500' : 'border-slate-500'}`}>
+                                                                {selectedBatchesForContent.includes(b.id) && <CheckCircle size={12} className="text-white"/>}
+                                                            </div>
+                                                            <span className="font-bold text-sm">{b.name}</span>
+                                                        </label>
                                                     ))}
                                                 </div>
                                             </div>
-                                        )}
+
+                                            <div className="bg-white/5 rounded-3xl p-6 md:p-8 border border-white/10 space-y-8">
+                                                {batches.filter(b => selectedBatchesForContent.includes(b.id)).map(selectedBatch => (
+                                                    <div key={`batch-group-${selectedBatch.id}`} className="mb-6">
+                                                        <h4 className="text-xl font-bold text-blue-400 mb-4 border-b border-white/10 pb-2">{selectedBatch.name}</h4>
+                                                        
+                                                        {selectedBatch.groups?.length === 0 && <p className="text-sm text-slate-500">No groups in this batch.</p>}
+
+                                                        {selectedBatch.groups?.map((group, gIdx) => (
+                                                            <div key={`g-assign-${gIdx}`} className="mb-6 ml-4">
+                                                                <h5 className="text-base font-bold text-slate-200 mb-4">{group.name} <span className="text-xs font-medium text-slate-400 bg-white/5 px-3 py-1 rounded-lg ml-2 border border-white/5">{group.type === 1 ? 'Monthly' : 'Full'}</span></h5>
+                                                                
+                                                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                                                    {group.courses?.map((course, cIdx) => (
+                                                                        <label key={`c-assign-${cIdx}`} className={`flex items-center gap-4 cursor-pointer p-4 rounded-2xl border transition-colors group ${massAssignSubjects.includes(course.id) ? 'bg-blue-600/20 border-blue-500/50' : 'bg-black/20 border-white/10 hover:border-white/20'}`}>
+                                                                            <div className="relative flex items-center justify-center shrink-0">
+                                                                                <input type="checkbox" checked={massAssignSubjects.includes(course.id)} onChange={() => toggleMassAssignSubject(course.id)} className="peer w-6 h-6 appearance-none bg-black/40 border-2 border-slate-600 rounded-lg checked:bg-blue-500 checked:border-blue-500" />
+                                                                                <CheckCircle size={16} className="text-white absolute opacity-0 peer-checked:opacity-100 pointer-events-none"/>
+                                                                            </div>
+                                                                            <span className={`text-base font-bold truncate ${massAssignSubjects.includes(course.id) ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>{course.name}</span>
+                                                                        </label>
+                                                                    ))}
+                                                                    {group.courses?.length === 0 && <p className="text-xs text-slate-500">No subjects in this group.</p>}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
 
                                         <div className="pt-6 pb-4">
                                             <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold text-lg py-4 rounded-2xl shadow-lg shadow-green-500/20 mt-4">
@@ -332,7 +344,7 @@ export default function ContentHubModals({ state, actions }) {
                                                 <UploadCloud size={24} className="text-blue-400"/>
                                                 <span className="text-xs text-slate-300 font-bold">{selectedLogoName || "Select Image File"}</span>
                                             </div>
-                                            <input type="file" name="logo" required={!editMode} accept="image/*" className="hidden" onChange={(e) => setSelectedLogoName(e.target.files[0]?.name || "")} />
+                                            <input type="file" name="logo" accept="image/*" className="hidden" onChange={(e) => setSelectedLogoName(e.target.files[0]?.name || "")} />
                                         </label>
                                     </div>
 
@@ -538,15 +550,30 @@ export default function ContentHubModals({ state, actions }) {
                             )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 
-                                {/* 🔥 LECTURER NAME FIELD WITH DROPDOWN SUGGESTIONS 🔥 */}
-                                <div>
-                                    <label className="text-sm font-semibold text-slate-300 mb-2 block">Lecturer Name (Optional)</label>
-                                    <input type="text" list="lecturersList" name="lecturerName" defaultValue={editData?.lecturerName} placeholder="Select or type name..." className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500" />
-                                    <datalist id="lecturersList">
-                                        {activeBatch?.lecturers && JSON.parse(activeBatch.lecturers).map((m, i) => (
-                                            <option key={i} value={m.name} />
-                                        ))}
-                                    </datalist>
+                                {/* 🔥 LECTURER NAME AND IMAGE UPLOAD 🔥 */}
+                                <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
+                                    <div>
+                                        <label className="text-sm font-semibold text-slate-300 mb-2 block">Lecturer Name (Optional)</label>
+                                        <input type="text" list="lecturersList" name="lecturerName" defaultValue={editData?.lecturerName} placeholder="Select or type name..." className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500" />
+                                        <datalist id="lecturersList">
+                                            {activeBatch?.lecturers && JSON.parse(activeBatch.lecturers).map((m, i) => (
+                                                <option key={i} value={m.name} />
+                                            ))}
+                                        </datalist>
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-semibold text-slate-300 mb-2 block">Lecturer Image (Optional)</label>
+                                        {editMode && editData?.groupPrices && (() => {
+                                            try {
+                                                const parsed = typeof editData.groupPrices === 'string' ? JSON.parse(editData.groupPrices) : editData.groupPrices;
+                                                if (parsed?.[0]?.lecturerImage) {
+                                                    return <p className="text-[10px] text-green-400 mb-2 border border-green-500/20 bg-green-500/10 px-2 py-1 rounded inline-block">Current: {parsed[0].lecturerImage}</p>;
+                                                }
+                                            } catch(e) {}
+                                            return null;
+                                        })()}
+                                        <input type="file" name="lecturerImage" accept="image/*" className="w-full bg-black/20 border border-white/10 rounded-xl p-2.5 text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-white/10 file:text-white cursor-pointer" />
+                                    </div>
                                 </div>
 
                                 <div><label className="text-sm font-semibold text-slate-300 mb-2 block">Subject Name *</label><input type="text" name="name" defaultValue={editData?.name} required className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white outline-none focus:border-blue-500" /></div>
@@ -600,6 +627,9 @@ export default function ContentHubModals({ state, actions }) {
                                                     </div>
                                                     <div>
                                                         <label className="text-xs text-slate-400 mb-1 block uppercase tracking-widest font-semibold">Tute Cover (Optional)</label>
+                                                        {selectedGroupPrices[g.id]?.tuteCover && (
+                                                            <p className="text-[10px] text-green-400 mb-1">Current: {selectedGroupPrices[g.id].tuteCover}</p>
+                                                        )}
                                                         <input type="file" accept="image/*" onChange={(e) => updateGroupData(g.id, 'tuteFile', e.target.files[0])} className="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-sm text-slate-400 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-white/10 file:text-white cursor-pointer" />
                                                     </div>
                                                 </div>
@@ -671,15 +701,17 @@ export default function ContentHubModals({ state, actions }) {
                         <div className="p-6 border-b border-white/10 flex justify-between items-center">
                             <h3 className="text-lg font-bold text-white flex items-center gap-3"><MonitorPlay size={24} className="text-blue-400"/> {previewData.title}</h3>
                             <div className="flex gap-3">
-                                <a href={previewData.link || `http://72.62.249.211:5000/documents/${previewData.fileName}`} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors">
+                                {/* 🔥 FIX: Open External Link URL Fixed 🔥 */}
+                                <a href={previewData.fileName ? `${getBaseUrl()}/storage/documents/${previewData.fileName}` : previewData.link} target="_blank" rel="noreferrer" className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors">
                                     <ExternalLink size={18}/> Open External
                                 </a>
                                 <button onClick={() => setPreviewData(null)} className="text-slate-400 hover:text-white bg-white/5 hover:bg-red-500 border border-white/5 p-2.5 rounded-xl transition-colors"><X size={20}/></button>
                             </div>
                         </div>
                         <div className="flex-1 bg-black/40 p-4 relative flex items-center justify-center">
+                            {/* 🔥 FIX: Preview Iframe URL Fixed 🔥 */}
                             {previewData.fileName ? (
-                                <iframe src={`http://72.62.249.211:5000/documents/${previewData.fileName}`} className="w-full h-full rounded-2xl bg-white" title="Document Preview" />
+                                <iframe src={`${getBaseUrl()}/storage/documents/${previewData.fileName}`} className="w-full h-full rounded-2xl bg-white" title="Document Preview" />
                             ) : previewData.link ? (
                                 <iframe src={getEmbedUrl(previewData.link)} className="w-full h-full rounded-2xl bg-black border border-white/10" title="Video/Live Preview" allowFullScreen />
                             ) : (

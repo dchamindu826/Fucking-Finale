@@ -1,13 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import axios from '../../api/axios';
 import { BarChart2, MessageCircle, Users, Percent, Download, Clock, Plus, Upload, Megaphone, Search, AlertCircle, CheckCircle, Trash2, UserPlus, Lock, User, Phone } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import toast from 'react-hot-toast';
 
 export default function ManagerCampaignStats({ filters }) {
-    const rawRole = JSON.parse(localStorage.getItem('user'))?.role || '';
+    const user = JSON.parse(localStorage.getItem('user')) || {};
+    const rawRole = user.role || '';
     const userRole = rawRole.toUpperCase().replace(/ /g, '_');
-    const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
+    
+    const isSystemAdmin = ['SYSTEM_ADMIN', 'DIRECTOR', 'SUPER'].includes(userRole);
+    const isManager = ['MANAGER', 'ASS_MANAGER'].includes(userRole);
 
     const [data, setData] = useState({ summary: {}, report: [], msgReport: [] });
     const [allLeads, setAllLeads] = useState([]);
@@ -21,11 +24,6 @@ export default function ManagerCampaignStats({ filters }) {
     const todayMidnight = new Date(); todayMidnight.setHours(23, 59, 59, 999);
     const [startDate, setStartDate] = useState(today9AM.toISOString().slice(0, 16));
     const [endDate, setEndDate] = useState(todayMidnight.toISOString().slice(0, 16));
-
-    const [businesses, setBusinesses] = useState([]);
-    const [batches, setBatches] = useState([]);
-    const [localBusiness, setLocalBusiness] = useState(filters?.selectedBusiness || '');
-    const [localBatch, setLocalBatch] = useState(filters?.selectedBatch || '');
 
     const [templates, setTemplates] = useState([]);
     const [tplForm, setTplForm] = useState({ name: '', category: 'MARKETING', headerType: 'NONE', headerText: '', bodyText: '', footerText: '' });
@@ -45,29 +43,12 @@ export default function ManagerCampaignStats({ filters }) {
     const [teamForm, setTeamForm] = useState({ firstName: '', lastName: '', phone: '', password: '' });
     const [teamLoading, setTeamLoading] = useState(false);
 
-    useEffect(() => {
-        if (isManager) {
-            axios.get('/admin/businesses').then(res => {
-                setBusinesses(res.data);
-                if (!localBusiness && res.data.length > 0) setLocalBusiness(res.data[0].id.toString());
-            }).catch(console.error);
-        }
-    }, [isManager]);
-
-    useEffect(() => {
-        if (localBusiness) {
-            axios.get(`/admin/batches/${localBusiness}`).then(res => setBatches(res.data.batches || res.data || [])).catch(console.error);
-        } else {
-            setBatches([]);
-        }
-    }, [localBusiness]);
-
     useEffect(() => { 
         fetchStats(); 
         fetchAllLeads();
         if (activeTab === 'TEMPLATES') fetchTemplates();
         if (activeTab === 'TEAM') fetchTeam();
-    }, [localBusiness, localBatch, phase, timeFilter, startDate, endDate, activeTab]);
+    }, [filters?.selectedBusiness, filters?.selectedBatch, phase, timeFilter, startDate, endDate, activeTab]);
 
     const fetchStats = async () => {
         setLoading(true);
@@ -75,11 +56,13 @@ export default function ManagerCampaignStats({ filters }) {
             let start = timeFilter === 'today' ? today9AM.toISOString() : new Date(startDate).toISOString();
             let end = timeFilter === 'today' ? todayMidnight.toISOString() : new Date(endDate).toISOString();
 
-            const bId = isManager ? localBusiness : filters?.selectedBusiness;
-            const batchId = isManager ? localBatch : filters?.selectedBatch;
+            const targetBusinessId = filters?.selectedBusiness || user.businessId;
+            const targetBatchId = filters?.selectedBatch || user.batchId;
 
+            const token = localStorage.getItem('token');
             const res = await axios.get('/coordinator-crm/campaign-stats', {
-                params: { businessId: bId, batchId: batchId, phase, startDate: start, endDate: end }
+                headers: { Authorization: `Bearer ${token}` },
+                params: { businessId: targetBusinessId, batchId: targetBatchId, phase, startDate: start, endDate: end }
             });
             setData(res.data);
         } catch (error) { console.error(error); }
@@ -87,15 +70,56 @@ export default function ManagerCampaignStats({ filters }) {
     };
 
     const fetchAllLeads = async () => {
-        try { const res = await axios.get('/coordinator-crm/all-leads'); setAllLeads(res.data); } catch(e) {}
+        try { 
+            const targetBusinessId = filters?.selectedBusiness || user.businessId;
+            const targetBatchId = filters?.selectedBatch || user.batchId;
+            const token = localStorage.getItem('token');
+            const res = await axios.get('/coordinator-crm/all-leads', { 
+                headers: { Authorization: `Bearer ${token}` },
+                params: { businessId: targetBusinessId, batchId: targetBatchId }
+            }); 
+            setAllLeads(res.data); 
+        } catch(e) {}
     };
 
     const fetchTemplates = async () => {
-        try { const res = await axios.get('/coordinator-crm/meta-templates'); setTemplates(res.data || []); } catch(e) {}
+        try { 
+            const targetBusinessId = filters?.selectedBusiness || user.businessId;
+            const token = localStorage.getItem('token');
+            const res = await axios.get('/coordinator-crm/meta-templates', { 
+                headers: { Authorization: `Bearer ${token}` },
+                params: { businessId: targetBusinessId }
+            }); 
+            setTemplates(res.data || []); 
+        } catch(e) {}
     };
 
     const fetchTeam = async () => {
-        try { const res = await axios.get('/team'); setTeamMembers(res.data); } catch(e) { console.error("Failed to load team"); }
+        try { 
+            const token = localStorage.getItem('token');
+            const [staffRes, bizRes] = await Promise.all([
+                axios.get('/admin/staff', { headers: { Authorization: `Bearer ${token}` } }),
+                axios.get('/admin/businesses', { headers: { Authorization: `Bearer ${token}` } })
+            ]);
+            
+            let coords = staffRes.data.filter(s => s.role && ['COORDINATOR', 'CALLER', 'MANAGER'].includes(s.role.toUpperCase()));
+            
+            if (filters?.selectedBusiness && bizRes.data) {
+                const selectedBizObj = bizRes.data.find(b => String(b.id) === String(filters.selectedBusiness));
+                const bizName = selectedBizObj ? selectedBizObj.name : '';
+
+                coords = coords.filter(c => {
+                    const cBiz = String(c.businessType || '').toLowerCase().trim();
+                    const selBizName = String(bizName).toLowerCase().trim();
+                    const selBizId = String(filters.selectedBusiness).toLowerCase().trim();
+                    
+                    if (!cBiz) return false;
+
+                    return cBiz === selBizName || cBiz === selBizId || String(c.businessId) === String(filters.selectedBusiness);
+                });
+            }
+            setTeamMembers(coords); 
+        } catch(e) { console.error("Failed to load team", e); }
     };
 
     const exportAllLeads = () => {
@@ -123,7 +147,8 @@ export default function ManagerCampaignStats({ filters }) {
             formData.append('buttons', JSON.stringify(tplButtons));
             if (tplFile) formData.append('media', tplFile);
 
-            await axios.post('/coordinator-crm/meta-templates', formData);
+            const token = localStorage.getItem('token');
+            await axios.post('/coordinator-crm/meta-templates', formData, { headers: { Authorization: `Bearer ${token}` } });
             toast.success("Template Created successfully!", { id: loadToast });
             setTplForm({ name: '', category: 'MARKETING', headerType: 'NONE', headerText: '', bodyText: '', footerText: '' });
             setTplButtons([]); setTplFile(null); fetchTemplates();
@@ -132,7 +157,12 @@ export default function ManagerCampaignStats({ filters }) {
 
     const deleteTemplate = async (name) => {
         if(!window.confirm(`Delete template ${name}?`)) return;
-        try { await axios.delete(`/coordinator-crm/meta-templates/${name}`); toast.success("Deleted"); fetchTemplates(); } catch(e) { toast.error("Delete failed"); }
+        try { 
+            const token = localStorage.getItem('token');
+            await axios.delete(`/coordinator-crm/meta-templates/${name}`, { headers: { Authorization: `Bearer ${token}` } }); 
+            toast.success("Deleted"); 
+            fetchTemplates(); 
+        } catch(e) { toast.error("Delete failed"); }
     };
 
     const toggleLeadSelection = (id) => {
@@ -159,7 +189,8 @@ export default function ManagerCampaignStats({ filters }) {
             formData.append('templateName', bcastTemplate);
             if (bcastFile) formData.append('media', bcastFile);
 
-            const res = await axios.post('/coordinator-crm/broadcast', formData);
+            const token = localStorage.getItem('token');
+            const res = await axios.post('/coordinator-crm/broadcast', formData, { headers: { Authorization: `Bearer ${token}` } });
             setBcastResults(res.data);
             toast.success("Broadcast completed", { id: loadToast });
         } catch (e) { toast.error("Broadcast Failed", { id: loadToast }); }
@@ -170,7 +201,19 @@ export default function ManagerCampaignStats({ filters }) {
         e.preventDefault();
         setTeamLoading(true);
         try {
-            await axios.post('/team', teamForm);
+            const token = localStorage.getItem('token');
+            const bizRes = await axios.get('/admin/businesses', { headers: { Authorization: `Bearer ${token}` } });
+            const selectedBizObj = bizRes.data.find(b => String(b.id) === String(filters?.selectedBusiness));
+            const bizNameToSave = selectedBizObj ? selectedBizObj.name : String(filters?.selectedBusiness);
+
+            const payload = {
+                ...teamForm,
+                businessType: bizNameToSave,
+                department: 'Class Coordination',
+                role: 'CALLER'
+            };
+
+            await axios.post('/admin/staff', payload, { headers: { Authorization: `Bearer ${token}` } });
             toast.success("Caller Added Successfully!");
             setTeamForm({ firstName: '', lastName: '', phone: '', password: '' });
             fetchTeam();
@@ -180,8 +223,22 @@ export default function ManagerCampaignStats({ filters }) {
 
     const deleteTeamMember = async (id) => {
         if (!window.confirm("Remove this caller?")) return;
-        try { await axios.delete(`/team/${id}`); toast.success("Caller Removed!"); fetchTeam(); } catch (error) { toast.error("Failed to remove"); }
+        try { 
+            const token = localStorage.getItem('token');
+            await axios.delete(`/admin/staff/${id}`, { headers: { Authorization: `Bearer ${token}` } }); 
+            toast.success("Caller Removed!"); 
+            fetchTeam(); 
+        } catch (error) { toast.error("Failed to remove"); }
     };
+
+    // 🔥 FIX: Calculate Covered, Pending and Assigned for the top cards 🔥
+    const statsCalculations = useMemo(() => {
+        if (!data.report) return { covered: 0, pending: 0, assigned: 0 };
+        const covered = data.report.reduce((acc, curr) => acc + curr.answered + curr.noAnswer + curr.reject, 0);
+        const pending = data.report.reduce((acc, curr) => acc + curr.pending, 0);
+        const assigned = data.report.reduce((acc, curr) => acc + curr.assigned, 0);
+        return { covered, pending, assigned };
+    }, [data.report]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -191,23 +248,10 @@ export default function ManagerCampaignStats({ filters }) {
                     <button onClick={() => setActiveTab('WHATSAPP')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'WHATSAPP' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>WhatsApp Metrics</button>
                     <button onClick={() => setActiveTab('TEMPLATES')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'TEMPLATES' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}>Meta Templates</button>
                     <button onClick={() => setActiveTab('BROADCAST')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'BROADCAST' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}>Broadcast</button>
-                    {isManager && <button onClick={() => setActiveTab('TEAM')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'TEAM' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>My Team</button>}
+                    {(isSystemAdmin || isManager) && <button onClick={() => setActiveTab('TEAM')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'TEAM' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>My Team</button>}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                    {isManager && (
-                        <div className="flex gap-2">
-                            <select value={localBusiness} onChange={e => {setLocalBusiness(e.target.value); setLocalBatch('');}} className="bg-blue-900/30 text-blue-300 text-sm p-2 rounded-lg border border-blue-500/30 outline-none max-w-[140px] font-bold">
-                                <option value="">All Businesses</option>
-                                {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
-                            <select value={localBatch} onChange={e => setLocalBatch(e.target.value)} disabled={!localBusiness} className="bg-blue-900/30 text-blue-300 text-sm p-2 rounded-lg border border-blue-500/30 outline-none max-w-[140px] font-bold">
-                                <option value="">All Batches</option>
-                                {batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                            </select>
-                        </div>
-                    )}
-
                     {(activeTab === 'CALLS' || activeTab === 'WHATSAPP') && (
                         <>
                             <select value={phase} onChange={e=>setPhase(e.target.value)} className="bg-[#0f172a] text-slate-300 text-sm p-2 rounded-lg border border-slate-700 outline-none">
@@ -235,24 +279,42 @@ export default function ManagerCampaignStats({ filters }) {
 
             {loading && (activeTab === 'CALLS' || activeTab === 'WHATSAPP') ? <div className="text-center py-10 text-slate-500">Loading metrics...</div> : (
                 <>
-                    {(activeTab === 'CALLS' || activeTab === 'WHATSAPP') && (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {/* 🔥 FIX: Separated Top Cards for CALLS and WHATSAPP 🔥 */}
+                    {activeTab === 'CALLS' && (
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl border border-white/5 shadow-lg relative overflow-hidden">
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total System Leads</p>
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total Leads</p>
                                 <h3 className="text-2xl font-bold text-white">{data.summary.totalLeads}</h3>
                                 <div className="absolute bottom-0 right-0 bg-red-500/20 text-red-400 px-4 py-1.5 rounded-tl-xl text-xs font-black border-t border-l border-red-500/30">{data.summary.unassignedLeads} UNASSIGNED</div>
                             </div>
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total Msgs Sent</p>
-                                <h3 className="text-2xl font-bold text-blue-400">{data.summary.totalSent}</h3>
+                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-2">Total Assigned</p>
+                                <h3 className="text-2xl font-bold text-indigo-400">{statsCalculations.assigned} <span className="text-[10px] text-slate-500 font-normal">Agents</span></h3>
                             </div>
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total Msgs Received</p>
-                                <h3 className="text-2xl font-bold text-emerald-400">{data.summary.totalReceived}</h3>
+                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-2">Covered Leads</p>
+                                <h3 className="text-2xl font-bold text-emerald-400">{statsCalculations.covered} <span className="text-[10px] text-slate-500 font-normal">Contacted</span></h3>
                             </div>
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
-                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Overall Call Response</p>
+                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-2">Pending Leads</p>
+                                <h3 className="text-2xl font-bold text-blue-400">{statsCalculations.pending} <span className="text-[10px] text-slate-500 font-normal">Remaining</span></h3>
+                            </div>
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
+                                <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-2">Response Rate</p>
                                 <h3 className="text-2xl font-bold text-amber-400">{data.summary.rate}%</h3>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'WHATSAPP' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Unique Numbers Contacted (Sent)</p>
+                                <h3 className="text-2xl font-bold text-blue-400">{data.summary.totalSent} <span className="text-[10px] text-slate-500 font-normal">Numbers</span></h3>
+                            </div>
+                            <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Unique Numbers Replied (Received)</p>
+                                <h3 className="text-2xl font-bold text-emerald-400">{data.summary.totalReceived} <span className="text-[10px] text-slate-500 font-normal">Numbers</span></h3>
                             </div>
                         </div>
                     )}
@@ -268,6 +330,7 @@ export default function ManagerCampaignStats({ filters }) {
                                             <th className="p-4 text-center text-blue-400">Pending</th>
                                             <th className="p-4 text-center text-emerald-400">Answered</th>
                                             <th className="p-4 text-center text-amber-400">No Answer</th>
+                                            <th className="p-4 text-center text-red-400">Reject</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
@@ -278,6 +341,7 @@ export default function ManagerCampaignStats({ filters }) {
                                                 <td className="p-4 text-center font-bold text-blue-400">{r.pending}</td>
                                                 <td className="p-4 text-center font-bold text-emerald-400">{r.answered}</td>
                                                 <td className="p-4 text-center font-bold text-amber-400">{r.noAnswer}</td>
+                                                <td className="p-4 text-center font-bold text-red-400">{r.reject}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -287,12 +351,13 @@ export default function ManagerCampaignStats({ filters }) {
                                 <h3 className="text-sm font-bold text-white mb-4">Calls Performance</h3>
                                 <div style={{ width: '100%', height: '100%', minHeight: '300px' }}>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={data.report} barSize={15}> 
+                                        <BarChart data={data.report} barSize={12}> 
                                             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                             <XAxis dataKey="agentName" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                             <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '8px'}} />
                                             <Bar dataKey="answered" name="Answered" fill="#10b981" radius={[4, 4, 0, 0]} />
                                             <Bar dataKey="noAnswer" name="No Answer" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="reject" name="Reject" fill="#ef4444" radius={[4, 4, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -307,31 +372,31 @@ export default function ManagerCampaignStats({ filters }) {
                                     <thead className="bg-black/40 text-slate-400 text-xs uppercase tracking-wider sticky top-0 z-10">
                                         <tr>
                                             <th className="p-4">Agent Name</th>
-                                            <th className="p-4 text-center text-blue-400">Total Sent</th>
-                                            <th className="p-4 text-center text-emerald-400">Total Received</th>
+                                            <th className="p-4 text-center text-blue-400">Leads Contacted</th>
+                                            <th className="p-4 text-center text-emerald-400">Leads Replied</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
                                         {data.msgReport.map((r, i) => (
                                             <tr key={i} className="hover:bg-white/5">
                                                 <td className="p-4 font-bold text-white">{r.agentName}</td>
-                                                <td className="p-4 text-center font-bold text-blue-400">{r.sentMsgs} <span className="text-[10px] text-slate-500 block">to {r.uniqueSent} users</span></td>
-                                                <td className="p-4 text-center font-bold text-emerald-400">{r.receivedMsgs} <span className="text-[10px] text-slate-500 block">from {r.uniqueReceived} users</span></td>
+                                                <td className="p-4 text-center font-bold text-blue-400">{r.uniqueSent} <span className="text-[10px] text-slate-500 font-normal">Users</span></td>
+                                                <td className="p-4 text-center font-bold text-emerald-400">{r.uniqueReceived} <span className="text-[10px] text-slate-500 font-normal">Users</span></td>
                                             </tr>
                                         ))}
                                     </tbody>
                                 </table>
                             </div>
                             <div className="bg-[#1e293b]/60 border border-white/5 rounded-2xl p-6 backdrop-blur-xl shadow-xl">
-                                <h3 className="text-sm font-bold text-white mb-4">Message Volume Trends</h3>
+                                <h3 className="text-sm font-bold text-white mb-4">Unique User Interaction Trends</h3>
                                 <div style={{ width: '100%', height: '100%', minHeight: '300px' }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={data.msgReport}> 
                                             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                             <XAxis dataKey="agentName" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                             <Tooltip contentStyle={{backgroundColor: '#1e293b', border: 'none', borderRadius: '8px'}} />
-                                            <Line type="monotone" dataKey="sentMsgs" stroke="#3b82f6" strokeWidth={3} dot={{r:4}} />
-                                            <Line type="monotone" dataKey="receivedMsgs" stroke="#10b981" strokeWidth={3} dot={{r:4}} />
+                                            <Line type="monotone" dataKey="uniqueSent" name="Leads Contacted" stroke="#3b82f6" strokeWidth={3} dot={{r:4}} />
+                                            <Line type="monotone" dataKey="uniqueReceived" name="Leads Replied" stroke="#10b981" strokeWidth={3} dot={{r:4}} />
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -443,7 +508,6 @@ export default function ManagerCampaignStats({ filters }) {
                                         </>
                                     ) : (
                                         <>
-                                            {/* 🔥 FIX: Removed curly braces that cause parsing issues in React 🔥 */}
                                             <p className="text-[10px] text-blue-400 mb-2 leading-tight">Templates can be sent to anyone. If your template has variables or a Header Media, add them below.</p>
                                             <select value={bcastTemplate} onChange={e=>setBcastTemplate(e.target.value)} className="w-full bg-[#0f172a] text-white p-3 rounded-xl border border-slate-700 mb-3">
                                                 <option value="">Select Approved Template...</option>
@@ -489,7 +553,7 @@ export default function ManagerCampaignStats({ filters }) {
                         </div>
                     )}
 
-                    {activeTab === 'TEAM' && isManager && (
+                    {activeTab === 'TEAM' && (isSystemAdmin || isManager) && (
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="bg-[#1e293b]/60 p-6 rounded-3xl border border-white/5 shadow-xl h-fit">
                                 <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><UserPlus size={20} className="text-blue-500"/> Add Call Agent</h3>
@@ -531,23 +595,51 @@ export default function ManagerCampaignStats({ filters }) {
                                 {teamMembers.length === 0 ? (
                                     <div className="text-center py-10 text-slate-500 bg-black/20 rounded-2xl border border-white/5">No external callers added yet.</div>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {teamMembers.map(caller => (
-                                            <div key={caller.id} className="bg-black/30 p-4 rounded-2xl border border-white/5 flex justify-between items-center hover:border-white/20 transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg border border-blue-500/20">
-                                                        {caller.firstName.charAt(0)}
+                                    <div className="space-y-6">
+                                        
+                                        <div>
+                                            <h4 className="text-xs text-blue-400 font-bold uppercase tracking-widest mb-3 border-b border-slate-700 pb-2">External Callers</h4>
+                                            <div className="space-y-3">
+                                                {teamMembers.filter(m => m.role === 'CALLER').map(caller => (
+                                                    <div key={caller.id} className="bg-black/30 p-4 rounded-2xl border border-white/5 flex justify-between items-center hover:border-white/20 transition-colors">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg border border-blue-500/20">
+                                                                {caller.firstName.charAt(0)}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-white font-bold">{caller.firstName} {caller.lastName}</h4>
+                                                                <p className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12}/> {caller.phone}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => deleteTeamMember(caller.id)} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition-colors border border-transparent hover:border-red-500/30">
+                                                            <Trash2 size={18}/>
+                                                        </button>
                                                     </div>
-                                                    <div>
-                                                        <h4 className="text-white font-bold">{caller.firstName} {caller.lastName}</h4>
-                                                        <p className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12}/> {caller.phone}</p>
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => deleteTeamMember(caller.id)} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition-colors border border-transparent hover:border-red-500/30">
-                                                    <Trash2 size={18}/>
-                                                </button>
+                                                ))}
+                                                {teamMembers.filter(m => m.role === 'CALLER').length === 0 && <p className="text-xs text-slate-500 italic">No external callers found.</p>}
                                             </div>
-                                        ))}
+                                        </div>
+
+                                        <div>
+                                            <h4 className="text-xs text-emerald-400 font-bold uppercase tracking-widest mb-3 border-b border-slate-700 pb-2">Staff Coordinators</h4>
+                                            <div className="space-y-3">
+                                                {teamMembers.filter(m => m.role !== 'CALLER').map(caller => (
+                                                    <div key={caller.id} className="bg-black/30 p-4 rounded-2xl border border-white/5 flex justify-between items-center hover:border-white/20 transition-colors">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg border border-emerald-500/20">
+                                                                {caller.firstName.charAt(0)}
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="text-white font-bold">{caller.firstName} {caller.lastName}</h4>
+                                                                <p className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12}/> {caller.phone}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                                {teamMembers.filter(m => m.role !== 'CALLER').length === 0 && <p className="text-xs text-slate-500 italic">No staff coordinators found.</p>}
+                                            </div>
+                                        </div>
+
                                     </div>
                                 )}
                             </div>

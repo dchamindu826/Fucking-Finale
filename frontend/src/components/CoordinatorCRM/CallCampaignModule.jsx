@@ -27,21 +27,11 @@ export default function CallCampaignModule({ loggedInUser, filters, setActiveMod
     return (
         <div className="h-full w-full overflow-y-auto custom-scrollbar p-2 relative">
             
-            {/* 🔴 VISUAL DEBUG BANNER (Screen eke uda penewi) 🔴 */}
-            <div className="bg-red-950/80 border-2 border-red-500 text-red-200 p-4 mb-4 rounded-xl font-mono text-sm shadow-lg backdrop-blur-md">
-                <p className="font-bold text-xl text-white mb-2 border-b border-red-500/50 pb-2">🚨 ROLE DEBUG INFO 🚨</p>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                    <p><b>1. Raw Role (DB Eken ena):</b> <span className="text-white bg-black/40 px-2 py-0.5 rounded">"{rawRole}"</span></p>
-                    <p><b>2. Normalized Role:</b> <span className="text-white bg-black/40 px-2 py-0.5 rounded">"{userRole}"</span></p>
-                    <p><b>3. Is Manager?:</b> <span className={isManager ? "text-emerald-400 font-bold" : "text-red-400 font-bold"}>{isManager ? "TRUE ✅" : "FALSE ❌"}</span></p>
-                    <p><b>4. Has loggedInUser Props?:</b> <span className="text-white">{loggedInUser ? "YES" : "NO"}</span></p>
-                </div>
-            </div>
-
             {isManager ? (
                 <ManagerCampaignStats filters={filters} />
             ) : (
                 <StaffCampaignExecution 
+                    filters={filters} /* 🔥 FIX: Me line eka thama aluthen ekathu kale 🔥 */
                     setActiveMode={setActiveMode} 
                     setSelectedLead={setSelectedLead} 
                 />

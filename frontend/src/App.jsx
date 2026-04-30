@@ -125,7 +125,7 @@ export default function App() {
 
             {/* Active CRM Interface for Staff & Managers */}
             <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
-            <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
+            <Route path="/workspace/after-seminar-crm" element={<AfterSeminarDashboard loggedInUser={loggedInUser} />} />
 
         </Route>
 

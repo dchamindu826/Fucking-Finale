@@ -1,7 +1,7 @@
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import React, { useState, useEffect } from 'react';
 import axios from '../../api/axios';
-import { Menu, LogOut, AlertTriangle, Info, Lock } from 'lucide-react';
+import { Menu, LogOut, AlertTriangle, Info, Lock, MonitorPlay } from 'lucide-react'; // 🔥 FIX: MonitorPlay added here
 import Sidebar from './components/Sidebar';
 import EnrollmentTab from './components/EnrollmentTab';
 import PaymentHistory from './components/PaymentHistory';
@@ -22,6 +22,13 @@ if (isGhostMode && ghostToken) {
     };
     axios.defaults.headers.common['Authorization'] = `Bearer ${ghostToken}`;
 }
+
+// 🔥 FIX: Utility function to force HTTPS for images coming from the backend API
+const getSecureImageUrl = (url) => {
+    if (!url) return '';
+    // Replace the insecure IP address with your secure domain
+    return url.replace('http://72.62.249.211:5000', 'https://imacampus.online');
+};
 
 const StudentDashboard = () => {
 
@@ -55,7 +62,6 @@ const StudentDashboard = () => {
   const [businesses, setBusinesses] = useState([]);
   const [alerts, setAlerts] = useState([]); 
 
-  // 🔥 FIX: Background Image State eka gatta 🔥
   const [bgImage, setBgImage] = useState('/student-bg.jpg'); 
 
   useEffect(() => {
@@ -84,10 +90,9 @@ const StudentDashboard = () => {
   if (loading) return <div className="flex h-screen items-center justify-center text-red-500 font-bold text-xl tracking-wide animate-pulse">Loading Workspace...</div>;
 
   return (
-    // 🔥 FIX: Container eke background eka pass kara + dark overlay ekak damma 🔥
     <div 
         className="min-h-screen w-full flex items-center justify-center p-2 sm:p-4 md:p-8 relative overflow-hidden bg-cover bg-center transition-all duration-500"
-        style={{ backgroundImage: `url(${bgImage})` }}
+        style={{ backgroundImage: `url(${getSecureImageUrl(bgImage)})` }} // 🔥 FIX: Applying secure image URL
     >
       {/* Dark overlay for the background wallpaper */}
       <div className="absolute inset-0 bg-black/60 z-0"></div>
@@ -100,7 +105,7 @@ const StudentDashboard = () => {
             sidebarOpen={sidebarOpen} 
             setSidebarOpen={setSidebarOpen} 
             handleLogout={handleLogout} 
-            bgImage={bgImage} 
+            bgImage={getSecureImageUrl(bgImage)} // 🔥 FIX: Passed secure image URL to Sidebar
             setBgImage={setBgImage} 
           />
 
@@ -139,7 +144,6 @@ const StudentDashboard = () => {
                 )}
 
                 <div className="w-full h-full animate-fade-in relative">
-    {/* display: none (hidden) use karanawa tab destroy karanne nathuwa */}
     
     <div className={`h-full ${activeTab === 'home' ? 'block' : 'hidden'}`}>
         <StudentOverview />

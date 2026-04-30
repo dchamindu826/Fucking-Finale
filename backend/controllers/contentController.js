@@ -39,7 +39,6 @@ exports.deleteBusiness = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to delete business. Please delete its batches first." }); }
 };
 
-
 // ================= BATCHES & LECTURERS =================
 exports.getBatchesByBusiness = async (req, res) => {
     try {
@@ -94,7 +93,6 @@ exports.updateBatchLecturers = async (req, res) => {
     }
 };
 
-
 // ================= GROUPS =================
 exports.createGroup = async (req, res) => {
     try {
@@ -129,7 +127,6 @@ exports.deleteGroup = async (req, res) => {
     }
 };
 
-
 // ================= SUBJECTS =================
 exports.createSubject = async (req, res) => {
     try {
@@ -143,10 +140,14 @@ exports.createSubject = async (req, res) => {
         const isDiscountExcluded = safeStr(req.body.isDiscountExcluded);
         let streamsStr = safeStr(req.body.streams);
 
+        let lecturerImage = null;
+        if (req.files && req.files.length > 0) {
+             const lecImageFile = req.files.find(f => f.fieldname === 'lecturerImage');
+             if (lecImageFile) lecturerImage = lecImageFile.filename;
+        }
+
         try {
-            if (typeof streamsStr === 'string' && !streamsStr.startsWith('[')) {
-                streamsStr = JSON.stringify([streamsStr]);
-            }
+            if (typeof streamsStr === 'string' && !streamsStr.startsWith('[')) streamsStr = JSON.stringify([streamsStr]);
         } catch(e) {}
 
         const parsedPrices = JSON.parse(groupPrices || '[]');
@@ -162,6 +163,9 @@ exports.createSubject = async (req, res) => {
         }
 
         const coursePromises = parsedPrices.map(gp => {
+            if (lecturerImage) gp.lecturerImage = lecturerImage;
+            gp.deliverTute = gp.deliverTute === true || gp.deliverTute === 'true';
+
             return prisma.course.create({
                 data: { 
                     name, code, stream, streams: streamsStr, description, lecturerName,
@@ -194,10 +198,14 @@ exports.updateSubject = async (req, res) => {
         const batch_id = safeStr(req.body.batch_id); 
         let streamsStr = safeStr(req.body.streams);
 
+        let lecturerImage = null;
+        if (req.files && req.files.length > 0) {
+             const lecImageFile = req.files.find(f => f.fieldname === 'lecturerImage');
+             if (lecImageFile) lecturerImage = lecImageFile.filename;
+        }
+
         try {
-            if (typeof streamsStr === 'string' && !streamsStr.startsWith('[')) {
-                streamsStr = JSON.stringify([streamsStr]);
-            }
+            if (typeof streamsStr === 'string' && !streamsStr.startsWith('[')) streamsStr = JSON.stringify([streamsStr]);
         } catch(e) {}
 
         const parsedPrices = JSON.parse(groupPrices || '[]');
@@ -206,6 +214,7 @@ exports.updateSubject = async (req, res) => {
         const originalCourse = await prisma.course.findUnique({ where: { id: parseInt(course_id) } });
         if (!originalCourse) return res.status(404).json({ error: "Course not found" });
 
+        // Map uploaded tute covers
         if (req.files && req.files.length > 0) {
             parsedPrices.forEach(gp => {
                 const file = req.files.find(f => f.fieldname === `tuteCover_${gp.groupId}`);
@@ -213,31 +222,46 @@ exports.updateSubject = async (req, res) => {
             });
         }
 
-        const updatePromises = parsedPrices.map(async (gp) => {
+        for (let i = 0; i < parsedPrices.length; i++) {
+            let gp = parsedPrices[i];
             const existingCourse = await prisma.course.findFirst({
                 where: { name: originalCourse.name, groupId: parseInt(gp.groupId) }
             });
+            
+            const existingGpData = existingCourse ? JSON.parse(existingCourse.groupPrices || '[]').find(p => parseInt(p.groupId) === parseInt(gp.groupId)) : null;
+            
+            if (existingGpData) {
+                if (!lecturerImage && existingGpData.lecturerImage) gp.lecturerImage = existingGpData.lecturerImage;
+                if (!gp.tuteCover && existingGpData.tuteCover) gp.tuteCover = existingGpData.tuteCover;
+                if (!gp.tuteName && existingGpData.tuteName) gp.tuteName = existingGpData.tuteName;
+            }
+            if (lecturerImage) gp.lecturerImage = lecturerImage;
+            
+            gp.deliverTute = gp.deliverTute === true || gp.deliverTute === 'true';
+            gp._existingCourse = existingCourse;
+        }
 
+        const finalGroupPricesStr = JSON.stringify(parsedPrices.map(gp => {
+            const { _existingCourse, ...cleanGp } = gp;
+            return cleanGp;
+        }));
+
+        const updatePromises = parsedPrices.map(gp => {
+            const existingCourse = gp._existingCourse;
             if (existingCourse) {
-                const existingGpData = JSON.parse(existingCourse.groupPrices || '[]').find(p => parseInt(p.groupId) === parseInt(gp.groupId));
-                if (!gp.tuteCover && existingGpData && existingGpData.tuteCover) {
-                    gp.tuteCover = existingGpData.tuteCover;
-                }
-
                 return prisma.course.update({
                     where: { id: existingCourse.id },
-                    data: { name, code, stream, streams: streamsStr, description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), isDiscountExcluded: excludeDiscount }
+                    data: { name, code, stream, streams: streamsStr, description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: finalGroupPricesStr, isDiscountExcluded: excludeDiscount }
                 });
             } else {
                 return prisma.course.create({
-                    data: { name, code, stream, streams: streamsStr, description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: JSON.stringify(parsedPrices), groupId: parseInt(gp.groupId), isDiscountExcluded: excludeDiscount }
+                    data: { name, code, stream, streams: streamsStr, description, lecturerName, itemOrder: parseInt(itemOrder || 1), price: parseFloat(gp.price || 0), groupPrices: finalGroupPricesStr, groupId: parseInt(gp.groupId), isDiscountExcluded: excludeDiscount }
                 });
             }
         });
 
         await Promise.all(updatePromises);
 
-        // 🔥 Untick karapu groups database eken delete karana code eka 🔥
         if (batch_id) {
             const batchGroups = await prisma.group.findMany({ where: { batchId: parseInt(batch_id) }, select: { id: true } });
             const batchGroupIds = batchGroups.map(g => g.id);
@@ -245,10 +269,7 @@ exports.updateSubject = async (req, res) => {
             
             const incomingGroupIds = parsedPrices.map(gp => parseInt(gp.groupId));
             const coursesToDelete = allExistingCourses.filter(c => !incomingGroupIds.includes(c.groupId));
-            
-            for (const c of coursesToDelete) {
-                await prisma.course.delete({ where: { id: c.id } });
-            }
+            for (const c of coursesToDelete) await prisma.course.delete({ where: { id: c.id } });
         }
 
         res.status(200).json({ message: "Updated across groups" });
@@ -278,7 +299,6 @@ exports.assignLecturer = async (req, res) => {
     }
 };
 
-
 // ================= INSTALLMENTS =================
 exports.getInstallments = async (req, res) => {
     try {
@@ -302,7 +322,6 @@ exports.createInstallment = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to create installment" }); }
 };
 
-
 // ================= FOLDERS (CONTENT GROUPS) =================
 exports.addContentGroup = async (req, res) => {
     try {
@@ -321,18 +340,19 @@ exports.deleteContentGroup = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to delete folder. Delete contents first." }); }
 };
 
-
 // ================= CONTENT & MASS ASSIGN =================
 exports.addContentMassAssign = async (req, res) => {
     try {
-        const { type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree, selectedCourses, batch_id } = req.body;
+        const { type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree, selectedCourses, batch_id, itemOrder } = req.body;
+        
         const newContent = await prisma.content.create({
             data: {
                 title, contentType: type, contentGroupId: contentGroupId ? parseInt(contentGroupId) : null,
                 link, meetingId: zoomMeetingId, fileName: req.file ? req.file.filename : null,
                 date: date ? new Date(date) : null, startTime, endTime,
                 paperTime: paperTime ? parseInt(paperTime) : null, questionCount: questionCount ? parseInt(questionCount) : null,
-                isFree: isFree === '1', batchId: parseInt(batch_id), courseId: 0
+                isFree: isFree === '1', batchId: parseInt(batch_id), courseId: 0,
+                itemOrder: parseInt(itemOrder || 1)
             }
         });
 
@@ -347,10 +367,41 @@ exports.addContentMassAssign = async (req, res) => {
 
 exports.updateContentMassAssign = async (req, res) => {
     try {
-        const { content_id, type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree } = req.body;
-        let updateData = { title, contentType: type, contentGroupId: contentGroupId ? parseInt(contentGroupId) : null, link, meetingId: zoomMeetingId, date: date ? new Date(date) : null, startTime, endTime, paperTime: paperTime ? parseInt(paperTime) : null, questionCount: questionCount ? parseInt(questionCount) : null, isFree: isFree === '1' };
+        const { content_id, type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree, itemOrder, selectedCourses } = req.body;
+        
+        let updateData = { 
+            title, 
+            contentType: type, 
+            contentGroupId: contentGroupId ? parseInt(contentGroupId) : null, 
+            link, 
+            meetingId: zoomMeetingId, 
+            date: date ? new Date(date) : null, 
+            startTime, 
+            endTime, 
+            paperTime: paperTime ? parseInt(paperTime) : null, 
+            questionCount: questionCount ? parseInt(questionCount) : null, 
+            isFree: isFree === '1',
+            itemOrder: parseInt(itemOrder || 1)
+        };
+
         if (req.file) updateData.fileName = req.file.filename;
         const updated = await prisma.content.update({ where: { id: parseInt(content_id) }, data: updateData });
+
+        // 🔥 FIX: Update karaddi database eke subject allocation eka update wena eka
+        if (selectedCourses) {
+            const coursesArray = JSON.parse(selectedCourses);
+            await prisma.contentCourse.deleteMany({ where: { content_id: parseInt(content_id) } });
+            
+            if (coursesArray.length > 0) {
+                const contentCourseData = coursesArray.map(cId => ({ 
+                    content_id: parseInt(content_id), 
+                    course_id: BigInt(cId), 
+                    type: getTypeInt(type) 
+                }));
+                await prisma.contentCourse.createMany({ data: contentCourseData });
+            }
+        }
+
         res.status(200).json(updated);
     } catch (e) { res.status(500).json({ error: "Failed to update content" }); }
 };
@@ -381,11 +432,20 @@ exports.getContents = async (req, res) => {
             orderBy: { createdAt: 'desc' }
         });
 
+        // 🔥 FIX: Content walata assign wela thiyena courses serama pre-populate wenna yawana eka
+        const allContentCourses = await prisma.contentCourse.findMany({
+            where: { content_id: { in: contentIds } }
+        });
+
+        const contentsWithCourses = contents.map(c => ({
+            ...c,
+            assignedCourses: allContentCourses.filter(cc => cc.content_id === c.id).map(cc => Number(cc.course_id))
+        }));
+
         const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
-        res.status(200).json({ lessonGroups, contents: safeJson(contents) });
+        res.status(200).json({ lessonGroups, contents: safeJson(contentsWithCourses) });
     } catch (e) { console.error(e); res.status(500).json({ error: "Failed to fetch contents" }); }
 };
-
 
 // ================= BATCHES FULL DATA =================
 exports.getBatchesFull = async (req, res) => {
@@ -407,26 +467,53 @@ exports.getBatchesFull = async (req, res) => {
     }
 };
 
-
 // ================= POSTS =================
+const admin = require("firebase-admin"); // 🔥 Firebase Admin Import Karanna
+
 exports.createAdminPost = async (req, res) => {
     try {
         const { title, description, businessId, batchId } = req.body;
         
         const finalBizId = (businessId === 'all' || !businessId) ? null : BigInt(businessId);
         const finalBatchId = (batchId === 'all' || !batchId) ? null : BigInt(batchId);
+        
+        const fileName = req.file ? req.file.filename : 'default.png';
 
-        await prisma.post.create({ 
+        // 1. Database ekata save karanawa
+        const newPost = await prisma.post.create({ 
             data: { 
                 title, 
                 caption: description, 
-                image: req.file ? req.file.filename : 'default.png', 
+                image: fileName, 
                 business_id: finalBizId, 
                 batch_id: finalBatchId 
             }
         });
-        res.status(201).json({ message: "Post Created" });
-    } catch (e) { console.error("Post Creation Error:", e); res.status(500).json({ error: "Failed to create post" }); }
+
+        // 2. 🔥 Firebase Cloud Messaging (Push Notification) Yawana Kotasa 🔥
+        try {
+            const message = {
+                notification: {
+                    title: title,
+                    body: description
+                },
+                data: {
+                    image_url: fileName !== 'default.png' ? `https://imacampus.online/storage/posts/${fileName}` : '',
+                },
+                topic: 'ima_updates' // Mobile app eken subscribe wela inna topic eka
+            };
+
+            await admin.messaging().send(message);
+            console.log("🚀 Push notification sent successfully!");
+        } catch (fcmError) {
+            console.error("Push notification send error:", fcmError);
+        }
+
+        res.status(201).json({ message: "Post Created & Notification Sent" });
+    } catch (e) { 
+        console.error("Post Creation Error:", e); 
+        res.status(500).json({ error: "Failed to create post" }); 
+    }
 };
 
 exports.getPosts = async (req, res) => {

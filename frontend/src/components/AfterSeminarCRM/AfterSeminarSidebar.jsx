@@ -3,18 +3,16 @@ import axios from '../../api/axios';
 import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquare, FaEnvelopeOpenText, FaEnvelope, FaUserMinus } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
-export default function ContactSidebar({ activeMode, selectedLead, setSelectedLead, filters }) {
+export default function AfterSeminarSidebar({ activeMode, selectedLead, setSelectedLead, filters }) {
   const rawRole = JSON.parse(localStorage.getItem('user'))?.role || '';
   const userRole = rawRole.toUpperCase().replace(' ', '_');
   const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
   const currentUserId = JSON.parse(localStorage.getItem('user'))?.id;
 
-  const [activeTab, setActiveTab] = useState(isManager ? 'NEW' : 'ASSIGNED');
+  const [activeTab, setActiveTab] = useState('NEW'); 
   const [leads, setLeads] = useState([]);
   const [tabCounts, setTabCounts] = useState({ NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
-  const [unreadCounts, setUnreadCounts] = useState({ NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
-  const [totalUnread, setTotalUnread] = useState(0);
-  const [loading, setLoading] = useState(false); // 🔥 MISS WELA THIBBE MEKA 🔥
+  const [loading, setLoading] = useState(false);
   const [coordinators, setCoordinators] = useState([]);
   
   const [checkedLeads, setCheckedLeads] = useState([]);
@@ -32,83 +30,50 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   const [searchQuery, setSearchQuery] = useState('');
 
   const fetchLeads = async (showLoading = true) => {
-    // 🔥 STRICT BLOCKER: Business eka thoranakam backend ekata call yanne na 🔥
-    if (isManager && (!filters || !filters.selectedBusiness)) {
-        setLeads([]);
-        setTabCounts({ NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
-        setLoading(false);
-        return;
-    }
-
     if (showLoading) setLoading(true);
     try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get(`/coordinator-crm/leads`, {
-            headers: { Authorization: `Bearer ${token}` },
-            params: { 
-                tab: activeTab, 
-                campaignType: 'FREE_SEMINAR', 
-                staffPhase: phaseFilter, 
-                status: statusFilter, 
-                staffId: staffFilter,
-                loggedUserId: currentUserId, 
-                loggedUserRole: rawRole,
-                businessId: isManager ? (filters?.selectedBusiness || '') : '', 
-                batchId: isManager ? (filters?.selectedBatch || '') : ''        
-            }
-        });
+      const token = localStorage.getItem('token');
+      // 🔥 FIX: Using /after-seminar-crm API with Token and LoggedUserID 🔥
+      const response = await axios.get(`/after-seminar-crm/leads`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { 
+          tab: activeTab, 
+          campaignType: 'AFTER_SEMINAR', 
+          staffPhase: phaseFilter, 
+          status: statusFilter, 
+          staffId: staffFilter,
+          loggedUserId: currentUserId, 
+          loggedUserRole: rawRole
+        }
+      });
 
       let fetchedLeads = response.data.leads || [];
+      
       if (activeTab === 'NEW') {
-          if (!isManager) fetchedLeads = fetchedLeads.filter(l => l.assignedTo === parseInt(currentUserId));
-          else fetchedLeads = fetchedLeads.filter(l => l.assignedTo === null);
+          if (!isManager) {
+              fetchedLeads = fetchedLeads.filter(l => l.assignedTo === parseInt(currentUserId));
+          } else {
+              fetchedLeads = fetchedLeads.filter(l => l.assignedTo === null);
+          }
       }
       
       setLeads(fetchedLeads);
       setTabCounts(response.data.counts || {});
-      setUnreadCounts(response.data.unreadCounts || { NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
-      setTotalUnread(response.data.totalUnread || 0);
-    } catch (error) {
+    } catch (error) { 
         if(showLoading) toast.error("Failed to load leads"); 
     }
     if (showLoading) setLoading(false);
   };
 
   const fetchCoordinatorsAndQuotas = async () => {
-    // 🔥 STRICT BLOCKER: Business eka thoranakam backend ekata call yanne na 🔥
-    if (isManager && (!filters || !filters.selectedBusiness)) {
-        setCoordinators([]);
-        setAutoAssignData([]);
-        return;
-    }
-
     try {
       const token = localStorage.getItem('token');
-      const [staffRes, quotaRes, bizRes] = await Promise.all([ 
+      const [staffRes, quotaRes] = await Promise.all([ 
           axios.get('/admin/staff', { headers: { Authorization: `Bearer ${token}` } }), 
-          axios.get('/coordinator-crm/leads/auto-assign-quotas', { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get('/admin/businesses', { headers: { Authorization: `Bearer ${token}` } })
+          axios.get('/after-seminar-crm/leads/auto-assign-quotas', { headers: { Authorization: `Bearer ${token}` } }) 
       ]);
       
-      let coords = staffRes.data.filter(s => 
-          s.role && ['COORDINATOR', 'CALLER', 'STAFF', 'MANAGER'].includes(s.role.toUpperCase())
-      );
-          
-      if (filters?.selectedBusiness) {
-          const selectedBizObj = bizRes.data.find(b => String(b.id) === String(filters.selectedBusiness));
-          const bizName = selectedBizObj ? selectedBizObj.name : '';
-
-          coords = coords.filter(c => {
-              const cBiz = String(c.businessType || '').toLowerCase().trim();
-              const selBizId = String(filters.selectedBusiness).toLowerCase().trim();
-              const selBizName = String(bizName).toLowerCase().trim();
-              
-              if (!cBiz) return false;
-
-              return cBiz === selBizId || cBiz === selBizName || String(c.businessId) === String(filters.selectedBusiness);
-          });
-      }
-      
+      const coords = staffRes.data.filter(s => s.role === 'Coordinator' || s.role === 'CALLER');
       setCoordinators(coords);
 
       const merged = coords.map(c => {
@@ -119,14 +84,14 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
     } catch (error) { console.error("Data load error", error); }
   };
 
-  useEffect(() => { fetchCoordinatorsAndQuotas(); }, [filters?.selectedBusiness, filters?.selectedBatch]);
+  useEffect(() => { fetchCoordinatorsAndQuotas(); }, []);
 
   useEffect(() => { 
       fetchLeads(true); 
       setCheckedLeads([]); 
       const interval = setInterval(() => { fetchLeads(false); }, 10000);
       return () => clearInterval(interval);
-  }, [activeTab, staffFilter, phaseFilter, statusFilter, filters?.selectedBusiness, filters?.selectedBatch]);
+  }, [activeTab, staffFilter, phaseFilter, statusFilter]);
 
   const handleSelectAll = () => {
     if (checkedLeads.length === leads.length) setCheckedLeads([]); else setCheckedLeads(leads.map(l => l.id));
@@ -136,7 +101,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
     if (checkedLeads.length === 0) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/coordinator-crm/leads/bulk-action', { action, leadIds: checkedLeads, staffId: assignStaffId }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post('/after-seminar-crm/leads/bulk-action', { action, leadIds: checkedLeads, staffId: assignStaffId }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success("Action applied successfully!");
       setCheckedLeads([]); fetchLeads(true);
     } catch (e) { toast.error("Action failed"); }
@@ -147,16 +112,9 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
     try {
       const token = localStorage.getItem('token');
       if (type === 'bulk') {
-        await axios.post('/coordinator-crm/leads/assign', { 
-            type: 'bulk', 
-            count: e.target.count.value, 
-            sort: e.target.sort.value, 
-            staffId: e.target.staffId.value,
-            batchId: filters?.selectedBatch,
-            businessId: filters?.selectedBusiness
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('/after-seminar-crm/leads/assign', { type: 'bulk', count: e.target.count.value, sort: e.target.sort.value, staffId: e.target.staffId.value }, { headers: { Authorization: `Bearer ${token}` } });
       } else {
-        await axios.post('/coordinator-crm/leads/assign', { type: 'auto', autoAssignConfig: autoAssignData }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post('/after-seminar-crm/leads/assign', { type: 'auto', autoAssignConfig: autoAssignData }, { headers: { Authorization: `Bearer ${token}` } });
       }
       toast.success("Assignment rules saved!");
       setShowAssignModal(false); fetchLeads(true);
@@ -164,7 +122,6 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   };
 
   const handleBulkImport = () => {
-    if (!filters?.selectedBatch) return toast.error("⚠️ Please select a Batch from the top right dropdown first!");
     if (!csvFile) return toast.error("Please select a CSV file first!");
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -178,12 +135,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
         if (leadsList.length === 0) return toast.error("No valid data found in CSV");
         try {
             const token = localStorage.getItem('token');
-            await axios.post('/coordinator-crm/leads/import', { 
-                isBulk: true, 
-                leadsList, 
-                batchId: filters.selectedBatch,
-                businessId: filters.selectedBusiness
-            }, { headers: { Authorization: `Bearer ${token}` } });
+            await axios.post('/after-seminar-crm/leads/import', { isBulk: true, leadsList }, { headers: { Authorization: `Bearer ${token}` } });
             toast.success(`${leadsList.length} Leads Imported!`);
             setShowImportModal(false); setCsvFile(null); fetchLeads(true);
         } catch (error) { toast.error("Bulk import failed!"); }
@@ -197,7 +149,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
           setLeads(prevLeads => prevLeads.map(l => l.id === lead.id ? { ...l, unreadCount: 0 } : l));
           try {
               const token = localStorage.getItem('token');
-              await axios.post('/coordinator-crm/leads/bulk-action', { action: 'MARK_READ', leadIds: [lead.id] }, { headers: { Authorization: `Bearer ${token}` } });
+              await axios.post('/after-seminar-crm/leads/bulk-action', { action: 'MARK_READ', leadIds: [lead.id] }, { headers: { Authorization: `Bearer ${token}` } });
           } catch (e) {
               console.error("Failed to mark as read in DB");
           }
@@ -210,10 +162,10 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   });
 
   const tabs = [
-    { id: 'NEW', label: 'New', total: tabCounts.NEW, unread: unreadCounts.NEW },
-    { id: 'IMPORTED', label: 'Import', total: tabCounts.IMPORTED, unread: unreadCounts.IMPORTED },
-    { id: 'ASSIGNED', label: 'Assigned', total: tabCounts.ASSIGNED, unread: unreadCounts.ASSIGNED },
-    { id: 'ALL', label: 'All', total: tabCounts.ALL, unread: unreadCounts.ALL }
+    { id: 'NEW', label: 'New', count: tabCounts.NEW },
+    { id: 'IMPORTED', label: 'Import', count: tabCounts.IMPORTED },
+    { id: 'ASSIGNED', label: 'Assigned', count: tabCounts.ASSIGNED },
+    { id: 'ALL', label: 'All', count: tabCounts.ALL }
   ];
 
   return (
@@ -240,9 +192,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
       ) : (
         <div className="p-5 bg-[#121a24] border-b border-white/5">
           <div className="flex justify-between items-center mb-5">
-            <h3 className="text-lg font-black text-slate-200 tracking-wider uppercase flex items-center gap-2">
-              Contacts
-            </h3>
+            <h3 className="text-lg font-black text-slate-200 tracking-wider uppercase">After Seminar</h3>
             <div className="flex gap-2">
               <button onClick={() => setShowImportModal(true)} className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg border border-blue-500/30 transition-all"><FaFileImport size={16}/></button>
               {isManager && <button onClick={() => setShowAssignModal(true)} className="p-2.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-500/30 transition-all"><FaUserPlus size={16}/></button>}
@@ -260,12 +210,10 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
             />
           </div>
           
-          <div className="flex justify-between items-center bg-[#0f172a] p-1 rounded-xl border border-slate-800 gap-1">
+          <div className="flex justify-between items-center bg-[#0f172a] p-1 rounded-xl border border-slate-800">
             {tabs.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`relative flex-1 flex flex-col items-center justify-center py-1.5 rounded-lg transition-all ${activeTab === tab.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-                <span className="text-[11px] font-bold tracking-widest uppercase">{tab.label}</span>
-                <span className="text-[9px] font-medium opacity-60 mt-0.5">Total: {tab.total || 0}</span>
-                {tab.unread > 0 && <span className="absolute -top-2 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{tab.unread}</span>}
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`relative flex-1 py-2 text-[11px] font-bold tracking-widest uppercase rounded-lg transition-all ${activeTab === tab.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+                {tab.label} {tab.count > 0 && <span className="absolute -top-2 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{tab.count}</span>}
               </button>
             ))}
           </div>
@@ -404,15 +352,8 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
                   <h4 className="text-sm font-bold text-emerald-400 mb-3">Single Import</h4>
                   <form onSubmit={async (e) => {
                     e.preventDefault();
-                    if (!filters?.selectedBatch) return toast.error("⚠️ Please select a Batch from the top right dropdown first!");
                     const token = localStorage.getItem('token');
-                    await axios.post('/coordinator-crm/leads/import', { 
-                        number: e.target.phone.value, 
-                        name: e.target.name.value, 
-                        isBulk: false, 
-                        batchId: filters.selectedBatch,
-                        businessId: filters.selectedBusiness
-                    }, { headers: { Authorization: `Bearer ${token}` } });
+                    await axios.post('/after-seminar-crm/leads/import', { number: e.target.phone.value, name: e.target.name.value, isBulk: false }, { headers: { Authorization: `Bearer ${token}` } });
                     toast.success("Imported successfully");
                     setShowImportModal(false);
                     fetchLeads(true);

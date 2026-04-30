@@ -3,6 +3,7 @@ const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const studentController = require('../controllers/studentController');
+const adminController = require('../controllers/adminController'); // 🔥 FIX: MEKA THAMAI MISS WELA THIBBE 🔥
 
 // Admin Overview
 router.get('/overview', async (req, res) => {
@@ -30,5 +31,8 @@ router.get('/students-data-center', studentController.getStudentsDataCenter);
 router.put('/students/update', studentController.updateStudentByAdmin);
 router.post('/students/reset-password', studentController.resetStudentPassword);
 router.post('/ghost-login', studentController.ghostLogin);
+
+// Backup
+router.get('/backup', adminController.downloadDatabaseBackup);
 
 module.exports = router;

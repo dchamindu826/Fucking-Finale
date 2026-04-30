@@ -33,6 +33,7 @@ model User {
   assignedLeads   Lead[]          @relation("AssignedLeads")
   sentMessages    ChatMessage[]   @relation("SentMessages")
   autoAssignQuota AutoAssignQuota?
+  session_id  String?
 }
 
 model Business {
@@ -73,6 +74,8 @@ model Batch {
 
   payments    Payment[]
   lecturers   String?   @db.Text
+
+  leads       Lead[]
 }
 
 model Group {
@@ -155,6 +158,7 @@ model Content {
   group          ContentGroup? @relation(fields: [contentGroupId], references: [id])
   batchId        Int
   courseId       Int
+  itemOrder      Int           @default(1)  // 🔥 Me line eka aluthin add kale
   createdAt      DateTime      @default(now())
 }
 
@@ -242,39 +246,46 @@ model KnowledgeBase {
 // ================= CRM MODULE MODELS =================
 
 model Lead {
-  id             Int           @id @default(autoincrement())
-  name           String?
-  phone          String        @unique 
-  source         String        @default("whatsapp") 
-  campaignType   String        @default("FREE_SEMINAR") 
-  status         String        @default("NEW") 
+  id               Int           @id @default(autoincrement())
+  name             String?
+  phone            String        @unique 
+  source           String        @default("whatsapp") 
+  campaignType     String        @default("FREE_SEMINAR") 
+  status           String        @default("NEW") 
+  batchId          Int?
+  batch            Batch?        @relation(fields: [batchId], references: [id])
   
-  assignedTo     Int?          
-  assignedUser   User?         @relation("AssignedLeads", fields: [assignedTo], references: [id])
+  assignedTo       Int?          
+  assignedUser     User?         @relation("AssignedLeads", fields: [assignedTo], references: [id])
   
-  lastMessage    String?       @db.Text
-  unreadCount    Int           @default(0) 
+  lastMessage      String?       @db.Text
+  unreadCount      Int           @default(0) 
   
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   
-  messages       ChatMessage[]
+  messages         ChatMessage[]
 
-  phase          Int           @default(1)
-  callMethod     String?       // direct, whatsapp, 3cx
-  callStatus     String        @default("pending") // pending, no_answer, reject, answered
-  feedback       String?
-  isAutoAssigned Boolean       @default(false)
+  phase            Int           @default(1)
+  callMethod       String?       // direct, whatsapp, 3cx
+  callStatus       String        @default("pending") // pending, no_answer, reject, answered
+  feedback         String?
+  isAutoAssigned   Boolean       @default(false)
 
   autoReplyStep     Int     @default(0)
   sequenceCompleted Boolean @default(false)
   followUpSent      Boolean @default(false)
+
+  // 🔥 ME TIKA THAMA ADU WELA THIBBE 🔥
   paymentIntention String?  @default("NOT_DECIDED") // FULL, MONTHLY, INSTALLMENT, NOT_DECIDED, NEW_INQ
   enrollmentStatus String?  @default("NON_ENROLLED") // ENROLLED, NON_ENROLLED
+  inquiryType      String?  @default("NORMAL")       // NORMAL, NEW_INQ
+  newInqTimestamp  DateTime?                         // 24h lock ekatai 5-day call ekatai
+  
   coordinationRound Int     @default(1) // 1st coordination, 2nd coordination...
   
-  slaDeadline      DateTime? // 24hr or 5-day lock deadline for New Inquiries
-  isLocked         Boolean   @default(false) // 24 පැය පැනලා lock උනාද කියලා බලන්න
+  slaDeadline       DateTime? // 24hr or 5-day lock deadline for New Inquiries
+  isLocked          Boolean   @default(false) // 24 පැය පැනලා lock උනාද කියලා බලන්න
 }
 
 

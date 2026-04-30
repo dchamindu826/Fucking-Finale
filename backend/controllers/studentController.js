@@ -4,6 +4,9 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken'); // 🔥 FIX: Ghost login error fix
 const bcrypt = require('bcrypt');
 
+// 🔥 NEW: BigInt convert karana helper function eka meka hama thanatama pawichi karanawa
+const safeJson = (data) => JSON.parse(JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value));
+
 // 1. Dashboard
 exports.getStudentDashboard = async (req, res) => {
     try {
@@ -77,14 +80,15 @@ exports.getStudentDashboard = async (req, res) => {
             }
         }
 
-        res.status(200).json({
+        // 🔥 FIX: Dashboard data eka yawanakota safeJson walin watalai yawanne
+        res.status(200).json(safeJson({
             enrolledCount: enrolledSubjectIds.size, 
             upcomingLive: null,
             posts: posts,
             alerts: alerts,
-            duePayments: JSON.parse(JSON.stringify(duePaymentsList, (key, value) => typeof value === 'bigint' ? value.toString() : value)),
+            duePayments: duePaymentsList,
             stats: { unlockedVideos, studyMaterials }
-        });
+        }));
     } catch (error) {
         console.error("Dashboard Load Error:", error);
         res.status(500).json({ error: "Dashboard load failed" });
@@ -106,9 +110,7 @@ exports.getAvailableEnrollments = async (req, res) => {
             }
         });
 
-        const safeData = JSON.parse(JSON.stringify(businesses, (key, value) =>
-            typeof value === 'bigint' ? value.toString() : value
-        ));
+        const safeData = safeJson(businesses);
         
         for (let i = 0; i < safeData.length; i++) {
             for (let j = 0; j < safeData[i].batches.length; j++) {
@@ -148,21 +150,23 @@ exports.getMyEnrolledSubjects = async (req, res) => {
     }
 };
 
-// 3. PayHere Hash (Updated to strictly use your .env variables)
+// 3. PayHere Hash 
 exports.generatePayHereHash = async (req, res) => {
     try {
         const { amount, orderId, currency } = req.body;
         
-        // Fetching directly from your .env file
-        const merchantId = process.env.PAYHERE_MERCHANT_ID; 
-        const merchantSecret = process.env.PAYHERE_SECRET; 
+        const merchantId = process.env.PAYHERE_MERCHANT_ID || process.env.VITE_PAYHERE_MERCHANT_ID || "222646"; 
+        const merchantSecret = process.env.PAYHERE_SECRET || process.env.VITE_PAYHERE_SECRET || "3113931171298094467140764830232859317793"; 
 
         if (!merchantId || !merchantSecret) {
+            console.error("❌ Backend .env missing PayHere keys!");
             return res.status(500).json({ error: "PayHere credentials missing in server .env" });
         }
 
         const hashedSecret = crypto.createHash('md5').update(merchantSecret).digest('hex').toUpperCase();
-        const amountFormatted = parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2, useGrouping: false });
+        
+        // 🔥 FIX: අනිවාර්යයෙන්ම දශමස්ථාන 2කට සීමා කරලා තියෙන්නේ (eg: 44998.00) 🔥
+        const amountFormatted = parseFloat(amount).toFixed(2);
         
         const hashString = merchantId + orderId + amountFormatted + currency + hashedSecret;
         const hash = crypto.createHash('md5').update(hashString).digest('hex').toUpperCase();
@@ -279,7 +283,7 @@ exports.getStudentClassroom = async (req, res) => {
             });
         });
 
-        const safeData = JSON.parse(JSON.stringify(businesses, (key, value) => typeof value === 'bigint' ? value.toString() : value));
+        const safeData = safeJson(businesses);
         res.status(200).json({ businesses: safeData }); 
     } catch (error) {
         console.error("Classroom Error:", error);
@@ -315,7 +319,7 @@ exports.getCourseModules = async (req, res) => {
         const sPapers = contents.filter(c => c.contentType === 'sPaper' || c.contentType === '4');
         const papers = contents.filter(c => c.contentType === 'paper' || c.contentType === '5');
 
-        const safeData = JSON.parse(JSON.stringify({ 
+        const safeData = safeJson({ 
             lessonGroups, 
             contents,
             liveClasses,
@@ -324,7 +328,7 @@ exports.getCourseModules = async (req, res) => {
             sPapers,
             papers,
             paidStatus: 1 
-        }, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        });
         
         res.status(200).json(safeData);
     } catch (error) {
@@ -362,10 +366,7 @@ exports.getMyPayments = async (req, res) => {
             };
         });
 
-        const safeData = JSON.parse(JSON.stringify(formattedPayments, (key, value) =>
-            typeof value === 'bigint' ? value.toString() : value
-        ));
-
+        const safeData = safeJson(formattedPayments);
         res.status(200).json(safeData); 
     } catch (error) {
         console.error("History Error:", error);
@@ -394,7 +395,6 @@ exports.updateProfile = async (req, res) => {
             data: updateData
         });
 
-        // 🔥 FIX: Return the image name exactly as it was saved
         res.status(200).json({ message: "Profile updated successfully", image: image || null });
     } catch (error) {
         console.error("Profile Update Error:", error);
@@ -469,7 +469,6 @@ exports.getStudentsDataCenter = async (req, res) => {
                 district: true,
                 image: true,
                 role: true,
-                // 🔥 අලුතින්: ළමයාගේ ඇත්තටම Enroll වෙලා තියෙන Payments (Status 1 or 4) ගන්නවා
                 payments: {
                     where: { status: { in: [1, 4] } },
                     include: {
@@ -501,14 +500,15 @@ exports.getStudentsDataCenter = async (req, res) => {
             };
         });
 
-        res.status(200).json(formattedStudents);
+        // 🔥 FIX: Data center eken yawanakotath safeJson dala yawanawa
+        res.status(200).json(safeJson(formattedStudents));
     } catch (error) {
         console.error("Error fetching students data center:", error);
         res.status(500).json({ error: "Failed to fetch students" });
     }
 };
 
-// 2. Edit Student Profile (🔥 Updated with ALL fields)
+// 2. Edit Student Profile 
 exports.updateStudentByAdmin = async (req, res) => {
     try {
         const { 
@@ -556,15 +556,24 @@ exports.ghostLogin = async (req, res) => {
         
         if (!user) return res.status(404).json({ error: "Student not found" });
 
+        // 🔥 FIX: Generate Session ID for Ghost Login as well
+        const sessionId = crypto.randomBytes(16).toString('hex');
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { session_id: sessionId }
+        });
+
+        // 🔥 FIX: Add Session ID to Ghost Token
         const token = jwt.sign(
-            { id: user.id, userId: user.id, role: user.role },
+            { id: user.id, userId: user.id, role: user.role, sessionId: sessionId },
             process.env.JWT_SECRET || "ima_super_secret_token_12345", 
             { expiresIn: '1d' }
         );
 
         delete user.password;
 
-        res.status(200).json({ token, user });
+        // 🔥 FIX: Ghost login datath safeJson haraha yawanawa
+        res.status(200).json(safeJson({ token, user }));
     } catch (error) {
         console.error("Ghost login error:", error);
         res.status(500).json({ error: "Failed to ghost login" });

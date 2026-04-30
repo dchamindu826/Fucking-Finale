@@ -16,7 +16,7 @@ const formatDateLabel = (dateString) => {
     return msgDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-export default function ChatArea({ selectedLead }) {
+export default function AfterSeminarChatArea({ selectedLead }) {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -60,7 +60,7 @@ export default function ChatArea({ selectedLead }) {
   const fetchMessages = async (showLoading = true) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/coordinator-crm/messages/${selectedLead.id}`, {
+      const response = await axios.get(`/after-seminar-crm/messages/${selectedLead.id}`, {
           headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(response.data);
@@ -91,7 +91,7 @@ export default function ChatArea({ selectedLead }) {
       try {
           const token = localStorage.getItem('token');
           setLocalReactions(prev => ({ ...prev, [msg.id]: emoji }));
-          await axios.post('/coordinator-crm/messages/react', {
+          await axios.post('/after-seminar-crm/messages/react', {
               leadId: selectedLead.id,
               metaMessageId: msg.metaMessageId,
               emoji: emoji
@@ -189,7 +189,7 @@ export default function ChatArea({ selectedLead }) {
       }
 
       const token = localStorage.getItem('token');
-      const res = await axios.post('/coordinator-crm/messages', formData, { 
+      const res = await axios.post('/after-seminar-crm/messages', formData, { 
           headers: { 
               'Content-Type': 'multipart/form-data',
               'Authorization': `Bearer ${token}` 
@@ -269,12 +269,12 @@ export default function ChatArea({ selectedLead }) {
       return <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 bg-black/10 rounded-lg mb-2 text-xs font-bold hover:underline"><FaFilePdf className="text-red-500 text-lg"/> View Document</a>;
   };
   
-  // 🔥 FIX: Hide "IMAGE Message" placeholders if media exists
+  // 🔥 FIX: Render message text properly without empty bubbles 🔥
   const renderMessageText = (msg) => {
-      const text = msg.message;
+      const text = msg?.message;
       if (!text) return null;
 
-      // Hide auto-generated media labels
+      // Hide auto-generated media labels ONLY IF the media URL actually exists
       if (msg.mediaUrl && ["IMAGE Message", "AUDIO Message", "VIDEO Message", "DOCUMENT Message"].includes(text)) {
           return null; 
       }
@@ -393,7 +393,8 @@ export default function ChatArea({ selectedLead }) {
                                         )}
 
                                         {renderMedia(msg)}
-                                        {/* 🔥 FIX: Changed function call here to pass full object 🔥 */}
+                                        
+                                        {/* 🔥 FIX: Passed the full msg object instead of msg.message 🔥 */}
                                         {!isSticker && renderMessageText(msg)}
 
                                         {!isSticker && (
