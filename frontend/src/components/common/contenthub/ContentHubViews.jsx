@@ -1,5 +1,5 @@
 import React from 'react';
-import { FolderOpen, Layers, BookOpen, Edit3, Trash2, ChevronRight, ChevronDown, GripVertical, CheckCircle, Video, MonitorPlay, FileText, FileSignature, Power, UserPlus, Plus, Users, User } from 'lucide-react';
+import { FolderOpen, Layers, BookOpen, Edit3, Trash2, ChevronRight, ChevronDown, GripVertical, CheckCircle, Video, MonitorPlay, FileText, FileSignature, Power, UserPlus, Plus, Users, User, Eye, EyeOff } from 'lucide-react';
 import api from '../../../api/axios'; // 🔥 Get API config for base URL
 
 export default function ContentHubViews({ state, actions }) {
@@ -49,7 +49,7 @@ export default function ContentHubViews({ state, actions }) {
                         <div className="flex flex-wrap items-center gap-3 mt-auto">
                             <button onClick={() => { setEditData(biz); setShowAssignModal(true); }} className="flex-1 bg-white/5 hover:bg-white/10 text-white py-3 rounded-xl text-sm font-bold flex justify-center items-center gap-2 transition-colors border border-white/5" title="Assign Managers"><UserPlus size={16}/></button>
                             <button onClick={() => { setEditData(biz); setEditMode(true); setSelectedLogoName(""); setShowBusinessModal(true); }} className="text-blue-400 bg-white/5 hover:bg-blue-500 hover:text-white p-3 rounded-xl transition-colors" title="Edit Business"><Edit3 size={20}/></button>
-                            <button onClick={() => toggleBusinessStatus(biz)} className={`p-3 rounded-xl border transition-colors ${biz.status === 1 ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500 hover:text-white' : 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500 hover:text-white'}`} title="Toggle Status"><Power size={20}/></button>
+                            <button onClick={() => toggleBusinessStatus(biz)} className={`p-3 rounded-xl border transition-colors ${biz.status === 1 ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500 hover:text-white' : 'text-slate-400 bg-slate-500/10 border-slate-500/20 hover:bg-slate-500 hover:text-white'}`} title={biz.status === 1 ? "Hide from Students" : "Show to Students"}>{biz.status === 1 ? <Eye size={20}/> : <EyeOff size={20}/>}</button>
                             <button onClick={() => deleteItem('/admin/business/delete', { business_id: biz.id }, "Business Deleted")} className="text-red-400 bg-white/5 hover:bg-red-500 hover:text-white p-3 rounded-xl transition-colors" title="Delete Business"><Trash2 size={20}/></button>
                         </div>
                         <button onClick={() => openBusinessDetails(biz)} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl text-base font-bold flex justify-center items-center gap-2 transition-colors shadow-lg shadow-blue-500/20 mt-1">Manage Batches <ChevronRight size={18}/></button>
@@ -75,7 +75,7 @@ export default function ContentHubViews({ state, actions }) {
                         <div className="flex items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0 shrink-0">
                             {canManageBatches && (
                                 <>
-                                    <button onClick={() => toggleBatchStatus(batch)} className={`p-3 rounded-xl border transition-colors ${batch.status === 1 ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500 hover:text-white' : 'text-red-400 bg-red-500/10 border-red-500/20 hover:bg-red-500 hover:text-white'}`}><Power size={20}/></button>
+                                    <button onClick={() => toggleBatchStatus(batch)} className={`p-3 rounded-xl border transition-colors ${batch.status === 1 ? 'text-green-400 bg-green-500/10 border-green-500/20 hover:bg-green-500 hover:text-white' : 'text-slate-400 bg-slate-500/10 border-slate-500/20 hover:bg-slate-500 hover:text-white'}`} title={batch.status === 1 ? "Hide from Students" : "Show to Students"}>{batch.status === 1 ? <Eye size={20}/> : <EyeOff size={20}/>}</button>
                                     <button onClick={() => { setEditData(batch); setEditMode(true); setSelectedLogoName(""); setShowBatchModal(true); }} className="text-blue-400 bg-white/5 hover:bg-blue-500 hover:text-white p-3 rounded-xl transition-colors"><Edit3 size={20}/></button>
                                     <button onClick={() => deleteItem('/admin/batch/delete', { batch_id: batch.id }, "Batch Deleted")} className="text-red-400 bg-white/5 hover:bg-red-500 hover:text-white p-3 rounded-xl transition-colors"><Trash2 size={20}/></button>
                                 </>

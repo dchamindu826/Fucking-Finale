@@ -3,8 +3,31 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client'); // 🔥 Database eka ona session check karanna
 const prisma = new PrismaClient();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs'); // 🔥 අලුතෙන් එකතු කළා ෆෝල්ඩර් එක චෙක් කරන්න
 
 const mobileStudentController = require('../../controllers/mobile/mobileStudentController');
+
+// 🔥 FIX: Multer Configuration for Profile Images
+// දැන් හරියටම backend/storage/images ෆෝල්ඩර් එකට යයි
+const uploadDir = path.join(__dirname, '../../storage/images');
+
+// ෆෝල්ඩර් එක නැත්නම් Auto හදන්න (Error එන එක නවත්වන්න)
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadDir) 
+    },
+    filename: function (req, file, cb) {
+        cb(null, 'profile_' + Date.now() + path.extname(file.originalname))
+    }
+});
+const upload = multer({ storage: storage });
+
 
 // 🔥 FIX: Token Verification Middleware with Session Check
 const verifyToken = async (req, res, next) => {
@@ -41,5 +64,10 @@ router.get('/classroom', verifyToken, mobileStudentController.getMobileClassroom
 router.get('/module/:id', verifyToken, mobileStudentController.getCourseModules);
 router.get('/classroom/lives', verifyToken, mobileStudentController.getMobileUpcomingLives);
 router.post('/profile/password', verifyToken, mobileStudentController.updateMobilePassword);
+
+// 🔥 NEW: Profile Update Route (Image Upload එකත් එක්ක)
+router.post('/profile/update', verifyToken, upload.single('image'), mobileStudentController.updateMobileProfile);
+
+router.get('/getVideoStream/:videoId', verifyToken, mobileStudentController.getVideoStream);
 
 module.exports = router;

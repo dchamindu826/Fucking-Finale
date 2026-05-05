@@ -10,7 +10,7 @@ import TuteStock from './components/TuteStock';
 export default function DeliveryDashboard() {
     const location = useLocation();
     const queryParams = new URLSearchParams(location.search);
-    const activeTab = queryParams.get('tab') || 'overview'; // URL එකෙන් tab එක ගන්නවා
+    const activeTab = queryParams.get('tab') || 'overview'; 
 
     const [searchQuery, setSearchQuery] = useState('');
 

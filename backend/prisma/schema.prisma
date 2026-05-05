@@ -8,10 +8,10 @@ datasource db {
 }
 
 model User {
-  id             Int      @id @default(autoincrement())
+  id             Int     @id @default(autoincrement())
   firstName      String
   lastName       String
-  phone          String   @unique
+  phone          String  @unique
   whatsapp       String?
   optionalPhone  String?
   nic            String?
@@ -20,43 +20,52 @@ model User {
   city           String?
   district       String?
   password       String
-  role           String   @default("Student")
+  role           String  @default("Student")
   department     String?
   businessType   String?
-  
-  image          String?
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  image String?
 
-  payments        Payment[] 
-  assignedLeads   Lead[]          @relation("AssignedLeads")
-  sentMessages    ChatMessage[]   @relation("SentMessages")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments        Payment[]
+  assignedLeads   Lead[]           @relation("AssignedLeads")
+  sentMessages    ChatMessage[]    @relation("SentMessages")
   autoAssignQuota AutoAssignQuota?
-  session_id  String?
+  session_id      String?
+
+  assignedTasks         Task[]               @relation("AssignedTasks")
+  autoAssignedTemplates CustomTaskTemplate[] @relation("AutoAssignedUser")
+
+  actionedPayments Payment[] @relation("ActionedPayments")
 }
 
 model Business {
-  id                               Int         @id @default(autoincrement())
+  id                               Int      @id @default(autoincrement())
   name                             String
   category                         String
-  medium                           String      @default("Sinhala")
+  medium                           String   @default("Sinhala")
   description                      String?
   logo                             String?
   streams                          String?
-  isDiscountEnabledForInstallments Int         @default(0)
+  isDiscountEnabledForInstallments Int      @default(0)
   head_manager_id                  Int?
   ass_manager_id                   Int?
-  status                           Int         @default(1)
+  status                           Int      @default(1)
   batches                          Batch[]
-  createdAt                        DateTime    @default(now())
-  
-  // 🔥 FIX: Corrected relation name to CrmSettings (with 's') 🔥
-  crmSettings                      CrmSettings? @relation(fields: [crmSettingId], references: [id])
-  crmSettingId                     Int?
-  
-  autoReplies                      AutoReply[]
-  payments                         Payment[]
+  createdAt                        DateTime @default(now())
+
+  crmSettings  CrmSettings? @relation(fields: [crmSettingId], references: [id])
+  crmSettingId Int?
+
+  autoReplies AutoReply[]
+  payments    Payment[]
+
+  // 🔥 FIX: Added reverse relations for Tasks and Templates 🔥
+  taskTemplates       TaskTemplate[]
+  tasks               Task[]
+  customTaskTemplates CustomTaskTemplate[]
 }
 
 model Batch {
@@ -72,10 +81,16 @@ model Batch {
   groups      Group[]
   createdAt   DateTime @default(now())
 
-  payments    Payment[]
-  lecturers   String?   @db.Text
+  payments  Payment[]
+  lecturers String?   @db.Text
 
-  leads       Lead[]
+  leads Lead[]
+
+  monthlyStats BatchMonthlyStats[]
+  timetables   Timetable[]
+
+  // 🔥 FIX: Added reverse relation for Tasks 🔥
+  tasks Task[]
 }
 
 model Group {
@@ -88,28 +103,30 @@ model Group {
   batch          Batch    @relation(fields: [batchId], references: [id])
   courses        Course[]
   createdAt      DateTime @default(now())
-  
-  payments       Payment[] 
+
+  payments Payment[]
 }
 
 model Course {
-  id                 Int      @id @default(autoincrement())
-  name               String
-  code               String?
-  stream             String?
-  streams            String?
-  description        String?  @db.Text
-  itemOrder          Int      @default(1)
-  courseType         Int      @default(1)
-  price              Float    @default(0)
-  groupPrices        String?  @db.Text
-  
-  isDiscountExcluded Boolean  @default(false) 
+  id          Int     @id @default(autoincrement())
+  name        String
+  code        String?
+  stream      String?
+  streams     String?
+  description String? @db.Text
+  itemOrder   Int     @default(1)
+  courseType  Int     @default(1)
+  price       Float   @default(0)
+  groupPrices String? @db.Text
+
+  isDiscountExcluded Boolean @default(false)
   lecturerName       String?
 
-  groupId            Int?
-  group              Group?   @relation(fields: [groupId], references: [id])
-  createdAt          DateTime @default(now())
+  groupId       Int?
+  group         Group?         @relation(fields: [groupId], references: [id])
+  createdAt     DateTime       @default(now())
+  tuteStocks    TuteStock[]
+  deliveryItems DeliveryItem[]
 }
 
 model Installment {
@@ -158,8 +175,11 @@ model Content {
   group          ContentGroup? @relation(fields: [contentGroupId], references: [id])
   batchId        Int
   courseId       Int
-  itemOrder      Int           @default(1)  // 🔥 Me line eka aluthin add kale
+  itemOrder      Int           @default(1)
   createdAt      DateTime      @default(now())
+
+  // 🔥 FIX: Added reverse relation for Tasks 🔥
+  tasks Task[]
 }
 
 model ContentCourse {
@@ -172,65 +192,65 @@ model ContentCourse {
 }
 
 model Payment {
-  id             Int       @id @default(autoincrement())
-  amount         Float     @default(0)
-  payment_type   Int       @default(1) // 1=Monthly, 2=Installment, 3=Full
-  method         String?   @default("Slip")
-  status         Int       @default(0) // 0=Pending, 1=Approved, 2=Rejected, 3=Non Paid, 4=Post Pay
-  slip_image     String?
-  post_pay_days  Int?      @default(0)
+  id            Int     @id @default(autoincrement())
+  amount        Float   @default(0)
+  payment_type  Int     @default(1)
+  method        String? @default("Slip")
+  status        Int     @default(0)
+  slip_image    String?
+  post_pay_days Int?    @default(0)
 
-  due_date       DateTime? 
-  installment_no Int       @default(1) 
-  valid_until    DateTime? 
+  due_date       DateTime?
+  installment_no Int       @default(1)
+  valid_until    DateTime?
 
-  created_at     DateTime  @default(now())
+  created_at DateTime @default(now())
 
-  studentId      Int?
-  student        User?     @relation(fields: [studentId], references: [id])
-  businessId     Int?
-  business       Business? @relation(fields: [businessId], references: [id])
-  batchId        Int?
-  batch          Batch?    @relation(fields: [batchId], references: [id])
-  
-  groupId        Int?
-  group          Group?    @relation(fields: [groupId], references: [id])
-  
-  subjects       String?   @db.Text
-  remark         String?   @db.Text
+  studentId  Int?
+  student    User?     @relation(fields: [studentId], references: [id])
+  businessId Int?
+  business   Business? @relation(fields: [businessId], references: [id])
+  batchId    Int?
+  batch      Batch?    @relation(fields: [batchId], references: [id])
+
+  groupId Int?
+  group   Group? @relation(fields: [groupId], references: [id])
+
+  subjects String? @db.Text
+  remark   String? @db.Text
+
+  actionedById Int?
+  actionedUser User?     @relation("ActionedPayments", fields: [actionedById], references: [id])
+  delivery     Delivery?
 }
 
-// ==========================================
-// 🔥 CRM MODULE MODELS 🔥
-// ==========================================
-
 model CrmSettings {
-  id           Int        @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   businessId   Int
   campaignType String
-  metaApiKey   String?    @db.Text
+  metaApiKey   String?  @db.Text
   waId         String?
   waNumId      String?
-  geminiKeys   Json?      // Array of API keys
-  botMode      String     @default("OFF")
+  geminiKeys   Json?
+  botMode      String   @default("OFF")
   batchId      String?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  
-  businesses   Business[] // Opposite relation required by Prisma
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  businesses Business[]
 }
 
 model AutoReply {
-  id             Int        @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   businessId     Int
   campaignType   String
   stepOrder      Int
-  message        String     @db.Text
+  message        String   @db.Text
   attachment     String?
   attachmentType String?
-  createdAt      DateTime   @default(now())
-  
-  business       Business?  @relation(fields: [businessId], references: [id]) // Relation
+  createdAt      DateTime @default(now())
+
+  business Business? @relation(fields: [businessId], references: [id])
 }
 
 model KnowledgeBase {
@@ -243,79 +263,263 @@ model KnowledgeBase {
   createdAt    DateTime @default(now())
 }
 
-// ================= CRM MODULE MODELS =================
-
 model Lead {
-  id               Int           @id @default(autoincrement())
-  name             String?
-  phone            String        @unique 
-  source           String        @default("whatsapp") 
-  campaignType     String        @default("FREE_SEMINAR") 
-  status           String        @default("NEW") 
-  batchId          Int?
-  batch            Batch?        @relation(fields: [batchId], references: [id])
-  
-  assignedTo       Int?          
-  assignedUser     User?         @relation("AssignedLeads", fields: [assignedTo], references: [id])
-  
-  lastMessage      String?       @db.Text
-  unreadCount      Int           @default(0) 
-  
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-  
-  messages         ChatMessage[]
+  id           Int     @id @default(autoincrement())
+  name         String?
+  phone        String  @unique
+  source       String  @default("whatsapp")
+  campaignType String  @default("FREE_SEMINAR")
+  status       String  @default("NEW")
+  batchId      Int?
+  batch        Batch?  @relation(fields: [batchId], references: [id])
 
-  phase            Int           @default(1)
-  callMethod       String?       // direct, whatsapp, 3cx
-  callStatus       String        @default("pending") // pending, no_answer, reject, answered
-  feedback         String?
-  isAutoAssigned   Boolean       @default(false)
+  assignedTo   Int?
+  assignedUser User? @relation("AssignedLeads", fields: [assignedTo], references: [id])
+
+  lastMessage String? @db.Text
+  unreadCount Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ChatMessage[]
+
+  phase          Int     @default(1)
+  callMethod     String?
+  callStatus     String  @default("pending")
+  feedback       String?
+  isAutoAssigned Boolean @default(false)
 
   autoReplyStep     Int     @default(0)
   sequenceCompleted Boolean @default(false)
   followUpSent      Boolean @default(false)
 
-  // 🔥 ME TIKA THAMA ADU WELA THIBBE 🔥
-  paymentIntention String?  @default("NOT_DECIDED") // FULL, MONTHLY, INSTALLMENT, NOT_DECIDED, NEW_INQ
-  enrollmentStatus String?  @default("NON_ENROLLED") // ENROLLED, NON_ENROLLED
-  inquiryType      String?  @default("NORMAL")       // NORMAL, NEW_INQ
-  newInqTimestamp  DateTime?                         // 24h lock ekatai 5-day call ekatai
-  
-  coordinationRound Int     @default(1) // 1st coordination, 2nd coordination...
-  
-  slaDeadline       DateTime? // 24hr or 5-day lock deadline for New Inquiries
-  isLocked          Boolean   @default(false) // 24 පැය පැනලා lock උනාද කියලා බලන්න
+  paymentIntention String?   @default("NOT_DECIDED")
+  enrollmentStatus String?   @default("NON_ENROLLED")
+  inquiryType      String?   @default("NORMAL")
+  newInqTimestamp  DateTime?
+
+  coordinationRound Int @default(1)
+
+  slaDeadline   DateTime?
+  isLocked      Boolean   @default(false)
+  lastPaidMonth String?
+  isDropped     Boolean   @default(false)
 }
 
-
 model ChatMessage {
-  id         Int      @id @default(autoincrement())
-  leadId     Int
-  lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  
-  message    String   @db.Text
-  mediaUrl   String?  @db.Text
-  mediaType  String?  
-  
-  direction  String   // "inbound", "outbound"
-  senderType String   // "USER", "STAFF", "AI_BOT", "SYSTEM"
-  
-  senderId   Int?      
-  senderName String?  @default("System")
-  senderUser User?    @relation("SentMessages", fields: [senderId], references: [id])
-  
-  isRead     Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  metaMessageId  String?
+  id     Int  @id @default(autoincrement())
+  leadId Int
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  message   String  @db.Text
+  mediaUrl  String? @db.Text
+  mediaType String?
+
+  direction  String
+  senderType String
+
+  senderId   Int?
+  senderName String? @default("System")
+  senderUser User?   @relation("SentMessages", fields: [senderId], references: [id])
+
+  isRead        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  metaMessageId String?
 }
 
 model AutoAssignQuota {
   id          Int      @id @default(autoincrement())
   staffId     Int      @unique
   staff       User     @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  quotaAmount Int      @default(0) // Dawasata assign wenna ona gaana
-  assigned    Int      @default(0) // Danata assign wela thiyena gaana
-  isActive    Boolean  @default(true) // Toggle on/off
+  quotaAmount Int      @default(0)
+  assigned    Int      @default(0)
+  isActive    Boolean  @default(true)
   updatedAt   DateTime @updatedAt
+}
+
+model WebhookLog {
+  id        Int      @id @default(autoincrement())
+  phone     String
+  waNumId   String?
+  message   String?
+  status    String   @default("PENDING")
+  errorMsg  String?  @db.Text
+  createdAt DateTime @default(now())
+}
+
+model BatchMonthlyStats {
+  id      Int   @id @default(autoincrement())
+  batchId Int
+  batch   Batch @relation(fields: [batchId], references: [id])
+
+  recordMonth String
+
+  totalEnrolled Int @default(0)
+  fullCount     Int @default(0)
+  monthlyCount  Int @default(0)
+  installCount  Int @default(0)
+
+  droppedCount  Int @default(0)
+  upgradedCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Timetable {
+  id           Int      @id @default(autoincrement())
+  businessId   Int
+  batchId      Int
+  batch        Batch    @relation(fields: [batchId], references: [id])
+  date         DateTime
+  subjectName  String
+  title        String
+  startTime    String
+  endTime      String
+  lecturerName String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 🔥 FIX: Added reverse relation for Tasks 🔥
+  tasks Task[]
+}
+
+// ================= TASK MANAGEMENT MODELS =================
+
+model TaskTemplate {
+  id            Int      @id @default(autoincrement())
+  businessId    Int
+  business      Business @relation(fields: [businessId], references: [id])
+  taskType      String
+  isRequired    Boolean  @default(false)
+  deadlineHours Int      @default(24)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([businessId, taskType])
+}
+
+model Task {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id])
+
+  // Made optional because Custom Tasks might not belong to a specific batch/timetable
+  batchId     Int?
+  batch       Batch?     @relation(fields: [batchId], references: [id])
+  timetableId Int?
+  timetable   Timetable? @relation(fields: [timetableId], references: [id], onDelete: Cascade)
+
+  // 🔥 Sub-Task Logic 🔥
+  parentId Int?
+  parent   Task?  @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subTasks Task[] @relation("SubTasks")
+
+  taskType String // "LIVE_LINK", "RECORDING", "NOTES", "MCQ", "STRUCTURED_PAPER", "CUSTOM"
+
+  // 🔥 Custom Task Fields 🔥
+  customTitle String?
+  customDesc  String?   @db.Text
+  startDate   DateTime?
+  endDate     DateTime?
+
+  status String @default("PENDING")
+
+  assignedTo   Int?
+  assignedUser User? @relation("AssignedTasks", fields: [assignedTo], references: [id])
+
+  deadline    DateTime? // Optional because Parent tasks don't have deadlines, only sub-tasks do
+  completedAt DateTime?
+
+  unlockReason String? @db.Text
+  isUnlocked   Boolean @default(false)
+  unlockedBy   Int?
+
+  contentId Int?
+  content   Content? @relation(fields: [contentId], references: [id])
+
+  // 🔥 Proof Uploads 🔥
+  proofUrl  String?
+  proofType String? // "image" or "pdf"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ================= CUSTOM TASK TEMPLATE MODEL =================
+
+model CustomTaskTemplate {
+  id         Int      @id @default(autoincrement())
+  businessId Int
+  business   Business @relation(fields: [businessId], references: [id])
+
+  title       String
+  description String? @db.Text
+
+  dayOfMonth Int? // Optional (e.g. 5 for 5th day of the month)
+  startTime  String // Must (e.g. "08:00")
+  endTime    String // Must (e.g. "17:00")
+
+  allocationType String @default("MANUAL") // "MANUAL", "DAILY", "CLASS_LINKED"
+
+  autoAssignTo Int? // Auto allocate to a specific staff member
+  assignedUser User? @relation("AutoAssignedUser", fields: [autoAssignTo], references: [id])
+
+  subTasks Json? // Sub tasks check-list saved as a JSON array
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ================= DELIVERY & STOCK MANAGEMENT =================
+
+model TuteStock {
+  id                Int      @id @default(autoincrement())
+  courseId          Int      // Subject එකට ලින්ක් වෙනවා
+  tuteName          String   // ටියුට් එකේ නම
+  tuteImage         String?  // ටියුට් එකේ පින්තූරයක් තියෙනවනම් (Optional)
+  availableQuantity Int      @default(0) // දැනට තියෙන Stock එක
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  course            Course   @relation(fields: [courseId], references: [id])
+}
+
+model Delivery {
+  id                Int       @id @default(autoincrement())
+  paymentId         Int       @unique // Approved Payment එකට ලින්ක් වෙනවා
+  studentId         String    // ළමයාගේ ID එක
+  businessId        Int       // අදාල Business එක (Cards පෙන්නන්න)
+  paymentType       String    // "Full", "Monthly", "Installment" (Tabs වලට කඩන්න ලේසි වෙන්න)
+  
+  trackingNumber    String?   // Barcode Scan කරාම වැටෙන නම්බර් එක
+  
+  // Status: "Pending", "Hold", "Packed", "On the way", "Received", "Not Received"
+  status            String    @default("Pending") 
+  
+  holdReason        String?   // Hold කරොත් හේතුව (e.g., "Tute Iwarai")
+  holdRemark        String?   // "Other" දුන්නොත් type කරන හේතුව
+  
+  packedAt          DateTime? // Pack කරපු වෙලාව (මේකෙන් පැය 10ක් ගණන් කරලා Auto Update කරන්න)
+  onTheWayAt        DateTime? // On the way එකට මාරු උන වෙලාව
+  resolvedAt        DateTime? // ළමයා Received හෝ Not Received Click කරපු වෙලාව
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  payment           Payment   @relation(fields: [paymentId], references: [id])
+  items             DeliveryItem[]
+}
+
+model DeliveryItem {
+  id          Int      @id @default(autoincrement())
+  deliveryId  Int
+  courseId    Int      // ළමයා Payment කරපු Subject එක
+  tuteName    String   // ඒකට අදාල ටියුට් එකේ නම
+  tuteImage   String?  // ටියුට් එකේ පින්තූරේ
+  quantity    Int      @default(1)
+
+  delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  course      Course   @relation(fields: [courseId], references: [id])
 }

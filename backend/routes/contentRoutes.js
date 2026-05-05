@@ -84,4 +84,9 @@ router.post('/course-setup/installment', controller.createInstallment);
 router.get('/course-setup/installment/:batchId', controller.getInstallments);
 router.delete('/course-setup/installment', controller.deleteInstallment);
 
+
+// Update these paths based on your actual route file structure
+router.put('/course-setup/business/toggle-status', controller.toggleBusinessStatus);
+router.put('/course-setup/batch/toggle-status', controller.toggleBatchStatus);
+
 module.exports = router;

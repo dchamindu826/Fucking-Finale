@@ -44,9 +44,12 @@ app.use('/api/storage/images', express.static(path.join(__dirname, 'storage/imag
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/student', require('./routes/studentRoutes'));
 app.use('/api', require('./routes/contentRoutes')); 
+app.use('/api/admin', require('./routes/timetableRoutes')); 
+app.use('/api/admin', require('./routes/taskRoutes'));
 app.use('/api/admin/staff', require('./routes/staffRoutes'));
 app.use('/api', require('./routes/businessRoutes')); 
 app.use('/api/public', require('./routes/publicRoutes')); 
+app.use('/api/admin/delivery', require('./routes/deliveryRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes')); 
 app.use('/api/admin/payments', require('./routes/paymentRoutes'));
 app.use('/api/admin/crm', require('./routes/crmRoutes'));
@@ -58,6 +61,11 @@ app.use('/api/team', teamRoutes);
 // 🔥🔥🔥 MOBILE APP ROUTES 🔥🔥🔥
 app.use('/api/mobile', require('./routes/mobile/mobileRoutes')); 
 
+// ================= DELIVERY MODULE ROUTES (NEW) =================
+
+
+// 🔥 පැය 10න් Auto Update වෙන Cron Job එක Run වෙන්න Controller එක Load කරනවා 🔥
+require('./controllers/deliveryController'); 
 
 // ================= SERVER START =================
 const PORT = process.env.PORT || 5000;

@@ -1,376 +1,381 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from '../../api/axios';
-import { BarChart2, MessageCircle, Users, Percent, Download, Clock, Plus, Upload, Megaphone, Search, AlertCircle, CheckCircle, Trash2, UserPlus, Lock, User, Phone, Play, PieChart as PieIcon, Activity } from 'lucide-react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from 'recharts';
+import { FaUsers, FaUserCheck, FaUserClock, FaBookOpen, FaChartBar, FaListAlt, FaSearch, FaTimes, FaFilter, FaMoneyBillWave, FaCheckCircle } from 'react-icons/fa';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import toast from 'react-hot-toast';
 
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+import OpenSeminarControls from "./CampaignStatsModules/OpenSeminarControls";
+import NewInquiriesPerformance from "./CampaignStatsModules/NewInquiriesPerformance";
+import PaidCampaignPerformance from "./CampaignStatsModules/PaidCampaignPerformance";
+import BridgeTransfersTab from "./CampaignStatsModules/BridgeTransfersTab";
+import SubjectEnrollmentStats from "./CampaignStatsModules/SubjectEnrollmentStats"; 
 
-export default function AfterSeminarManagerCampaignStats({ filters }) {
-    const user = JSON.parse(localStorage.getItem('user')) || {};
-    const rawRole = user.role || '';
-    const userRole = rawRole.toUpperCase().replace(/ /g, '_');
-    
-    const isSystemAdmin = ['SYSTEM_ADMIN', 'DIRECTOR', 'SUPER'].includes(userRole);
-    const isManager = ['MANAGER', 'ASS_MANAGER'].includes(userRole);
-
-    const [allLeads, setAllLeads] = useState([]);
+export default function AfterSeminarManagerCampaignStats({ filters, allBatches }) {
     const [loading, setLoading] = useState(true);
-    const [data, setData] = useState({ summary: {}, report: [], msgReport: [] });
+    const [activeTab, setActiveTab] = useState('OVERALL'); 
     
-    const [activeTab, setActiveTab] = useState('DASHBOARD');
-    const [activeFlow, setActiveFlow] = useState('NEW_INQ'); // NEW_INQ or OPEN_SEMINAR
-    const [activeCoordinationRound, setActiveCoordinationRound] = useState(1);
-    
-    const [templates, setTemplates] = useState([]);
-    const [tplForm, setTplForm] = useState({ name: '', category: 'MARKETING', headerType: 'NONE', headerText: '', bodyText: '', footerText: '' });
-    const [tplFile, setTplFile] = useState(null);
-    const [tplButtons, setTplButtons] = useState([]); 
+    const [stats, setStats] = useState({
+        totalLeads: 0, assignedLeads: 0, unassignedLeads: 0,
+        openSemLeads: 0, newInqLeads: 0, staffAllocation: [], 
+        subjectEnrollments: [], mixerData: [] 
+    });
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [bcastType, setBcastType] = useState('24H'); 
-    const [selectedLeads, setSelectedLeads] = useState([]);
-    const [bcastMessage, setBcastMessage] = useState('');
-    const [bcastTemplate, setBcastTemplate] = useState('');
-    const [bcastFile, setBcastFile] = useState(null);
-    const [bcastResults, setBcastResults] = useState(null);
-    const [sendingBcast, setSendingBcast] = useState(false);
+    // 🔥 MASTER LEAD DIRECTORY MODAL STATES 🔥
+    const [showMasterModal, setShowMasterModal] = useState(false);
+    const [masterLoading, setMasterLoading] = useState(false);
+    const [masterLeads, setMasterLeads] = useState([]);
+    const [masterSearch, setMasterSearch] = useState('');
+    const [masterBatchFilter, setMasterBatchFilter] = useState('ALL');
 
-    const [teamMembers, setTeamMembers] = useState([]);
-    const [teamForm, setTeamForm] = useState({ firstName: '', lastName: '', phone: '', password: '' });
-    const [teamLoading, setTeamLoading] = useState(false);
+    useEffect(() => {
+        if (filters.selectedBusiness || filters.selectedBatch) {
+            fetchDashboardStats();
+        } else {
+            setLoading(false);
+        }
+    }, [filters.selectedBusiness, filters.selectedBatch]);
 
-    useEffect(() => { 
-        fetchAllLeads();
-        if (activeTab === 'WHATSAPP') fetchStats(); // Legacy API for WA metrics
-        if (activeTab === 'TEMPLATES') fetchTemplates();
-        if (activeTab === 'TEAM') fetchTeam();
-    }, [filters?.selectedBusiness, filters?.selectedBatch, activeTab]);
-
-    const fetchAllLeads = async () => {
+    const fetchDashboardStats = async () => {
         setLoading(true);
-        try { 
-            const targetBusinessId = filters?.selectedBusiness || user.businessId;
-            const targetBatchId = filters?.selectedBatch || user.batchId;
+        try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('/after-seminar-crm/all-leads', { 
+            const res = await axios.get('/after-seminar-crm/manager-dashboard-stats', {
                 headers: { Authorization: `Bearer ${token}` },
-                params: { businessId: targetBusinessId, batchId: targetBatchId }
-            }); 
-            setAllLeads(res.data); 
-        } catch(e) {}
+                params: { businessId: filters.selectedBusiness, batchId: filters.selectedBatch || 'ALL' }
+            });
+            if (res.data) {
+                setStats({
+                    ...res.data,
+                    mixerData: res.data.mixerData || [] 
+                });
+            }
+        } catch (error) { console.error("Failed to load manager stats", error); }
         setLoading(false);
     };
 
-    const fetchStats = async () => {
+    // 🔥 FETCH MASTER LEADS FOR MODAL 🔥
+    const fetchMasterDirectory = async () => {
+        setMasterLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get('/after-seminar-crm/campaign-stats', {
+            const res = await axios.get('/after-seminar-crm/leads/master-directory', {
                 headers: { Authorization: `Bearer ${token}` },
-                params: { businessId: filters?.selectedBusiness || user.businessId, batchId: filters?.selectedBatch || user.batchId }
+                params: { businessId: filters.selectedBusiness }
             });
-            setData(res.data);
-        } catch (error) { console.error(error); }
-    };
-
-    // ... (fetchTemplates, fetchTeam, deleteTemplate, submitTemplate, handleBroadcast, handleAddTeamMember, deleteTeamMember logic remains identical)
-    const fetchTemplates = async () => {
-        try { 
-            const targetBusinessId = filters?.selectedBusiness || user.businessId;
-            const token = localStorage.getItem('token');
-            const res = await axios.get('/coordinator-crm/meta-templates', { 
-                headers: { Authorization: `Bearer ${token}` },
-                params: { businessId: targetBusinessId }
-            }); 
-            setTemplates(res.data || []); 
-        } catch(e) {}
-    };
-
-    const fetchTeam = async () => {
-        try { 
-            const token = localStorage.getItem('token');
-            const [staffRes, bizRes] = await Promise.all([
-                axios.get('/admin/staff', { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get('/admin/businesses', { headers: { Authorization: `Bearer ${token}` } })
-            ]);
-            let coords = staffRes.data.filter(s => s.role && ['COORDINATOR', 'CALLER', 'MANAGER'].includes(s.role.toUpperCase()));
-            if (filters?.selectedBusiness && bizRes.data) {
-                const selectedBizObj = bizRes.data.find(b => String(b.id) === String(filters.selectedBusiness));
-                const bizName = selectedBizObj ? selectedBizObj.name : '';
-                coords = coords.filter(c => {
-                    const cBiz = String(c.businessType || '').toLowerCase().trim();
-                    const selBizName = String(bizName).toLowerCase().trim();
-                    const selBizId = String(filters.selectedBusiness).toLowerCase().trim();
-                    if (!cBiz) return false;
-                    return cBiz === selBizName || cBiz === selBizId || String(c.businessId) === String(filters.selectedBusiness);
-                });
-            }
-            setTeamMembers(coords); 
-        } catch(e) { console.error("Failed to load team", e); }
-    };
-
-    // 🔥 START NEXT COORDINATION ROUND 🔥
-    const handleStartNextRound = async () => {
-        const confirmStr = window.prompt('Type "CONFIRM" to start the next coordination round. This moves all non-enrolled to the next attempt.');
-        if (confirmStr !== 'CONFIRM') return;
-
-        const loadToast = toast.loading("Starting new coordination round...");
-        try {
-            const token = localStorage.getItem('token');
-            await axios.post('/after-seminar-crm/start-coordination', {
-                businessId: filters?.selectedBusiness || '',
-                batchId: filters?.selectedBatch || ''
-            }, { headers: { Authorization: `Bearer ${token}` } });
-            
-            toast.success("New Round Started Successfully!", { id: loadToast });
-            fetchAllLeads();
-        } catch (error) {
-            toast.error("Failed to start new round", { id: loadToast });
+            setMasterLeads(res.data.leads || []);
+        } catch (err) {
+            console.error("Master Directory Fetch Error:", err);
+            toast.error("Failed to load Master Directory. Check Backend API.");
+            // 🔥 Mock data ain kara! Dan real data nathnam his list ekak pennai.
+            setMasterLeads([]); 
         }
+        setMasterLoading(false);
     };
 
-    const exportAllLeads = () => {
-        let csvContent = "Name,Phone,Type,Round,Status,AssignedTo,PaymentGroup,Enrollment\n";
-        allLeads.forEach(l => { csvContent += `"${l.name || 'Unknown'}","${l.phone}","${l.inquiryType}","${l.coordinationRound || 1}","${l.callStatus || 'NEW'}","${l.assignedTo || 'Unassigned'}","${l.paymentIntention}","${l.enrollmentStatus}"\n`; });
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a"); 
-        link.setAttribute("href", url);
-        link.setAttribute("download", `After_Seminar_Leads.csv`);
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
-    };
+    useEffect(() => {
+        if (showMasterModal) {
+            fetchMasterDirectory();
+        }
+    }, [showMasterModal]);
 
-    // ... (rest of standard functions: submitTemplate, handleBroadcast, handleAddTeamMember omitted for brevity but they are kept the same)
-    
-    // ========================================================
-    // 🔥 NEW ADVANCED DATA CALCULATIONS FOR MANAGER UI 🔥
-    // ========================================================
-
-    const activeLeads = useMemo(() => {
-        return allLeads.filter(l => {
-            if (activeFlow === 'NEW_INQ') return l.inquiryType === 'NEW_INQ';
-            return l.inquiryType === 'OPEN_SEMINAR' || l.inquiryType === 'NORMAL';
+    const filteredMaster = useMemo(() => {
+        return masterLeads.filter(l => {
+            const matchSearch = l.phone.includes(masterSearch) || (l.name || '').toLowerCase().includes(masterSearch.toLowerCase());
+            const matchBatch = masterBatchFilter === 'ALL' || String(l.batchId) === String(masterBatchFilter);
+            return matchSearch && matchBatch;
         });
-    }, [allLeads, activeFlow]);
+    }, [masterLeads, masterSearch, masterBatchFilter]);
 
-    const roundFilteredLeads = useMemo(() => {
-        if (activeFlow === 'NEW_INQ') return activeLeads; // Round doesn't strictly apply to New Inq in same way
-        return activeLeads.filter(l => (l.coordinationRound || 1) === activeCoordinationRound);
-    }, [activeLeads, activeFlow, activeCoordinationRound]);
+    const mStats = useMemo(() => {
+        return {
+            total: filteredMaster.length,
+            enrolled: filteredMaster.filter(l => l.enrollmentStatus === 'ENROLLED').length,
+            nonEnrolled: filteredMaster.filter(l => l.enrollmentStatus !== 'ENROLLED').length,
+            full: filteredMaster.filter(l => l.paymentIntention === 'FULL').length,
+            monthly: filteredMaster.filter(l => l.paymentIntention === 'MONTHLY').length,
+            installment: filteredMaster.filter(l => l.paymentIntention === 'INSTALLMENT').length,
+            notDecided: filteredMaster.filter(l => !l.paymentIntention || l.paymentIntention === 'NOT_DECIDED').length,
+        };
+    }, [filteredMaster]);
 
-    // Top Level Stats
-    const topStats = useMemo(() => {
-        const total = roundFilteredLeads.length;
-        const assigned = roundFilteredLeads.filter(l => l.assignedTo).length;
-        const unassigned = total - assigned;
-        const covered = roundFilteredLeads.filter(l => ['answered', 'no_answer', 'reject'].includes(l.callStatus)).length;
-        const pending = total - covered;
-        const enrolled = roundFilteredLeads.filter(l => l.enrollmentStatus === 'ENROLLED').length;
-        
-        return { total, assigned, unassigned, covered, pending, enrolled, rate: total > 0 ? Math.round((covered/total)*100) : 0 };
-    }, [roundFilteredLeads]);
+    if (loading) return <div className="flex justify-center items-center h-full text-slate-400 font-sans tracking-wide animate-pulse">Loading Workspace...</div>;
 
-    // Agent Performance Data
-    const agentData = useMemo(() => {
-        const map = {};
-        roundFilteredLeads.forEach(l => {
-            if (!l.assignedTo) return;
-            const name = l.assignedUser?.firstName || `Agent ${l.assignedTo}`;
-            if (!map[name]) map[name] = { name, Assigned: 0, Covered: 0, Pending: 0, Enrolled: 0, NonEnrolled: 0 };
-            
-            map[name].Assigned++;
-            if (['answered', 'no_answer', 'reject'].includes(l.callStatus)) map[name].Covered++;
-            else map[name].Pending++;
+    if (!filters.selectedBusiness && !filters.selectedBatch) {
+        return <div className="flex justify-center items-center h-full text-slate-400 font-sans bg-black/20 rounded-2xl m-4 border border-white/5 backdrop-blur-md">Please select a Business or Batch to view Analytics.</div>;
+    }
 
-            if (l.enrollmentStatus === 'ENROLLED') map[name].Enrolled++;
-            else map[name].NonEnrolled++;
-        });
-        return Object.values(map);
-    }, [roundFilteredLeads]);
-
-    // Group Breakdown
-    const enrollmentPieData = [
-        { name: 'Full Pay', value: roundFilteredLeads.filter(l => l.enrollmentStatus === 'ENROLLED' && l.paymentIntention === 'FULL').length },
-        { name: 'Monthly', value: roundFilteredLeads.filter(l => l.enrollmentStatus === 'ENROLLED' && l.paymentIntention === 'MONTHLY').length },
-        { name: 'Installment', value: roundFilteredLeads.filter(l => l.enrollmentStatus === 'ENROLLED' && l.paymentIntention === 'INSTALLMENT').length },
-        { name: 'Non-Enrolled', value: roundFilteredLeads.filter(l => l.enrollmentStatus !== 'ENROLLED').length }
-    ];
-
-    // MoM Data
-    const currentMonth = new Date().getMonth();
-    const momCompareData = useMemo(() => {
-        return [
-            { 
-                name: 'Last Month', 
-                Enrolled: activeLeads.filter(l => new Date(l.updatedAt).getMonth() === currentMonth - 1 && l.enrollmentStatus === 'ENROLLED').length,
-                Dropped: activeLeads.filter(l => new Date(l.updatedAt).getMonth() === currentMonth - 1 && l.enrollmentStatus === 'NON_ENROLLED').length
-            },
-            { 
-                name: 'This Month', 
-                Enrolled: activeLeads.filter(l => new Date(l.updatedAt).getMonth() === currentMonth && l.enrollmentStatus === 'ENROLLED').length,
-                Dropped: activeLeads.filter(l => new Date(l.updatedAt).getMonth() === currentMonth && l.enrollmentStatus === 'NON_ENROLLED').length
-            }
-        ];
-    }, [activeLeads, currentMonth]);
+    const LEAD_COLORS = ['#ec4899', '#3b82f6'];
+    const leadTypeData = [ { name: 'Open Seminar', value: stats.openSemLeads }, { name: 'New Inquiries', value: stats.newInqLeads } ];
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="flex flex-col xl:flex-row justify-between gap-4 bg-[#1e293b] p-4 rounded-2xl border border-white/5 shadow-md">
-                <div className="flex gap-2 bg-[#0f172a] p-1 rounded-xl overflow-x-auto custom-scrollbar">
-                    <button onClick={() => setActiveTab('DASHBOARD')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'DASHBOARD' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>Advanced Dashboard</button>
-                    <button onClick={() => setActiveTab('WHATSAPP')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'WHATSAPP' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>WhatsApp Metrics</button>
-                    <button onClick={() => setActiveTab('TEMPLATES')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'TEMPLATES' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}>Meta Templates</button>
-                    <button onClick={() => setActiveTab('BROADCAST')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'BROADCAST' ? 'bg-amber-600 text-white' : 'text-slate-400'}`}>Broadcast</button>
-                    {(isSystemAdmin || isManager) && <button onClick={() => setActiveTab('TEAM')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${activeTab === 'TEAM' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>My Team</button>}
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                    {/* MANAGER START ROUND BUTTON */}
-                    {(activeTab === 'DASHBOARD' && (isSystemAdmin || isManager)) && (
-                        <button onClick={handleStartNextRound} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold rounded-lg text-sm shadow-[0_0_15px_rgba(239,68,68,0.4)] whitespace-nowrap border border-red-400/30 transition-all transform hover:scale-105">
-                            <Play size={16} className="fill-current"/> START NEXT ROUND (Batch)
+        <div className="flex flex-col h-full overflow-hidden font-sans antialiased text-slate-200 bg-[#0f151c] relative">
+            
+            {/* TOP NAVIGATION */}
+            <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02] backdrop-blur-xl shrink-0 flex items-center justify-between">
+                <div className="flex gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5 shadow-inner">
+                    {[
+                        { id: 'OVERALL', label: 'Overall Progress' },
+                        { id: 'OPEN_SEM', label: 'Open Seminar' },
+                        { id: 'NEW_INQ', label: 'New Inquiries' },
+                        { id: 'BRIDGE', label: 'Bridge Data' },
+                        { id: 'PAID', label: 'Paid Campaign' }
+                    ].map(tab => (
+                        <button 
+                            key={tab.id} 
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-5 py-2 rounded-lg text-xs font-semibold transition-all duration-300 tracking-wide ${activeTab === tab.id ? 'bg-[#2563eb] text-white shadow-md' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}
+                        >
+                            {tab.label}
                         </button>
-                    )}
-                    <button onClick={exportAllLeads} className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-sm shadow-lg whitespace-nowrap"><Download size={16}/> Export CRM</button>
+                    ))}
                 </div>
             </div>
 
-            {loading ? <div className="text-center py-10 text-slate-500 animate-pulse">Loading Deep Metrics...</div> : (
-                <>
-                    {activeTab === 'DASHBOARD' && (
-                        <div className="space-y-6">
-                            {/* FLOW SWITCHER */}
-                            <div className="flex gap-4 bg-[#0f172a] p-2 rounded-2xl border border-slate-700 w-full md:w-1/2">
-                                <button onClick={() => setActiveFlow('NEW_INQ')} className={`flex-1 py-3 font-black rounded-xl transition-all ${activeFlow === 'NEW_INQ' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-400 hover:bg-[#1e293b]'}`}>DIRECT INQUIRIES</button>
-                                <button onClick={() => setActiveFlow('OPEN_SEMINAR')} className={`flex-1 py-3 font-black rounded-xl transition-all ${activeFlow === 'OPEN_SEMINAR' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:bg-[#1e293b]'}`}>OPEN SEMINAR</button>
+            {/* TAB CONTENTS */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+                
+                {/* 1. OVERALL TAB */}
+                {activeTab === 'OVERALL' && (
+                    <div className="space-y-6 animate-fade-in-up">
+                        
+                        {/* 🔥 MASTER DIRECTORY BUTTON 🔥 */}
+                        <div className="flex justify-between items-center bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl">
+                            <div>
+                                <h3 className="text-indigo-400 font-bold text-sm tracking-wide">Complete Lead Directory</h3>
+                                <p className="text-slate-400 text-xs mt-1">View, search, and analyze all leads across Open Seminar, New Inquiries, etc.</p>
                             </div>
+                            <button 
+                                onClick={() => setShowMasterModal(true)} 
+                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg transition-transform hover:scale-105"
+                            >
+                                <FaListAlt size={14}/> View Full Directory
+                            </button>
+                        </div>
 
-                            {/* ROUND SWITCHER (Only for Open Seminar) */}
-                            {activeFlow === 'OPEN_SEMINAR' && (
-                                <div className="flex gap-2 bg-[#0f172a] p-2 rounded-xl border border-slate-700 overflow-x-auto custom-scrollbar">
-                                    {[1,2,3,4,5,6,7,8,9,10].map(round => (
-                                        <button 
-                                            key={round} 
-                                            onClick={() => setActiveCoordinationRound(round)} 
-                                            className={`px-4 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${activeCoordinationRound === round ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}
-                                        >
-                                            {round}th Coord
-                                        </button>
-                                    ))}
+                        {/* STATS CARDS */}
+                        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                            <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all">
+                                <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl"><FaUsers size={20}/></div>
+                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Total Leads</p><h2 className="text-2xl font-semibold text-white mt-1">{stats.totalLeads}</h2></div>
+                            </div>
+                            <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all relative overflow-hidden">
+                                <div className="absolute -right-6 -top-6 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl"></div>
+                                <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl"><FaUserCheck size={20}/></div>
+                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Assigned</p><h2 className="text-2xl font-semibold text-emerald-400 mt-1">{stats.assignedLeads}</h2></div>
+                            </div>
+                            <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all">
+                                <div className="p-3 bg-red-500/10 text-red-400 rounded-xl"><FaUserClock size={20}/></div>
+                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Unassigned</p><h2 className="text-2xl font-semibold text-red-400 mt-1">{stats.unassignedLeads}</h2></div>
+                            </div>
+                            <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-center hover:bg-white/[0.05] transition-all">
+                                <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mb-3">Assigned Breakdown</p>
+                                <div className="flex justify-between items-center text-xs font-semibold mb-2">
+                                    <span className="text-blue-400">Open Sem: {stats.openSemLeads}</span>
+                                    <span className="text-pink-400">New Inq: {stats.newInqLeads}</span>
                                 </div>
-                            )}
-
-                            {/* TOP STATS */}
-                            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                                <div className="bg-[#1e293b] p-5 rounded-2xl border border-white/5 text-center shadow-lg">
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total</p>
-                                    <h3 className="text-2xl font-black text-white">{topStats.total}</h3>
-                                </div>
-                                <div className="bg-[#1e293b] p-5 rounded-2xl border border-white/5 text-center shadow-lg">
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Assigned</p>
-                                    <h3 className="text-2xl font-black text-indigo-400">{topStats.assigned}</h3>
-                                </div>
-                                <div className="bg-[#1e293b] p-5 rounded-2xl border border-emerald-500/30 bg-emerald-900/10 text-center shadow-lg">
-                                    <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-1">Enrolled</p>
-                                    <h3 className="text-2xl font-black text-emerald-400">{topStats.enrolled}</h3>
-                                </div>
-                                <div className="bg-[#1e293b] p-5 rounded-2xl border border-white/5 text-center shadow-lg">
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Covered</p>
-                                    <h3 className="text-2xl font-black text-amber-400">{topStats.covered}</h3>
-                                </div>
-                                <div className="bg-[#1e293b] p-5 rounded-2xl border border-white/5 text-center shadow-lg">
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Pending</p>
-                                    <h3 className="text-2xl font-black text-red-400">{topStats.pending}</h3>
-                                </div>
-                                <div className="bg-[#1e293b] p-5 rounded-2xl border border-white/5 text-center shadow-lg">
-                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Coverage Rate</p>
-                                    <h3 className="text-2xl font-black text-blue-400">{topStats.rate}%</h3>
+                                <div className="w-full h-1.5 bg-black/40 rounded-full flex overflow-hidden shadow-inner border border-white/5">
+                                    <div style={{width: `${(stats.openSemLeads / (stats.assignedLeads || 1)) * 100}%`}} className="bg-blue-500 h-full"></div>
+                                    <div style={{width: `${(stats.newInqLeads / (stats.assignedLeads || 1)) * 100}%`}} className="bg-pink-500 h-full"></div>
                                 </div>
                             </div>
+                        </div>
 
-                            {/* CHARTS ROW */}
-                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                
-                                {/* AGENT PERFORMANCE TABLE */}
-                                <div className="lg:col-span-1 bg-[#1e293b]/60 border border-white/5 rounded-2xl overflow-hidden backdrop-blur-xl shadow-xl max-h-[400px] overflow-y-auto custom-scrollbar">
-                                    <div className="p-4 bg-black/20 border-b border-white/5"><h3 className="text-sm font-bold text-white">Agent Breakdown</h3></div>
-                                    <table className="w-full text-left text-xs text-slate-300">
-                                        <thead className="bg-black/40 text-slate-400 uppercase tracking-wider sticky top-0 z-10">
-                                            <tr>
-                                                <th className="p-3">Agent</th>
-                                                <th className="p-3 text-center">Assig.</th>
-                                                <th className="p-3 text-center text-emerald-400">Enrolled</th>
-                                                <th className="p-3 text-center text-red-400">Non</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/5">
-                                            {agentData.map((a, i) => (
-                                                <tr key={i} className="hover:bg-white/5">
-                                                    <td className="p-3 font-bold text-white">{a.name}</td>
-                                                    <td className="p-3 text-center">{a.Assigned}</td>
-                                                    <td className="p-3 text-center font-bold text-emerald-400">{a.Enrolled}</td>
-                                                    <td className="p-3 text-center font-bold text-red-400">{a.NonEnrolled}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                        {/* CHARTS ROW */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div className="bg-white/[0.02] backdrop-blur-lg p-5 rounded-2xl border border-white/5 shadow-xl lg:col-span-2">
+                                <h3 className="text-xs font-semibold text-slate-300 mb-6 uppercase tracking-widest flex items-center gap-2"><FaChartBar className="text-blue-400"/> Staff Workload</h3>
+                                <div className="h-[250px]">
+                                    {stats.staffAllocation.length === 0 ? <div className="flex h-full items-center justify-center text-slate-500 text-sm">No data available.</div> : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={stats.staffAllocation} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                                <RechartsTooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px'}} />
+                                                <Bar dataKey="assigned" name="Allocated Leads" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={30} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
                                 </div>
-
-                                {/* AGENT CHART */}
-                                <div className="lg:col-span-2 bg-[#1e293b]/60 border border-white/5 rounded-2xl p-6 backdrop-blur-xl shadow-xl h-[400px]">
-                                    <h3 className="text-sm font-bold text-white mb-4">Agent Conversion Chart</h3>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={agentData}> 
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
-                                            <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                            <YAxis stroke="#64748b" fontSize={10} />
-                                            <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '8px'}} />
-                                            <Legend />
-                                            <Bar dataKey="Enrolled" name="Enrolled" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                            <Bar dataKey="NonEnrolled" name="Non-Enrolled" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-
                             </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[350px]">
-                                {/* ENROLLMENT PIE */}
-                                <div className="bg-[#1e293b]/60 border border-white/5 rounded-2xl p-6 backdrop-blur-xl shadow-xl flex flex-col items-center">
-                                    <h3 className="text-sm font-bold text-white mb-2">Total Payment Group Distribution</h3>
+                            <div className="bg-white/[0.02] backdrop-blur-lg p-5 rounded-2xl border border-white/5 shadow-xl">
+                                <h3 className="text-xs font-semibold text-slate-300 mb-2 uppercase tracking-widest flex items-center gap-2"><FaBookOpen className="text-indigo-400"/> Lead Sources</h3>
+                                <div className="h-[250px]">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
-                                            <Pie data={enrollmentPieData} cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={5} dataKey="value">
-                                                {enrollmentPieData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+                                            <Pie data={leadTypeData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={4} dataKey="value" stroke="none">
+                                                {leadTypeData.map((entry, index) => <Cell key={`cell-${index}`} fill={LEAD_COLORS[index % LEAD_COLORS.length]} />)}
                                             </Pie>
-                                            <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '10px'}} />
-                                            <Legend verticalAlign="bottom" height={36}/>
+                                            <RechartsTooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px'}} />
+                                            <Legend verticalAlign="bottom" wrapperStyle={{fontSize: '11px', paddingTop: '20px', color: '#94a3b8'}} />
                                         </PieChart>
-                                    </ResponsiveContainer>
-                                </div>
-
-                                {/* MOM COMPARE */}
-                                <div className="bg-[#1e293b]/60 border border-white/5 rounded-2xl p-6 backdrop-blur-xl shadow-xl">
-                                    <h3 className="text-sm font-bold text-white mb-2">Month over Month Global Retention</h3>
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={momCompareData}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false}/>
-                                            <XAxis dataKey="name" stroke="#94a3b8" />
-                                            <YAxis stroke="#94a3b8" />
-                                            <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '10px'}} />
-                                            <Legend />
-                                            <Bar dataKey="Enrolled" fill="#3b82f6" radius={[5, 5, 0, 0]} />
-                                            <Bar dataKey="Dropped" name="Non-Enrolled/Dropped" fill="#f59e0b" radius={[5, 5, 0, 0]} />
-                                        </BarChart>
                                     </ResponsiveContainer>
                                 </div>
                             </div>
                         </div>
-                    )}
 
-                    {/* WhatsApp, Templates, Broadcast, Team Tabs Code Remains Exactly As Originally Provided Here to Keep Length Manageable... */}
-                    {/* ... Oya dunna parana tabs tika as it is thiyenawa. Eka wenas kale na. */}
-                </>
+                        <SubjectEnrollmentStats rawSubjects={stats.subjectEnrollments} mixerData={stats.mixerData} />
+                    </div>
+                )}
+
+                {/* OTHER TABS */}
+                {activeTab === 'OPEN_SEM' && <div className="animate-fade-in-up h-full"><OpenSeminarControls filters={filters} allBatches={allBatches} isManager={true} /></div>}
+                {activeTab === 'NEW_INQ' && <div className="animate-fade-in-up h-full"><NewInquiriesPerformance filters={filters} allBatches={allBatches} isManager={true} /></div>}
+                {activeTab === 'BRIDGE' && <div className="animate-fade-in-up h-full bg-white/[0.02] border border-white/5 rounded-2xl"><BridgeTransfersTab filters={filters} /></div>}
+                {activeTab === 'PAID' && <div className="animate-fade-in-up h-full"><PaidCampaignPerformance filters={filters} /></div>}
+            </div>
+
+            {/* 🔥 FULL SCREEN MODAL: MASTER LEAD DIRECTORY 🔥 */}
+            {showMasterModal && (
+                // 👇 Methana pl-[260px] or pl-[300px] damma sidebar eken wamata thallu karanna
+                // w-full h-full dala screen eka purawata aran thiyenne
+                <div className="fixed inset-0 z-[200] bg-[#020617]/95 backdrop-blur-md flex items-center justify-center p-4 pl-[260px] lg:pl-[280px] xl:pl-[300px] w-full h-full animate-fade-in">
+                    
+                    {/* 👇 max-w-full dila margin nathi kara */}
+                    <div className="bg-[#1a2430] w-full h-full rounded-3xl flex flex-col overflow-hidden border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
+                        
+                        {/* Modal Header */}
+                        <div className="bg-[#0f172a] px-6 py-4 flex justify-between items-center border-b border-slate-700 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-lg"><FaListAlt size={20}/></div>
+                                <div>
+                                    <h3 className="text-white font-bold text-xl">Campaign Master Directory</h3>
+                                    <p className="text-slate-400 text-xs mt-0.5">Comprehensive view of all inquiries and statuses</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowMasterModal(false)} className="bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white p-3 rounded-xl transition-all shadow-sm">
+                                <FaTimes size={16} />
+                            </button>
+                        </div>
+
+                        {masterLoading ? (
+                            <div className="flex-1 flex justify-center items-center text-indigo-400 animate-pulse font-bold text-lg">Fetching Global Directory...</div>
+                        ) : (
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 bg-[#0b141a]">
+                                
+                                {/* Top Stats & Charts inside Modal */}
+                                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+                                    <div className="grid grid-cols-2 gap-4 xl:col-span-1">
+                                        <div className="bg-[#1e293b] p-5 rounded-2xl border border-slate-700 flex flex-col justify-center shadow-lg">
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Filtered</p>
+                                            <h2 className="text-3xl font-black text-white mt-1">{mStats.total}</h2>
+                                        </div>
+                                        <div className="bg-emerald-500/10 p-5 rounded-2xl border border-emerald-500/20 flex flex-col justify-center shadow-lg">
+                                            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Enrolled</p>
+                                            <h2 className="text-3xl font-black text-emerald-400 mt-1">{mStats.enrolled}</h2>
+                                        </div>
+                                        <div className="bg-red-500/10 p-5 rounded-2xl border border-red-500/20 flex flex-col justify-center shadow-lg">
+                                            <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Non-Enrolled</p>
+                                            <h2 className="text-3xl font-black text-red-400 mt-1">{mStats.nonEnrolled}</h2>
+                                        </div>
+                                        <div className="bg-[#1e293b] p-5 rounded-2xl border border-slate-700 flex flex-col justify-center shadow-lg">
+                                            <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">Conversion</p>
+                                            <h2 className="text-3xl font-black text-amber-400 mt-1">
+                                                {mStats.total > 0 ? Math.round((mStats.enrolled / mStats.total) * 100) : 0}%
+                                            </h2>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-[#1e293b] p-5 rounded-2xl border border-slate-700 shadow-lg xl:col-span-2">
+                                        <h3 className="text-xs font-semibold text-slate-300 mb-4 uppercase tracking-widest flex items-center gap-2"><FaMoneyBillWave className="text-emerald-400"/> Intention vs Enrollment</h3>
+                                        
+                                        {/* 👇 WARNING FIX: w-full and min-h added to the chart wrapper */}
+                                        <div className="w-full h-[150px] min-h-[150px]">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={[
+                                                    { name: 'Full Pay', count: mStats.full },
+                                                    { name: 'Monthly', count: mStats.monthly },
+                                                    { name: 'Installment', count: mStats.installment },
+                                                    { name: 'Not Decided', count: mStats.notDecided }
+                                                ]} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                                                    <RechartsTooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px'}} />
+                                                    <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} barSize={40} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Filters for Modal */}
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#1e293b] p-4 rounded-2xl border border-slate-700 mb-6">
+                                    <div className="flex items-center gap-3 w-full md:w-auto">
+                                        <FaFilter className="text-slate-500" />
+                                        <select 
+                                            value={masterBatchFilter} 
+                                            onChange={(e) => setMasterBatchFilter(e.target.value)} 
+                                            className="bg-[#0f172a] border border-slate-600 text-slate-200 text-xs font-bold rounded-lg px-4 py-2.5 outline-none focus:border-indigo-500"
+                                        >
+                                            <option value="ALL">All Batches</option>
+                                            {allBatches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                        </select>
+                                    </div>
+                                    <div className="relative w-full md:w-96">
+                                        <FaSearch className="absolute left-4 top-3 text-slate-500 text-sm" />
+                                        <input 
+                                            type="text" 
+                                            placeholder="Search by Name or Phone..." 
+                                            value={masterSearch} 
+                                            onChange={(e) => setMasterSearch(e.target.value)} 
+                                            className="w-full bg-[#0f172a] border border-slate-600 rounded-lg py-2.5 pl-10 pr-4 text-xs font-bold text-white outline-none focus:border-indigo-500 transition-all" 
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Data Table */}
+                                <div className="bg-[#1e293b] rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+                                    <div className="overflow-x-auto max-h-[500px] custom-scrollbar">
+                                        <table className="w-full text-left text-sm whitespace-nowrap">
+                                            <thead className="bg-[#0f172a] text-slate-400 text-[10px] uppercase tracking-wider sticky top-0 z-10 shadow-md">
+                                                <tr>
+                                                    <th className="py-4 px-5 font-bold">Student Details</th>
+                                                    <th className="py-4 px-5 font-bold text-center">Inquiry Source</th>
+                                                    <th className="py-4 px-5 font-bold text-center text-blue-400">Marked Intention</th>
+                                                    <th className="py-4 px-5 font-bold text-center text-emerald-400">Actual Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-700/50">
+                                                {filteredMaster.length === 0 ? (
+                                                    <tr><td colSpan="4" className="text-center py-10 text-slate-500 font-medium">No leads match your search criteria.</td></tr>
+                                                ) : (
+                                                    filteredMaster.map((l, i) => (
+                                                        <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                                                            <td className="py-3 px-5">
+                                                                <h4 className="text-slate-200 font-bold">{l.phone}</h4>
+                                                                <p className="text-[11px] text-slate-500 mt-0.5">{l.name || 'Unknown'}</p>
+                                                            </td>
+                                                            <td className="py-3 px-5 text-center">
+                                                                <span className="bg-slate-800 text-slate-300 px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-wider">
+                                                                    {l.inquiryType?.replace('_', ' ') || 'UNKNOWN'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-3 px-5 text-center">
+                                                                <span className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider ${l.paymentIntention === 'FULL' ? 'bg-indigo-500/20 text-indigo-400' : l.paymentIntention === 'MONTHLY' ? 'bg-blue-500/20 text-blue-400' : l.paymentIntention === 'INSTALLMENT' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700 text-slate-400'}`}>
+                                                                    {l.paymentIntention || 'NOT DECIDED'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="py-3 px-5 text-center">
+                                                                {l.enrollmentStatus === 'ENROLLED' ? (
+                                                                    <span className="text-emerald-400 font-black text-xs flex items-center justify-center gap-1.5"><FaCheckCircle/> ENROLLED</span>
+                                                                ) : (
+                                                                    <span className="text-red-400 font-bold text-[11px] uppercase tracking-widest">Non-Enrolled</span>
+                                                                )}
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                            </div>
+                        )}
+                    </div>
+                </div>
             )}
         </div>
     );

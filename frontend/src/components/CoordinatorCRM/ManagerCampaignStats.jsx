@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import axios from '../../api/axios';
-import { BarChart2, MessageCircle, Users, Percent, Download, Clock, Plus, Upload, Megaphone, Search, AlertCircle, CheckCircle, Trash2, UserPlus, Lock, User, Phone } from 'lucide-react';
+import { BarChart2, MessageCircle, Users, Percent, Download, Clock, Plus, Upload, Megaphone, Search, AlertCircle, CheckCircle, Trash2, UserPlus, Lock, User, Phone, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import toast from 'react-hot-toast';
 
@@ -37,7 +37,9 @@ export default function ManagerCampaignStats({ filters }) {
     const [bcastTemplate, setBcastTemplate] = useState('');
     const [bcastFile, setBcastFile] = useState(null);
     const [bcastResults, setBcastResults] = useState(null);
+    
     const [sendingBcast, setSendingBcast] = useState(false);
+    const [broadcastProgress, setBroadcastProgress] = useState({ current: 0, total: 0 });
 
     const [teamMembers, setTeamMembers] = useState([]);
     const [teamForm, setTeamForm] = useState({ firstName: '', lastName: '', phone: '', password: '' });
@@ -46,9 +48,9 @@ export default function ManagerCampaignStats({ filters }) {
     useEffect(() => { 
         fetchStats(); 
         fetchAllLeads();
+        fetchTeam(); 
         if (activeTab === 'TEMPLATES') fetchTemplates();
-        if (activeTab === 'TEAM') fetchTeam();
-    }, [filters?.selectedBusiness, filters?.selectedBatch, phase, timeFilter, startDate, endDate, activeTab]);
+    }, [filters?.selectedBusiness, filters?.selectedBatch, phase, timeFilter, startDate, endDate, activeTab]); 
 
     const fetchStats = async () => {
         setLoading(true);
@@ -78,20 +80,35 @@ export default function ManagerCampaignStats({ filters }) {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { businessId: targetBusinessId, batchId: targetBatchId }
             }); 
-            setAllLeads(res.data); 
+            setAllLeads(Array.isArray(res.data) ? res.data : (res.data?.data || [])); 
         } catch(e) {}
     };
 
+    // 🔥 FIX: Template Fetch eka safe karala cache bypass damma
     const fetchTemplates = async () => {
         try { 
             const targetBusinessId = filters?.selectedBusiness || user.businessId;
+            const targetBatchId = filters?.selectedBatch || user.batchId;
             const token = localStorage.getItem('token');
             const res = await axios.get('/coordinator-crm/meta-templates', { 
-                headers: { Authorization: `Bearer ${token}` },
-                params: { businessId: targetBusinessId }
+                headers: { 
+                    Authorization: `Bearer ${token}`,
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                },
+                params: { 
+                    businessId: targetBusinessId, 
+                    batchId: targetBatchId,
+                    t: Date.now() 
+                }
             }); 
-            setTemplates(res.data || []); 
-        } catch(e) {}
+            const safeData = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            setTemplates(safeData); 
+        } catch(e) {
+            console.error("Template Fetch Error:", e);
+            toast.error(e.response?.data?.error || "Failed to load Meta Templates!");
+            setTemplates([]); 
+        }
     };
 
     const fetchTeam = async () => {
@@ -102,20 +119,22 @@ export default function ManagerCampaignStats({ filters }) {
                 axios.get('/admin/businesses', { headers: { Authorization: `Bearer ${token}` } })
             ]);
             
-            let coords = staffRes.data.filter(s => s.role && ['COORDINATOR', 'CALLER', 'MANAGER'].includes(s.role.toUpperCase()));
+            const targetBusinessId = filters?.selectedBusiness || user.businessId;
+            const safeStaffData = Array.isArray(staffRes.data) ? staffRes.data : (staffRes.data?.data || []);
+            let coords = safeStaffData.filter(s => s.role && ['COORDINATOR', 'CALLER', 'MANAGER'].includes(s.role.toUpperCase()));
             
-            if (filters?.selectedBusiness && bizRes.data) {
-                const selectedBizObj = bizRes.data.find(b => String(b.id) === String(filters.selectedBusiness));
+            if (targetBusinessId && bizRes.data) {
+                const safeBizData = Array.isArray(bizRes.data) ? bizRes.data : (bizRes.data?.data || []);
+                const selectedBizObj = safeBizData.find(b => String(b.id) === String(targetBusinessId));
                 const bizName = selectedBizObj ? selectedBizObj.name : '';
 
                 coords = coords.filter(c => {
                     const cBiz = String(c.businessType || '').toLowerCase().trim();
                     const selBizName = String(bizName).toLowerCase().trim();
-                    const selBizId = String(filters.selectedBusiness).toLowerCase().trim();
+                    const selBizId = String(targetBusinessId).toLowerCase().trim();
+                    const cBizIdStr = String(c.businessId || '').toLowerCase().trim();
                     
-                    if (!cBiz) return false;
-
-                    return cBiz === selBizName || cBiz === selBizId || String(c.businessId) === String(filters.selectedBusiness);
+                    return (cBizIdStr === selBizId) || (cBiz === selBizName) || (cBiz === selBizId);
                 });
             }
             setTeamMembers(coords); 
@@ -147,19 +166,36 @@ export default function ManagerCampaignStats({ filters }) {
             formData.append('buttons', JSON.stringify(tplButtons));
             if (tplFile) formData.append('media', tplFile);
 
+            // 🔥 FIX: Backend ekata Business ID eka yawanawa 🔥
+            const targetBusinessId = filters?.selectedBusiness || user.businessId;
+            formData.append('businessId', targetBusinessId);
+
             const token = localStorage.getItem('token');
             await axios.post('/coordinator-crm/meta-templates', formData, { headers: { Authorization: `Bearer ${token}` } });
+            
             toast.success("Template Created successfully!", { id: loadToast });
             setTplForm({ name: '', category: 'MARKETING', headerType: 'NONE', headerText: '', bodyText: '', footerText: '' });
-            setTplButtons([]); setTplFile(null); fetchTemplates();
-        } catch (err) { toast.error(err.response?.data?.error || "Failed", { id: loadToast }); }
+            setTplButtons([]); 
+            setTplFile(null); 
+            
+            setTimeout(() => {
+                fetchTemplates();
+            }, 1500);
+
+        } catch (err) { 
+            toast.error(err.response?.data?.error || "Failed", { id: loadToast }); 
+        }
     };
 
     const deleteTemplate = async (name) => {
         if(!window.confirm(`Delete template ${name}?`)) return;
         try { 
+            const targetBusinessId = filters?.selectedBusiness || user.businessId;
             const token = localStorage.getItem('token');
-            await axios.delete(`/coordinator-crm/meta-templates/${name}`, { headers: { Authorization: `Bearer ${token}` } }); 
+            await axios.delete(`/coordinator-crm/meta-templates/${name}`, { 
+                headers: { Authorization: `Bearer ${token}` },
+                params: { businessId: targetBusinessId } // 🔥 FIX: Delete karaddith Business ID eka yawanawa 🔥
+            }); 
             toast.success("Deleted"); 
             fetchTemplates(); 
         } catch(e) { toast.error("Delete failed"); }
@@ -179,21 +215,56 @@ export default function ManagerCampaignStats({ filters }) {
 
     const handleBroadcast = async () => {
         if (selectedLeads.length === 0) return toast.error("Select leads first!");
+        
+        if (bcastType === 'TEMPLATE' && !bcastTemplate) return toast.error("Please select a template!");
+        if (bcastType === '24H' && !bcastMessage && !bcastFile) return toast.error("Please add a message or file!");
+
+        if(!window.confirm(`Are you sure you want to broadcast to ${selectedLeads.length} leads? Salli kapenawa!`)) return;
+
         setSendingBcast(true);
-        const loadToast = toast.loading("Firing Broadcast...");
-        try {
+        setBroadcastProgress({ current: 0, total: selectedLeads.length });
+        setBcastResults(null); 
+        
+        let totalSuccess = 0;
+        let totalFailed = 0;
+        let allReasons = [];
+
+        const chunkSize = 50; 
+        
+        for (let i = 0; i < selectedLeads.length; i += chunkSize) {
+            const chunk = selectedLeads.slice(i, i + chunkSize);
+            
             const formData = new FormData();
-            formData.append('leadIds', JSON.stringify(selectedLeads));
+            formData.append('leadIds', JSON.stringify(chunk));
             formData.append('type', bcastType);
             formData.append('message', bcastMessage);
             formData.append('templateName', bcastTemplate);
             if (bcastFile) formData.append('media', bcastFile);
 
-            const token = localStorage.getItem('token');
-            const res = await axios.post('/coordinator-crm/broadcast', formData, { headers: { Authorization: `Bearer ${token}` } });
-            setBcastResults(res.data);
-            toast.success("Broadcast completed", { id: loadToast });
-        } catch (e) { toast.error("Broadcast Failed", { id: loadToast }); }
+            try {
+                const token = localStorage.getItem('token');
+                const res = await axios.post('/coordinator-crm/broadcast', formData, { 
+                    headers: { Authorization: `Bearer ${token}` } 
+                });
+                
+                totalSuccess += res.data.success || 0;
+                totalFailed += res.data.failed || 0;
+                allReasons = [...allReasons, ...(res.data.reasons || [])];
+                
+            } catch (e) { 
+                console.error("Chunk failed", e);
+                totalFailed += chunk.length;
+            }
+
+            setBroadcastProgress({ current: Math.min(i + chunkSize, selectedLeads.length), total: selectedLeads.length });
+            
+            if (i + chunkSize < selectedLeads.length) {
+                await new Promise(resolve => setTimeout(resolve, 500)); 
+            }
+        }
+
+        setBcastResults({ success: totalSuccess, failed: totalFailed, reasons: allReasons });
+        toast.success(`Broadcast completed! Sent: ${totalSuccess}, Failed: ${totalFailed}`);
         setSendingBcast(false);
     };
 
@@ -203,7 +274,8 @@ export default function ManagerCampaignStats({ filters }) {
         try {
             const token = localStorage.getItem('token');
             const bizRes = await axios.get('/admin/businesses', { headers: { Authorization: `Bearer ${token}` } });
-            const selectedBizObj = bizRes.data.find(b => String(b.id) === String(filters?.selectedBusiness));
+            const safeBizData = Array.isArray(bizRes.data) ? bizRes.data : (bizRes.data?.data || []);
+            const selectedBizObj = safeBizData.find(b => String(b.id) === String(filters?.selectedBusiness));
             const bizNameToSave = selectedBizObj ? selectedBizObj.name : String(filters?.selectedBusiness);
 
             const payload = {
@@ -231,14 +303,41 @@ export default function ManagerCampaignStats({ filters }) {
         } catch (error) { toast.error("Failed to remove"); }
     };
 
-    // 🔥 FIX: Calculate Covered, Pending and Assigned for the top cards 🔥
+    const displayReport = useMemo(() => {
+        const rawReport = data?.report || [];
+        if (!teamMembers || teamMembers.length === 0) return rawReport;
+
+        return teamMembers.map(member => {
+            const existing = rawReport.find(r => r.agentName === member.firstName);
+            if (existing) return existing;
+            return {
+                agentName: member.firstName,
+                assigned: 0, pending: 0, answered: 0, noAnswer: 0, reject: 0
+            };
+        });
+    }, [data?.report, teamMembers]);
+
+    const displayMsgReport = useMemo(() => {
+        const rawMsgReport = data?.msgReport || [];
+        if (!teamMembers || teamMembers.length === 0) return rawMsgReport;
+
+        return teamMembers.map(member => {
+            const existing = rawMsgReport.find(r => r.agentName === member.firstName);
+            if (existing) return existing;
+            return {
+                agentName: member.firstName,
+                uniqueSent: 0, uniqueReceived: 0
+            };
+        });
+    }, [data?.msgReport, teamMembers]);
+
     const statsCalculations = useMemo(() => {
-        if (!data.report) return { covered: 0, pending: 0, assigned: 0 };
-        const covered = data.report.reduce((acc, curr) => acc + curr.answered + curr.noAnswer + curr.reject, 0);
-        const pending = data.report.reduce((acc, curr) => acc + curr.pending, 0);
-        const assigned = data.report.reduce((acc, curr) => acc + curr.assigned, 0);
+        const rawReport = data?.report || [];
+        const covered = rawReport.reduce((acc, curr) => acc + curr.answered + curr.noAnswer + curr.reject, 0);
+        const pending = rawReport.reduce((acc, curr) => acc + curr.pending, 0);
+        const assigned = rawReport.reduce((acc, curr) => acc + curr.assigned, 0);
         return { covered, pending, assigned };
-    }, [data.report]);
+    }, [data?.report]);
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -279,13 +378,12 @@ export default function ManagerCampaignStats({ filters }) {
 
             {loading && (activeTab === 'CALLS' || activeTab === 'WHATSAPP') ? <div className="text-center py-10 text-slate-500">Loading metrics...</div> : (
                 <>
-                    {/* 🔥 FIX: Separated Top Cards for CALLS and WHATSAPP 🔥 */}
                     {activeTab === 'CALLS' && (
                         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                             <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 rounded-2xl border border-white/5 shadow-lg relative overflow-hidden">
                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Total Leads</p>
-                                <h3 className="text-2xl font-bold text-white">{data.summary.totalLeads}</h3>
-                                <div className="absolute bottom-0 right-0 bg-red-500/20 text-red-400 px-4 py-1.5 rounded-tl-xl text-xs font-black border-t border-l border-red-500/30">{data.summary.unassignedLeads} UNASSIGNED</div>
+                                <h3 className="text-2xl font-bold text-white">{data?.summary?.totalLeads || 0}</h3>
+                                <div className="absolute bottom-0 right-0 bg-red-500/20 text-red-400 px-4 py-1.5 rounded-tl-xl text-xs font-black border-t border-l border-red-500/30">{data?.summary?.unassignedLeads || 0} UNASSIGNED</div>
                             </div>
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
                                 <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-2">Total Assigned</p>
@@ -301,7 +399,7 @@ export default function ManagerCampaignStats({ filters }) {
                             </div>
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
                                 <p className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-2">Response Rate</p>
-                                <h3 className="text-2xl font-bold text-amber-400">{data.summary.rate}%</h3>
+                                <h3 className="text-2xl font-bold text-amber-400">{data?.summary?.rate || 0}%</h3>
                             </div>
                         </div>
                     )}
@@ -310,11 +408,11 @@ export default function ManagerCampaignStats({ filters }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Unique Numbers Contacted (Sent)</p>
-                                <h3 className="text-2xl font-bold text-blue-400">{data.summary.totalSent} <span className="text-[10px] text-slate-500 font-normal">Numbers</span></h3>
+                                <h3 className="text-2xl font-bold text-blue-400">{data?.summary?.totalSent || 0} <span className="text-[10px] text-slate-500 font-normal">Numbers</span></h3>
                             </div>
                             <div className="bg-slate-800 p-5 rounded-2xl border border-white/5 shadow-lg">
                                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-2">Unique Numbers Replied (Received)</p>
-                                <h3 className="text-2xl font-bold text-emerald-400">{data.summary.totalReceived} <span className="text-[10px] text-slate-500 font-normal">Numbers</span></h3>
+                                <h3 className="text-2xl font-bold text-emerald-400">{data?.summary?.totalReceived || 0} <span className="text-[10px] text-slate-500 font-normal">Numbers</span></h3>
                             </div>
                         </div>
                     )}
@@ -334,7 +432,7 @@ export default function ManagerCampaignStats({ filters }) {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {data.report.map((r, i) => (
+                                        {displayReport.map((r, i) => (
                                             <tr key={i} className="hover:bg-white/5">
                                                 <td className="p-4 font-bold text-white">{r.agentName}</td>
                                                 <td className="p-4 text-center">{r.assigned}</td>
@@ -351,7 +449,7 @@ export default function ManagerCampaignStats({ filters }) {
                                 <h3 className="text-sm font-bold text-white mb-4">Calls Performance</h3>
                                 <div style={{ width: '100%', height: '100%', minHeight: '300px' }}>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={data.report} barSize={12}> 
+                                        <BarChart data={displayReport} barSize={12}> 
                                             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                             <XAxis dataKey="agentName" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                             <Tooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#1e293b', border: '1px solid #ffffff10', borderRadius: '8px'}} />
@@ -377,7 +475,7 @@ export default function ManagerCampaignStats({ filters }) {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {data.msgReport.map((r, i) => (
+                                        {displayMsgReport.map((r, i) => (
                                             <tr key={i} className="hover:bg-white/5">
                                                 <td className="p-4 font-bold text-white">{r.agentName}</td>
                                                 <td className="p-4 text-center font-bold text-blue-400">{r.uniqueSent} <span className="text-[10px] text-slate-500 font-normal">Users</span></td>
@@ -391,7 +489,7 @@ export default function ManagerCampaignStats({ filters }) {
                                 <h3 className="text-sm font-bold text-white mb-4">Unique User Interaction Trends</h3>
                                 <div style={{ width: '100%', height: '100%', minHeight: '300px' }}>
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={data.msgReport}> 
+                                        <LineChart data={displayMsgReport}> 
                                             <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
                                             <XAxis dataKey="agentName" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
                                             <Tooltip contentStyle={{backgroundColor: '#1e293b', border: 'none', borderRadius: '8px'}} />
@@ -439,7 +537,15 @@ export default function ManagerCampaignStats({ filters }) {
                             </div>
 
                             <div className="bg-[#1e293b]/60 border border-white/5 rounded-2xl p-5 backdrop-blur-xl shadow-xl max-h-[600px] overflow-y-auto custom-scrollbar">
-                                <h3 className="text-lg font-bold text-white mb-4">Existing Templates</h3>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold text-white">Existing Templates</h3>
+                                    <button 
+                                        onClick={(e) => { e.preventDefault(); fetchTemplates(); }} 
+                                        className="text-xs text-purple-400 hover:text-purple-300 font-bold flex items-center gap-1 bg-purple-500/10 px-3 py-1.5 rounded-lg border border-purple-500/20 transition-all hover:bg-purple-500/20"
+                                    >
+                                        <RefreshCw size={14}/> Refresh
+                                    </button>
+                                </div>
                                 <div className="space-y-3">
                                     {templates.length === 0 ? <p className="text-slate-500 text-sm">No templates found.</p> : templates.map(t => (
                                         <div key={t.id} className="bg-black/30 p-4 rounded-xl border border-white/5 flex justify-between items-start">
@@ -519,8 +625,27 @@ export default function ManagerCampaignStats({ filters }) {
                                         </>
                                     )}
 
-                                    <button onClick={handleBroadcast} disabled={sendingBcast} className="w-full mt-5 bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors disabled:opacity-50">
-                                        {sendingBcast ? 'Sending...' : `Fire Broadcast to ${selectedLeads.length}`}
+                                    {sendingBcast && broadcastProgress.total > 0 && (
+                                        <div className="mt-4 mb-2">
+                                            <div className="flex justify-between text-xs text-amber-400 mb-1 font-bold">
+                                                <span>Sending Messages... Please don't refresh!</span>
+                                                <span>{broadcastProgress.current} / {broadcastProgress.total}</span>
+                                            </div>
+                                            <div className="w-full bg-slate-800 rounded-full h-2.5">
+                                                <div 
+                                                    className="bg-amber-500 h-2.5 rounded-full transition-all duration-300" 
+                                                    style={{ width: `${(broadcastProgress.current / broadcastProgress.total) * 100}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <button 
+                                        onClick={handleBroadcast} 
+                                        disabled={sendingBcast} 
+                                        className="w-full mt-4 bg-amber-500 hover:bg-amber-400 text-black font-black py-3 rounded-xl shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {sendingBcast ? 'Broadcasting... Wait' : `Fire Broadcast to ${selectedLeads.length}`}
                                     </button>
                                 </div>
 
@@ -537,7 +662,7 @@ export default function ManagerCampaignStats({ filters }) {
                                                 <p className="text-[10px] text-red-500/70 font-bold uppercase">Failed</p>
                                             </div>
                                         </div>
-                                        {bcastResults.reasons.length > 0 && (
+                                        {bcastResults.reasons?.length > 0 && (
                                             <div className="max-h-32 overflow-y-auto custom-scrollbar space-y-2">
                                                 {bcastResults.reasons.map((r, i) => (
                                                     <div key={i} className="flex items-start gap-2 text-xs bg-red-500/5 p-2 rounded border border-red-500/10">
@@ -634,6 +759,9 @@ export default function ManagerCampaignStats({ filters }) {
                                                                 <p className="text-xs text-slate-400 flex items-center gap-1"><Phone size={12}/> {caller.phone}</p>
                                                             </div>
                                                         </div>
+                                                        <button onClick={() => deleteTeamMember(caller.id)} className="p-2.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-xl transition-colors border border-transparent hover:border-red-500/30">
+                                                            <Trash2 size={18}/>
+                                                        </button>
                                                     </div>
                                                 ))}
                                                 {teamMembers.filter(m => m.role !== 'CALLER').length === 0 && <p className="text-xs text-slate-500 italic">No staff coordinators found.</p>}

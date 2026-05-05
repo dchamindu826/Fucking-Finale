@@ -4,6 +4,7 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const studentController = require('../controllers/studentController');
 const adminController = require('../controllers/adminController'); // 🔥 FIX: MEKA THAMAI MISS WELA THIBBE 🔥
+const databaseController = require('../controllers/databaseController');
 
 // Admin Overview
 router.get('/overview', async (req, res) => {
@@ -34,5 +35,10 @@ router.post('/ghost-login', studentController.ghostLogin);
 
 // Backup
 router.get('/backup', adminController.downloadDatabaseBackup);
+
+// 🔥 Database Manager Routes 🔥
+router.get('/database/:model', databaseController.getAllData);
+router.put('/database/:model/:id', databaseController.updateRecord);
+router.delete('/database/:model/:id', databaseController.deleteRecord);
 
 module.exports = router;

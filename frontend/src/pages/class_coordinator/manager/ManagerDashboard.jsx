@@ -10,9 +10,12 @@ export default function ManagerDashboard() {
   useEffect(() => {
     const fetchManagerData = async () => {
       try {
-        // Backend eken real data ganna API eka (Mock data natha)
-        const response = await api.get('/manager/dashboard-data');
-        setData(response.data);
+        // 🔥 මේක තාවකාලිකව කමෙන්ට් කරලා තියන්න 🔥
+        // const response = await api.get('/manager/dashboard-data');
+        // setData(response.data);
+        
+        // Error එක එන එක නවත්තන්න දැනට හිස් Array එකක් සෙට් කරමු
+        setData([]); 
       } catch (error) {
         console.error("Error fetching data", error);
       } finally {

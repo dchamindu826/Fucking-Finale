@@ -1,9 +1,28 @@
-import React from 'react';
-import { Package, AlertTriangle, CheckCircle, Box } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Package, AlertTriangle, CheckCircle, Box, Loader2 } from 'lucide-react';
+import axios from '../../../api/axios'; // Adjust path based on your folder structure
+import toast from 'react-hot-toast';
 
 export default function Overview() {
-    // Dummy Data
-    const stats = { pending: 124, onHold: 12, deliveredToday: 45, lowStock: 3 };
+    const [stats, setStats] = useState({ pending: 0, onHold: 0, deliveredToday: 0, lowStock: 0 });
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            try {
+                // We will create this backend endpoint next
+                const res = await axios.get('/admin/delivery/stats');
+                setStats(res.data);
+            } catch (error) {
+                toast.error("Failed to load delivery stats.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStats();
+    }, []);
+
+    if (loading) return <div className="flex justify-center py-10"><Loader2 className="animate-spin text-blue-500" size={32}/></div>;
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-fade-in">

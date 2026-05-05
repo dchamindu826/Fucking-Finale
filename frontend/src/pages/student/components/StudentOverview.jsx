@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from "../../../api/axios";
-import { Loader2, Bell, AlertTriangle, CheckCircle, Calendar, Clock, User, X, Smartphone, Download } from 'lucide-react';
+import { Loader2, Bell, AlertTriangle, CheckCircle, Calendar, Clock, User, X, Smartphone, Download, AlertCircle, Apple } from 'lucide-react';
 import AIChatWidget from './AIChatWidget';
 import toast from 'react-hot-toast';
 
@@ -10,6 +10,9 @@ export default function StudentOverview() {
     const [currentTime, setCurrentTime] = useState(new Date());
     const [selectedImage, setSelectedImage] = useState(null); 
     
+    // 🔥 Popup එක පෙන්නන්න State එක (True කියන්නේ මුලින්ම පෙන්නනවා)
+    const [showAppPopup, setShowAppPopup] = useState(true); 
+
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const backendBaseUrl = axios.defaults.baseURL ? axios.defaults.baseURL.replace('/api', '') : 'https://imacampus.online';
 
@@ -46,7 +49,76 @@ export default function StudentOverview() {
     return (
         <div className="w-full max-w-6xl mx-auto pb-20 relative px-2 sm:px-0 custom-scrollbar">
             
-            {/* 🔥 APP DOWNLOAD BANNER 🔥 */}
+            {/* 🔥 APP DOWNLOAD POPUP MODAL 🔥 */}
+            {showAppPopup && (
+                <div className="fixed inset-0 z-[300] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                    <div className="bg-[#0f172a] border border-blue-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl shadow-blue-900/20 relative animate-in zoom-in-95 duration-300">
+                        
+                        {/* Close Button */}
+                        <button 
+                            onClick={() => setShowAppPopup(false)}
+                            className="absolute top-4 right-4 text-white/50 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-all"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div className="flex flex-col items-center text-center">
+                            <div className="bg-blue-600/20 p-4 rounded-2xl mb-4 border border-blue-500/30 text-blue-400">
+                                <Smartphone size={40} />
+                            </div>
+                            
+                            <h2 className="text-2xl font-black text-white mb-2">Get the IMA Campus App!</h2>
+                            <p className="text-white/70 text-sm mb-6">
+                                Experience seamless learning directly from your mobile device. Download the app now for the best experience.
+                            </p>
+
+                            {/* Android Section (APK) */}
+                            <div className="w-full bg-black/40 border border-white/10 rounded-2xl p-4 mb-4">
+                                <h3 className="text-white font-bold mb-3 text-sm flex items-center justify-center gap-2">
+                                    <img src="https://upload.wikimedia.org/wikipedia/commons/d/d7/Android_robot.svg" alt="Android" className="w-5 h-5" /> 
+                                    For Android Users
+                                </h3>
+                                
+                                <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-3 mb-4 text-left flex gap-3 items-start">
+                                    <AlertCircle className="text-orange-500 shrink-0 mt-0.5" size={18} />
+                                    <p className="text-[11px] text-orange-200/90 leading-relaxed">
+                                        Our new update is waiting for Play Store approval. Until then, please download the APK directly. 
+                                        If you see a security warning, please tap <strong className="text-white">"More details"</strong> and select <strong className="text-white">"Install anyway"</strong> (Don't worry, it's 100% safe!).
+                                    </p>
+                                </div>
+
+                                <a 
+                                    href={`${backendBaseUrl}/app-release.apk`} // 🔥 ඔයාගේ APK එකේ Path එක
+                                    download
+                                    className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+                                >
+                                    <Download size={18} /> Download APK Directly
+                                </a>
+                            </div>
+
+                            {/* iOS Section */}
+                            <div className="w-full bg-black/40 border border-white/10 rounded-2xl p-4">
+                                <h3 className="text-white font-bold mb-3 text-sm flex items-center justify-center gap-2">
+                                    <Apple size={20} className="text-white" /> 
+                                    For iOS Users
+                                </h3>
+                                <a 
+                                    href="https://apps.apple.com/lk/app/ima-campus/id6759137655" // 🔥 මෙතන ඔයාගේ App Store Link එක දාන්න
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all border border-white/10"
+                                >
+                                    View on App Store
+                                </a>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* 🔥 END POPUP MODAL 🔥 */}
+
+            {/* 🔥 APP DOWNLOAD BANNER (IN-PAGE) 🔥 */}
             <div className="bg-gradient-to-r from-blue-600/20 to-indigo-600/20 border border-blue-500/30 rounded-2xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
                 <div className="flex items-center gap-3">
                     <div className="bg-blue-500 p-2 rounded-xl text-white shadow-lg shadow-blue-500/20">
@@ -58,14 +130,12 @@ export default function StudentOverview() {
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    {/* Play Store */}
-                    <a href="https://play.google.com/store/apps/details?id=com.imaacademyapp" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-black/40 hover:bg-black border border-white/10 px-3 py-1.5 rounded-xl transition-all">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Play Store" className="h-5 md:h-6" />
-                    </a>
-                    {/* App Store */}
-                    <a href="https://apps.apple.com/lk/app/ima-campus/id6759137655" target="_blank" rel="noreferrer" className="flex items-center gap-2 bg-black/40 hover:bg-black border border-white/10 px-3 py-1.5 rounded-xl transition-all">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/3/3c/Download_on_the_App_Store_Badge.svg" alt="App Store" className="h-5 md:h-6" />
-                    </a>
+                    <button 
+                        onClick={() => setShowAppPopup(true)} // Banner එක එබුවත් Popup එක එන්න හැදුවා
+                        className="flex items-center gap-2 bg-black/40 hover:bg-black border border-white/10 px-4 py-2 rounded-xl transition-all text-white font-bold text-sm"
+                    >
+                        <Download size={16} /> Get App
+                    </button>
                 </div>
             </div>
 

@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { FaWhatsapp, FaHeadset, FaFilter, FaChartBar, FaRobot, FaPowerOff } from 'react-icons/fa';
+import { FaWhatsapp, FaHeadset, FaFilter, FaChartBar, FaRobot, FaPowerOff, FaTimes } from 'react-icons/fa';
 import axios from '../../api/axios';
 import toast from 'react-hot-toast';
 
-import AfterSeminarContactSidebar from './AfterSeminarContactSidebar';
-import AfterSeminarChatArea from './AfterSeminarChatArea';
-import AfterSeminarRightPanel from './AfterSeminarRightPanel';
-import AfterSeminarStaffExecution from './AfterSeminarStaffExecution';
-import AfterSeminarManagerCampaignStats from './AfterSeminarManagerCampaignStats'; 
+// CRM Folder Imports
+import AfterSeminarContactSidebar from './CRM/AfterSeminarContactSidebar';
+import AfterSeminarChatArea from './CRM/AfterSeminarChatArea';
+import AfterSeminarRightPanel from './CRM/AfterSeminarRightPanel';
+
+// CallCampaign Folder Import
+import AfterSeminarStaffExecution from './CallCampaign/AfterSeminarStaffExecution'; 
+
+// Current Directory Import
+import AfterSeminarManagerCampaignStats from './AfterSeminarManagerCampaignStats';
 
 export default function AfterSeminarDashboard() {
   const [user, setUser] = useState(null);
@@ -30,19 +35,8 @@ export default function AfterSeminarDashboard() {
       try { parsedUser = JSON.parse(storedUser); setUser(parsedUser); } catch(e) {}
     } else setUser(parsedUser); 
 
-    const userRole = (parsedUser.role || '').toUpperCase().replace(/ /g, '_');
-    const isAdmin = ['SYSTEM_ADMIN', 'DIRECTOR'].includes(userRole);
-
-    if (!isAdmin && parsedUser.businessId) {
-        setSelectedBusiness(String(parsedUser.businessId));
-    }
     fetchBusinessesAndBatches();
   }, []);
-
-  useEffect(() => {
-    if(selectedBusiness) fetchFollowUpStatus(selectedBusiness);
-    else setIsFollowUpOn(false);
-  }, [selectedBusiness]);
 
   const fetchBusinessesAndBatches = async () => {
     try {
@@ -62,6 +56,44 @@ export default function AfterSeminarDashboard() {
     } catch (err) { console.error("Error fetching batches:", err); }
   };
 
+  const rawRole = user?.role || JSON.parse(localStorage.getItem('user'))?.role || '';
+  const userRole = rawRole.toUpperCase().replace(/ /g, '_'); 
+  
+  const isAdmin = ['SYSTEM_ADMIN', 'DIRECTOR', 'SUPER'].includes(userRole);
+  const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER', 'ADMIN'].includes(userRole);
+
+  const displayBatches = batches.filter(b => {
+      if (isAdmin && !selectedBusiness) return true; 
+      if (isAdmin && selectedBusiness) return String(b.businessId) === String(selectedBusiness);
+      
+      const uBizId = String(user?.businessId || selectedBusiness || '').trim();
+      const uBizName = String(user?.businessType || '').toLowerCase().trim();
+      
+      if (uBizId === '' && uBizName === '') return true;
+      
+      const batchBizId = String(b.businessId).trim();
+      const batchBizName = String(b.business?.name || '').toLowerCase().trim();
+      
+      if (uBizId !== '' && batchBizId === uBizId) return true;
+      if (uBizName !== '' && batchBizName === uBizName) return true;
+      if (uBizName !== '' && batchBizName.includes(uBizName)) return true;
+      if (uBizName !== '' && uBizName.includes(batchBizName)) return true;
+
+      return false;
+  });
+
+  let activeBusinessId = isAdmin ? selectedBusiness : '';
+  if (!isAdmin && displayBatches.length > 0) {
+      activeBusinessId = String(displayBatches[0].businessId);
+  }
+
+  const needsToSelectBusiness = isAdmin && !selectedBusiness;
+
+  useEffect(() => {
+    if(activeBusinessId) fetchFollowUpStatus(activeBusinessId);
+    else setIsFollowUpOn(false);
+  }, [activeBusinessId]);
+
   const fetchFollowUpStatus = async (bizId) => {
     try {
       const res = await axios.get(`/after-seminar-crm/followup-status?businessId=${bizId}`);
@@ -70,11 +102,11 @@ export default function AfterSeminarDashboard() {
   };
 
   const handleToggleFollowUp = async () => {
-    if(!selectedBusiness) return toast.error("Please select a business first.");
+    if(!activeBusinessId) return toast.error("Please select a business first.");
     const newStatus = !isFollowUpOn;
     setIsFollowUpOn(newStatus);
     try {
-      await axios.post('/after-seminar-crm/toggle-followup', { businessId: selectedBusiness, isOn: newStatus });
+      await axios.post('/after-seminar-crm/toggle-followup', { businessId: activeBusinessId, isOn: newStatus });
       if (newStatus) toast.success("Auto Follow-Up STARTED!", { icon: '🚀' });
       else toast.error("Auto Follow-Up STOPPED!", { icon: '🛑' });
     } catch (error) {
@@ -83,59 +115,18 @@ export default function AfterSeminarDashboard() {
     }
   };
 
-  const rawRole = user?.role || JSON.parse(localStorage.getItem('user'))?.role || '';
-  const userRole = rawRole.toUpperCase().replace(/ /g, '_'); 
-  const isAdmin = ['SYSTEM_ADMIN', 'DIRECTOR'].includes(userRole);
-  const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
-
-  // 🔥 BATCH FILTER DEBUGGING 🔥
-  console.log("=== BATCH FILTER DEBUG ===");
-  console.log("User Data:", user);
-  console.log("Is Admin?:", isAdmin);
-  console.log("Selected Business State:", selectedBusiness);
-  console.log("Total Batches from DB:", batches.length);
-  
-// 🔥 BATCH FILTER LOGIC (100% FIXED & BULLETPROOF) 🔥
-// 🔥 BATCH FILTER LOGIC (100% FIXED FOR COORDINATORS) 🔥
-  const displayBatches = batches.filter(b => {
-      if (isAdmin && !selectedBusiness) return true; 
-      if (isAdmin && selectedBusiness) return String(b.businessId) === String(selectedBusiness);
-      
-      const uBizId = String(user?.businessId || selectedBusiness || '').trim();
-      const uBizName = String(user?.businessType || '').toLowerCase().trim();
-      
-      const batchBizId = String(b.businessId).trim();
-      const batchBizName = String(b.business?.name || '').toLowerCase().trim();
-      
-      // Strict Match
-      if (uBizId !== '' && batchBizId === uBizId) return true;
-      if (uBizName !== '' && batchBizName === uBizName) return true;
-      
-      // Fuzzy Match (Nam deke kotasak hari thiyenawada balanawa. Eg: "art" matches "art class")
-      if (uBizName !== '' && batchBizName.includes(uBizName)) return true;
-      if (uBizName !== '' && uBizName.includes(batchBizName)) return true;
-
-      return false;
-  });
-
-  console.log("Final Batches that will be shown in Dropdown:", displayBatches.length);
-  console.log("==========================");
-
-  const activeBusinessId = isAdmin ? selectedBusiness : (user?.businessId || selectedBusiness);
-  const needsToSelectBusiness = isAdmin && !selectedBusiness;
-
   return (
-    <div className="h-full flex flex-col gap-4 animate-fade-in-up text-slate-300">
+    <div className="h-full flex flex-col gap-4 animate-fade-in-up text-slate-300 relative">
       <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-[#23303f] p-3 rounded-2xl shadow-md border border-white/5">
         <div className="flex gap-2 p-1 bg-[#1a2430] rounded-full border border-white/5 w-full xl:w-auto overflow-x-auto custom-scrollbar">
-          <button onClick={() => setActiveMode('CRM')} className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 whitespace-nowrap ${activeMode === 'CRM' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}><FaWhatsapp /> After Seminar CRM</button>
-          <button onClick={() => setActiveMode('CALL_CAMPAIGN')} className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 whitespace-nowrap ${activeMode === 'CALL_CAMPAIGN' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}>
-            {(isAdmin || isManager) ? <><FaChartBar /> Campaign Progress</> : <><FaHeadset /> Call Campaign</>}
+          <button onClick={() => {setActiveMode('CRM'); setSelectedLead(null);}} className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 whitespace-nowrap ${activeMode === 'CRM' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}><FaWhatsapp /> After Seminar CRM</button>
+          <button onClick={() => {setActiveMode('CALL_CAMPAIGN'); setSelectedLead(null);}} className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 whitespace-nowrap ${activeMode === 'CALL_CAMPAIGN' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}>
+            {isManager ? <><FaChartBar /> Campaign Progress</> : <><FaHeadset /> Call Campaign</>}
           </button>
         </div>
 
         <div className="flex items-center gap-3 w-full xl:w-auto overflow-x-auto">
-          {(isAdmin || isManager) && (
+          {isManager && (
             <button onClick={handleToggleFollowUp} disabled={needsToSelectBusiness} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-xs transition-all shadow-md border whitespace-nowrap ${isFollowUpOn ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/50 hover:bg-red-500/30'} ${needsToSelectBusiness ? 'opacity-50 cursor-not-allowed' : ''}`}>
               {isFollowUpOn ? <FaRobot className="animate-pulse" /> : <FaPowerOff />}
               {isFollowUpOn ? 'FOLLOW-UP: ON' : 'FOLLOW-UP: OFF'}
@@ -146,6 +137,7 @@ export default function AfterSeminarDashboard() {
 
           <div className="flex items-center gap-3">
             <FaFilter className="text-slate-500 shrink-0" />
+            
             {isAdmin && (
               <select value={selectedBusiness} onChange={(e) => { setSelectedBusiness(e.target.value); setSelectedBatch(''); }} className="bg-[#1a2430] border border-white/10 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-emerald-600">
                 <option value="">Select Business</option>
@@ -185,6 +177,36 @@ export default function AfterSeminarDashboard() {
             ) : (
                 <AfterSeminarStaffExecution filters={{ selectedBusiness: activeBusinessId, selectedBatch }} allBatches={displayBatches} setSelectedLead={setSelectedLead} />
             )}
+        </div>
+      )}
+
+      {/* 🔥 CALL CAMPAIGN CHAT MODAL (IFRAME TYPE POPUP) 🔥 */}
+      {/* 🔥 CALL CAMPAIGN CHAT MODAL (IFRAME TYPE POPUP) 🔥 */}
+      {activeMode === 'CALL_CAMPAIGN' && selectedLead && (
+        // 👇 Methana p-4 ekata passe pl-[280px] wage padding ekak add kara
+        <div className="fixed inset-0 z-[100] bg-[#020617]/90 backdrop-blur-sm flex items-center justify-center p-4 md:pl-[280px] lg:pl-[320px] animate-fade-in">
+            <div className="bg-[#1a2430] w-full max-w-[1500px] h-full max-h-[90vh] rounded-3xl flex flex-col overflow-hidden border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative">
+                
+                {/* Modal Header */}
+                <div className="bg-[#0f172a] px-6 py-4 flex justify-between items-center border-b border-slate-700">
+                    <div>
+                        <h3 className="text-white font-bold text-lg">Campaign Workspace</h3>
+                        <p className="text-emerald-400 text-xs font-semibold">Communicating with: {selectedLead.phone}</p>
+                    </div>
+                    <button 
+                        onClick={() => setSelectedLead(null)} 
+                        className="bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white p-3 rounded-xl transition-all shadow-sm border border-red-500/20"
+                    >
+                        <FaTimes size={16} />
+                    </button>
+                </div>
+
+                {/* Modal Content - Chat & Panel */}
+                <div className="flex-1 flex gap-4 p-4 h-[calc(100%-70px)] bg-[#0b141a]">
+                    <AfterSeminarChatArea selectedLead={selectedLead} />
+                    <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
+                </div>
+            </div>
         </div>
       )}
     </div>

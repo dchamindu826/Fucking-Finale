@@ -19,20 +19,25 @@ import ContentHub from './components/common/contenthub/ContentHub';
 import StaffManagement from './components/common/StaffManagement'; 
 import PaymentManagement from './components/common/PaymentManagement';
 import StudentDataCenter from './components/common/StudentDataCenter';
+import ClassTimetable from './components/common/ClassTimetable';
+import TaskCenter from './components/common/TaskCenter';
 import AfterSeminarDashboard from './components/AfterSeminarCRM/AfterSeminarDashboard';
 
 // System Admin CRM Setup
 import CrmManagement from './components/admin/CrmManagement';
+import DatabaseManager from './components/admin/DatabaseManager';
 
 // Coordinator CRM Dashboard (For Manager & Staff)
 import CoordinatorDashboard from './pages/ClassCoordinator/CoordinatorDashboard';
 
 // Department Dashboards (Mangers & Staff)
 import ManagerDashboard from './pages/class_coordinator/manager/ManagerDashboard';
-import DeliveryDashboard from './pages/delivery/DeliveryDashboard'; // 🔥 NEW 🔥
+import DeliveryDashboard from './pages/delivery/DeliveryDashboard'; 
 
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
+// 🔥 NEW: Student Delivery Hub Import 🔥
+import StudentDeliveryHub from './pages/student/components/DeliveryHub'; 
 
 export default function App() {
   const [loggedInUser, setLoggedInUser] = useState(null);
@@ -61,7 +66,6 @@ export default function App() {
 
     if (role === 'STUDENT' || role === 'USER') return '/student/dashboard';
     
-    // 🔥 ALUTH TEAM EKE AYATA (Kelinma CRM ekata yanawa) 🔥
     if (role === 'CALLER') return '/workspace/crm'; 
     
     if (role === 'MANAGER' || role === 'ASS MANAGER' || role === 'STAFF') {
@@ -111,7 +115,7 @@ export default function App() {
             <Route path="/technical/dashboard" element={<ManagerDashboard />} />
             <Route path="/workspace/call-campaign" element={<CallCampaignModule loggedInUser={loggedInUser} />} />
             
-            {/* 🔥 Delivery Dashboard Route 🔥 */}
+            {/* Delivery Dashboard Route */}
             <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
 
             {/* Common Panels */}
@@ -119,9 +123,12 @@ export default function App() {
             <Route path="/admin/staff" element={<StaffManagement loggedInUser={loggedInUser} />} />
             <Route path="/admin/payments" element={<PaymentManagement loggedInUser={loggedInUser} />} />
             <Route path="/admin/student-center" element={<StudentDataCenter loggedInUser={loggedInUser} />} />
+            <Route path="/workspace/timetable" element={<ClassTimetable />} />
+            <Route path="/workspace/tasks" element={<TaskCenter loggedInUser={loggedInUser} />} />
 
             {/* System Admin CRM Configuration */}
             <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
+            <Route path="/admin/database" element={<DatabaseManager />} />
 
             {/* Active CRM Interface for Staff & Managers */}
             <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
@@ -133,6 +140,12 @@ export default function App() {
         <Route 
           path="/student/dashboard" 
           element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDashboard /> : <Navigate to="/login" />} 
+        />
+        
+        {/* 🔥 NEW: Student Delivery Route 🔥 */}
+        <Route 
+          path="/student/delivery" 
+          element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDeliveryHub /> : <Navigate to="/login" />} 
         />
 
         <Route path="*" element={<Navigate to="/" />} />

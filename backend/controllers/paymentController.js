@@ -59,7 +59,7 @@ exports.getPayments = async (req, res) => {
                     parsedSubjects = subIds.map(id => {
                         const course = courseMap[parseInt(id)];
                         if (course) systemTotal += parseFloat(course.price || 0);
-                        return course || { id, name: 'Unknown Course', price: 0 };
+                        return course || { id, name: 'Unknown Course', price: 0, code: 'N/A' };
                     });
 
                     if (p.payment_type === 2) {
@@ -149,18 +149,64 @@ exports.paymentAction = async (req, res) => {
              updateData.remark = payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`;
         }
 
-        await prisma.payment.update({
+        const updatedPayment = await prisma.payment.update({
             where: { id: parseInt(paymentId) },
             data: updateData
         });
+
+        // ==============================================================
+        // 🔥 NEW: CREATE DELIVERY RECORD ON APPROVAL 🔥
+        // ==============================================================
+        if (['Approve', 'Free Card', 'Discount'].includes(action)) {
+            
+            // Check if delivery already exists for this payment (Prevent duplicates)
+            const existingDelivery = await prisma.delivery.findUnique({
+                where: { paymentId: parseInt(paymentId) }
+            });
+
+            if (!existingDelivery && updatedPayment.subjects) {
+                try {
+                    const subIds = JSON.parse(updatedPayment.subjects).map(id => parseInt(id));
+                    
+                    // Fetch full course details to get tute names/images
+                    const courses = await prisma.course.findMany({
+                        where: { id: { in: subIds } }
+                    });
+
+                    if (courses.length > 0) {
+                        const paymentTypeStr = updatedPayment.payment_type === 1 ? 'Monthly' : (updatedPayment.payment_type === 2 ? 'Installment' : 'Full');
+
+                        await prisma.delivery.create({
+                            data: {
+                                paymentId: updatedPayment.id,
+                                studentId: updatedPayment.studentId.toString(),
+                                businessId: updatedPayment.businessId,
+                                paymentType: paymentTypeStr,
+                                status: 'Pending',
+                                items: {
+                                    create: courses.map(c => ({
+                                        courseId: c.id,
+                                        tuteName: c.name || "Tute", 
+                                        tuteImage: null, // If you have a specific tuteImage field in courses table, map it here
+                                        quantity: 1
+                                    }))
+                                }
+                            }
+                        });
+                        console.log(`🚚 Delivery created for Payment ID: ${paymentId}`);
+                    }
+                } catch(e) {
+                    console.error("Failed to create delivery record:", e);
+                }
+            }
+        }
+        // ==============================================================
 
         res.status(200).json({ message: `Payment processed as ${action}` });
     } catch (error) {
         res.status(500).json({ error: "Action failed" });
     }
 };
-
-// ... Pahalin thibba `approveInstallment`, `grantPostPay` tika ehemama thiyaganna ...
 
 // 3. 🔥 FIX: Approve Installment & Prevent Duplicates 🔥
 exports.approveInstallment = async (req, res) => {
@@ -171,10 +217,48 @@ exports.approveInstallment = async (req, res) => {
         if (!currentPay) return res.status(404).json({ error: "Payment not found" });
 
         // Approve current installment
-        await prisma.payment.update({
+        const updatedPayment = await prisma.payment.update({
             where: { id: parseInt(paymentId) },
             data: { status: 1 } 
         });
+
+        // ==============================================================
+        // 🔥 NEW: CREATE DELIVERY RECORD FOR INSTALLMENT APPROVAL 🔥
+        // ==============================================================
+        const existingDelivery = await prisma.delivery.findUnique({
+            where: { paymentId: parseInt(paymentId) }
+        });
+
+        if (!existingDelivery && updatedPayment.subjects) {
+            try {
+                const subIds = JSON.parse(updatedPayment.subjects).map(id => parseInt(id));
+                const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
+
+                if (courses.length > 0) {
+                    await prisma.delivery.create({
+                        data: {
+                            paymentId: updatedPayment.id,
+                            studentId: updatedPayment.studentId.toString(),
+                            businessId: updatedPayment.businessId,
+                            paymentType: 'Installment',
+                            status: 'Pending',
+                            items: {
+                                create: courses.map(c => ({
+                                    courseId: c.id,
+                                    tuteName: c.name || "Tute", 
+                                    tuteImage: null, 
+                                    quantity: 1
+                                }))
+                            }
+                        }
+                    });
+                    console.log(`🚚 Delivery created for Installment Payment ID: ${paymentId}`);
+                }
+            } catch(e) {
+                console.error("Failed to create delivery record for installment:", e);
+            }
+        }
+        // ==============================================================
 
         // ඊළඟ වාරිකය ගණනය කිරීම
         let nextAmount = currentPay.amount; 

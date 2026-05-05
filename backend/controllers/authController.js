@@ -86,7 +86,7 @@ exports.loginUser = async (req, res) => {
       { expiresIn: '1d' }
     );
 
-    res.status(200).json({
+res.status(200).json({
       message: "Login successful",
       token,
       user: {
@@ -101,7 +101,9 @@ exports.loginUser = async (req, res) => {
         district: user.district,
         image: user.image,
         role: user.role,
-        department: user.department
+        department: user.department,
+        // 🔥 මේ පේළිය අලුතින් add කරන්න 🔥
+        businessType: user.businessType
       }
     });
 

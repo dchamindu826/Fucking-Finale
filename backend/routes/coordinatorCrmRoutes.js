@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const coordinatorCrmController = require('../controllers/coordinatorCrmController'); 
 const multer = require('multer');
 const path = require('path');
+
+// 🔥 අපි ෆයිල් එකේ නම වෙනස් කරපු නිසා මෙතන නමත් 'freeSeminarController' කියලා හැදුවා 
+const freeSeminarController = require('../controllers/freeSeminarController'); 
 
 // Multer Storage Configuration
 const storage = multer.diskStorage({
@@ -11,39 +13,47 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-router.get('/leads', coordinatorCrmController.getLeads);
-router.post('/leads/import', coordinatorCrmController.importLead);
-router.post('/leads/assign', coordinatorCrmController.assignLeads); 
+// (අර වැඩකට නැති getMetaAnalyticsDirect පේළිය මෙතනින් අයින් කළා)
 
-router.post('/leads/update-call', coordinatorCrmController.updateCallCampaign); 
+// ==========================================================
+// FREE SEMINAR ROUTES
+// ==========================================================
 
-router.post('/leads/bulk-action', coordinatorCrmController.bulkActions);
-router.get('/leads/auto-assign-quotas', coordinatorCrmController.getAutoAssignQuotas);
+router.get('/leads', freeSeminarController.getLeads);
+router.post('/leads/import', freeSeminarController.importLead);
+router.post('/leads/assign', freeSeminarController.assignLeads); 
 
-router.get('/lead-details/:phone', coordinatorCrmController.getLeadDetails);
-router.post('/reset-password', coordinatorCrmController.resetStudentPassword);
+router.post('/leads/update-call', freeSeminarController.updateCallCampaign); 
 
-router.get('/messages/:leadId', coordinatorCrmController.getMessages);
-router.post('/messages', upload.single('media'), coordinatorCrmController.sendMessage);
-router.post('/messages/react', coordinatorCrmController.sendReaction);
+router.post('/leads/bulk-action', freeSeminarController.bulkActions);
+router.get('/leads/auto-assign-quotas', freeSeminarController.getAutoAssignQuotas);
+
+router.get('/lead-details/:phone', freeSeminarController.getLeadDetails);
+router.post('/reset-password', freeSeminarController.resetStudentPassword);
+
+router.get('/messages/:leadId', freeSeminarController.getMessages);
+router.post('/messages', upload.single('media'), freeSeminarController.sendMessage);
+router.post('/messages/react', freeSeminarController.sendReaction);
 
 // Meta Templates Routes
-router.get('/meta-templates', coordinatorCrmController.getMetaTemplates);
-router.post('/meta-templates', upload.single('media'), coordinatorCrmController.createMetaTemplate);
-router.delete('/meta-templates/:name', coordinatorCrmController.deleteMetaTemplate);
+router.get('/meta-templates', freeSeminarController.getMetaTemplates);
+router.post('/meta-templates', upload.single('media'), freeSeminarController.createMetaTemplate);
+router.delete('/meta-templates/:name', freeSeminarController.deleteMetaTemplate);
 
 // Broadcast & Leads
-router.post('/broadcast', upload.single('media'), coordinatorCrmController.sendBroadcast);
-router.get('/all-leads', coordinatorCrmController.getAllCampaignLeads);
+router.post('/broadcast', upload.single('media'), freeSeminarController.sendBroadcast);
+router.get('/all-leads', freeSeminarController.getAllCampaignLeads);
 
 // Webhook
-router.get('/webhook', coordinatorCrmController.verifyWebhook); 
-router.post('/webhook', coordinatorCrmController.receiveMessage);
+router.get('/webhook', freeSeminarController.verifyWebhook); 
+router.post('/webhook', freeSeminarController.receiveMessage);
 
-router.get('/campaign-stats', coordinatorCrmController.getCampaignStats);
+router.get('/campaign-stats', freeSeminarController.getCampaignStats);
 
-router.get('/followup-status', coordinatorCrmController.getFollowUpStatusAPI);
-router.post('/toggle-followup', coordinatorCrmController.toggleFollowUpAPI);
-router.post('/test-followup', coordinatorCrmController.testFollowUpMessage);
+router.get('/followup-status', freeSeminarController.getFollowUpStatusAPI);
+router.post('/toggle-followup', freeSeminarController.toggleFollowUpAPI);
+router.post('/test-followup', freeSeminarController.testFollowUpMessage);
+
+router.get('/meta-analytics', freeSeminarController.getUniqueNumbersCount);
 
 module.exports = router;

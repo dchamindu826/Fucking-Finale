@@ -229,25 +229,28 @@ export default function ContentHub() {
   const getTypeInt = (tabStr) => { switch(tabStr) { case 'live': return 1; case 'recording': return 2; case 'document': return 3; case 'sPaper': return 4; case 'paper': return 5; default: return 1; } };
   
   // 🔥 FIX: Bulletproof YouTube & Google Drive URL Extractor 🔥
-  const getEmbedUrl = (url) => {
+ const getEmbedUrl = (url) => {
       if (!url) return '';
       try {
-          if (url.includes('youtube.com') || url.includes('youtu.be')) {
-              const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-              const match = url.match(regExp);
-              if (match && match[2].length === 11) {
-                  return `https://www.youtube.com/embed/${match[2]}?rel=0&modestbranding=1`;
-              }
-          }
+          // Google Drive Handle kireema
           if (url.includes('drive.google.com') && url.includes('/view')) {
               return url.replace('/view', '/preview');
           }
+          
+          // YouTube Links Handle kireema 
+          const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/|shorts\/)|youtu\.be\/)([^"&?\/\s]{11})/i;
+          const match = url.match(ytRegex);
+          
+          if (match && match[1] && match[1].length === 11) {
+              // 🔥 youtube.com wenuwata youtube-nocookie.com damma 🔥
+              return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1`;
+          }
+          
           return url; 
       } catch(e) {
           return url;
       }
   };
-
   const isMatchedType = (item) => {
       const itemType = item.type ?? item.content_type ?? item.contentType;
       return itemType !== null && (parseInt(itemType) === getTypeInt(contentTab) || itemType.toString() === contentTab);
@@ -255,13 +258,13 @@ export default function ContentHub() {
   const getFolderId = (item) => { const fId = item.content_group_id ?? item.contentGroupId ?? item.folder_id; return fId ? String(fId) : null; };
 
   const toggleBusinessStatus = async (biz) => {
-      if(!window.confirm(`Are you sure you want to ${biz.status === 1 ? 'Disable' : 'Enable'} this Business?`)) return;
-      try { await api.put('/course-setup/business/toggle-status', { business_id: biz.id, status: biz.status === 1 ? 0 : 1 }); toast.success("Business Updated!"); fetchInitialData(); } catch (e) { toast.error("Failed"); }
+      if(!window.confirm(`Are you sure you want to ${biz.status === 1 ? 'Hide' : 'Show'} this Business in the Student Dashboard?`)) return;
+      try { await api.put('/course-setup/business/toggle-status', { business_id: biz.id, status: biz.status === 1 ? 0 : 1 }); toast.success("Business Visibility Updated!"); fetchInitialData(); } catch (e) { toast.error("Failed"); }
   };
 
   const toggleBatchStatus = async (batch) => {
-      if(!window.confirm(`Are you sure you want to ${batch.status === 1 ? 'Disable' : 'Enable'} this Batch?`)) return;
-      try { await api.put('/course-setup/batch/toggle-status', { batch_id: batch.id, status: batch.status === 1 ? 0 : 1 }); toast.success("Batch Updated!"); refreshBatches(activeBusiness.id); } catch (e) { toast.error("Failed"); }
+      if(!window.confirm(`Are you sure you want to ${batch.status === 1 ? 'Hide' : 'Show'} this Batch in the Student Dashboard?`)) return;
+      try { await api.put('/course-setup/batch/toggle-status', { batch_id: batch.id, status: batch.status === 1 ? 0 : 1 }); toast.success("Batch Visibility Updated!"); refreshBatches(activeBusiness.id); } catch (e) { toast.error("Failed"); }
   };
 
   const deleteItem = async (url, payload, successMsg) => {

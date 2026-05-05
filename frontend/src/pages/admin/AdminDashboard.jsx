@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Loader2, Database } from 'lucide-react'; // Database icon added
+import { Search, Filter, Loader2, Database, AlertTriangle, Activity, CheckCircle2 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import api from '../../api/axios';
 import toast from 'react-hot-toast'; // Toast for notifications
@@ -126,6 +126,50 @@ export default function AdminDashboard() {
             </ResponsiveContainer>
           </div>
         </div>
+
+        {/* 🏥 CRM SERVICE HEALTH CENTER */}
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+  {stats?.services?.map((service, index) => (
+    <div key={index} className={`relative overflow-hidden bg-slate-800/40 border ${service.status === 'RESTRICTED' ? 'border-rose-500/50' : 'border-emerald-500/30'} backdrop-blur-md p-4 rounded-2xl shadow-lg transition-all`}>
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex items-center gap-2">
+          <Activity size={16} className={service.status === 'RESTRICTED' ? 'text-rose-400' : 'text-emerald-400'} />
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{service.name}</span>
+        </div>
+        {service.status === 'RESTRICTED' ? (
+          <span className="bg-rose-500 text-[10px] font-bold px-2 py-0.5 rounded-full animate-pulse">LOCKED</span>
+        ) : (
+          <span className="bg-emerald-500 text-[10px] font-bold px-2 py-0.5 rounded-full">LIVE</span>
+        )}
+      </div>
+
+      <div className="flex items-end justify-between mt-4">
+        <div>
+          <p className="text-2xl font-black text-white">{service.totalLeads.toLocaleString()}</p>
+          <p className="text-[9px] text-gray-500 font-bold uppercase">Total Leads Processed</p>
+        </div>
+        <div className="text-right">
+          <p className={`text-lg font-bold ${service.status === 'RESTRICTED' ? 'text-rose-400' : 'text-emerald-400'}`}>
+            {service.healthScore}%
+          </p>
+          <p className="text-[9px] text-gray-500 font-bold uppercase">Delivery Rate</p>
+        </div>
+      </div>
+
+      {/* Progress bar for delivery rate */}
+      <div className="w-full bg-black/20 h-1.5 rounded-full mt-3 overflow-hidden">
+        <div 
+          className={`h-full transition-all duration-1000 ${service.status === 'RESTRICTED' ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+          style={{ width: `${service.healthScore}%` }}
+        ></div>
+      </div>
+
+      {service.status === 'RESTRICTED' && (
+        <div className="absolute inset-0 bg-rose-950/10 backdrop-blur-[1px] pointer-events-none"></div>
+      )}
+    </div>
+  ))}
+</div>
 
         <div className="xl:col-span-2 bg-slate-800/40 border border-white/10 backdrop-blur-md p-6 rounded-2xl shadow-lg flex flex-col">
           <h3 className="text-xs font-bold text-gray-400 tracking-wider mb-6">REVENUE BY COURSE</h3>

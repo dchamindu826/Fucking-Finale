@@ -1,41 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Check, X as CloseIcon, Clock, ShieldCheck, Wallet, CalendarDays, AlertCircle, Unlock, Loader2, User, Tag, Gift, FileImage, MessageSquare, Trash2, ChevronLeft, ChevronRight, CreditCard, FileText } from 'lucide-react';
+import { Check, X as CloseIcon, Clock, ShieldCheck, Wallet, CalendarDays, AlertCircle, Unlock, Loader2, User, Tag, Gift, FileImage, MessageSquare, Trash2, ChevronLeft, ChevronRight, CreditCard, FileText } from 'lucide-react';
 import axios from '../../api/axios';
 import toast from 'react-hot-toast';
+import PaymentFilters from './PaymentFilters';
+import StaffPerformanceModal from './StaffPerformanceModal';
 
 export default function PaymentManagement({ loggedInUser }) {
     const isAdmin = loggedInUser?.role?.toUpperCase() === 'SYSTEM_ADMIN' || loggedInUser?.role?.toUpperCase() === 'DIRECTOR';
     
+    // Core Data States
     const [loading, setLoading] = useState(true);
     const [payments, setPayments] = useState([]);
     const [businesses, setBusinesses] = useState([]); 
-    const [allBatches, setAllBatches] = useState([]); 
-    const [activeTab, setActiveTab] = useState('Pending'); 
+    const [batches, setBatches] = useState([]); 
+    const [groups, setGroups] = useState([]); 
+    const [subjects, setSubjects] = useState([]); 
 
-    const [searchQuery, setSearchQuery] = useState('');
-    const [filterBusinessId, setFilterBusinessId] = useState('All');
-    const [availableBatches, setAvailableBatches] = useState([]); 
-    const [filterBatch, setFilterBatch] = useState('All');
-    const [filterPaymentType, setFilterPaymentType] = useState('All'); 
+    // Filter States
+    const [activeTab, setActiveTab] = useState('Pending'); 
+    const [filters, setFilters] = useState({
+        search: '',
+        businessId: 'All',
+        batchId: 'All',
+        groupId: 'All',
+        subjectId: 'All',
+        dateFrom: '',
+        dateTo: '',
+        method: 'All'
+    });
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
+    // Modal States
     const [studentActionModal, setStudentActionModal] = useState(null); 
     const [actioningPaymentId, setActioningPaymentId] = useState(null);
-
     const [installmentModal, setInstallmentModal] = useState(null);
     const [nextDueDate, setNextDueDate] = useState('');
     const [isTestApprove, setIsTestApprove] = useState(false);
-
     const [advancedActionModal, setAdvancedActionModal] = useState(null); 
     const [customPrices, setCustomPrices] = useState({}); 
     const [actionRemark, setActionRemark] = useState('');
     const [postPayDays, setPostPayDays] = useState(3);
-
-    // 🔥 NEW: Slip View Modal State
     const [viewSlipUrl, setViewSlipUrl] = useState(null);
+    const [showStaffModal, setShowStaffModal] = useState(false);
 
     const getDefaultNextDueDate = () => {
         const date = new Date();
@@ -52,10 +61,6 @@ export default function PaymentManagement({ loggedInUser }) {
                 const bizRes = await axios.get('/admin/businesses');
                 setBusinesses(bizRes.data || []);
             }
-            try {
-                const batchRes = await axios.get('/admin/manager/batches-full');
-                setAllBatches(batchRes.data || []);
-            } catch(e) {}
         } catch (error) {
             toast.error("Failed to load data.");
         } finally {
@@ -65,49 +70,111 @@ export default function PaymentManagement({ loggedInUser }) {
 
     useEffect(() => { fetchData(); }, [isAdmin]);
 
+    // 🔥 FIX: Resilient Batch, Group, and Subject Extraction Logic
     useEffect(() => {
-        if (filterBusinessId === 'All') {
-            const uniqueBatches = [...new Set(payments.map(p => p.batch).filter(Boolean))];
-            setAvailableBatches(uniqueBatches);
+        if (filters.businessId !== 'All') {
+             axios.get(`/admin/batches/${filters.businessId}`).then(res => setBatches(res.data.batches || res.data || []));
         } else {
-            axios.get(`/admin/batches/${filterBusinessId}`)
-                .then(res => {
-                    const bData = res.data.batches || res.data || [];
-                    setAvailableBatches(bData.map(b => b.name));
-                }).catch(err => console.error(err));
+             const uniqueBatches = Array.from(new Set(payments.map(p => JSON.stringify({id: p.batchId || p.batch_id, name: p.batch || p.batchName}))))
+                 .map(str => JSON.parse(str)).filter(b => b.name && b.name !== 'N/A' && b.id);
+             setBatches(uniqueBatches);
         }
-    }, [filterBusinessId, payments]);
+    }, [filters.businessId, payments]);
 
     useEffect(() => {
-        setCurrentPage(1);
-    }, [activeTab, searchQuery, filterBusinessId, filterBatch, filterPaymentType]);
+        let extractedGroups = [];
+        let extractedSubjects = new Map();
 
+        // 1. Try to extract from Batches state first (if backend sent full data)
+        const selectedBatch = batches.find(b => (b.id?.toString() === filters.batchId || b.batch_id?.toString() === filters.batchId));
+        
+        if (selectedBatch && selectedBatch.groups && selectedBatch.groups.length > 0) {
+            extractedGroups = selectedBatch.groups;
+            selectedBatch.groups.forEach(g => {
+                const coursesList = g.courses || g.subjects || [];
+                coursesList.forEach(c => {
+                    if(c.id) extractedSubjects.set(c.id, { id: c.id, name: c.name, code: c.code || '' });
+                });
+            });
+        } else {
+            // 2. Fallback: Extract from Payments mapping
+            const validPayments = payments.filter(p => 
+                filters.batchId === 'All' || 
+                p.batchId?.toString() === filters.batchId || 
+                p.batch_id?.toString() === filters.batchId
+            );
+
+            const uniqueGroups = Array.from(new Set(validPayments.map(p => {
+                const gId = p.groupId || p.group_id;
+                const gName = p.groupName || p.group || (gId ? `Group ${gId}` : 'Unknown');
+                return JSON.stringify({ id: gId, name: gName });
+            }))).map(str => JSON.parse(str)).filter(g => g.id);
+            
+            extractedGroups = uniqueGroups;
+
+            validPayments.forEach(p => {
+                const subs = p.subjectsList || p.subjects || p.courses || [];
+                subs.forEach(s => {
+                    const sId = s.id || s.course_id || s.subject_id;
+                    const sName = s.name || s.courseName || s.subjectName;
+                    const sCode = s.code || s.courseCode || s.subjectCode || '';
+                    if (sId) extractedSubjects.set(sId, { id: sId, name: sName, code: sCode });
+                });
+            });
+        }
+
+        setGroups(extractedGroups);
+        setSubjects(Array.from(extractedSubjects.values()));
+    }, [filters.batchId, batches, payments]);
+
+    useEffect(() => { setCurrentPage(1); }, [activeTab, filters]);
+
+    // 🚀 MASTER FILTERING LOGIC (Updated to check multiple key formats)
     const filteredPayments = payments.filter(p => {
         let matchesTab = false;
-        
-        if (activeTab === 'PayHere') {
-            matchesTab = p.method === 'PayHere' && p.status !== 'Trash';
-        } else if (activeTab === 'Trash') {
-            matchesTab = p.status === 'Trash';
-        } else {
-            matchesTab = p.status === activeTab && p.method !== 'PayHere' && p.status !== 'Trash';
+        if (activeTab === 'PayHere') matchesTab = p.method === 'Online' && p.status !== 'Trash';
+        else if (activeTab === 'Trash') matchesTab = p.status === 'Trash';
+        else matchesTab = p.status === activeTab && p.method !== 'Online' && p.status !== 'Trash';
+
+        const searchVal = filters.search.toLowerCase();
+        const matchesSearch = p.studentName?.toLowerCase().includes(searchVal) || p.studentNo?.toLowerCase().includes(searchVal);
+
+        const pBizId = p.businessId || p.business_id;
+        const pBatchId = p.batchId || p.batch_id;
+        const pGroupId = p.groupId || p.group_id;
+
+        let matchesBiz = isAdmin ? (filters.businessId === 'All' || pBizId?.toString() === filters.businessId) : true;
+        const matchesBatch = filters.batchId === 'All' || pBatchId?.toString() === filters.batchId;
+        const matchesGroup = filters.groupId === 'All' || pGroupId?.toString() === filters.groupId;
+        const matchesMethod = filters.method === 'All' || p.method === filters.method;
+
+        let matchesSubject = filters.subjectId === 'All';
+        if (!matchesSubject) {
+            const subs = p.subjectsList || p.subjects || p.courses || [];
+            matchesSubject = subs.some(s => {
+                const sId = s.id || s.course_id || s.subject_id;
+                return sId?.toString() === filters.subjectId;
+            });
         }
 
-        const matchesSearch = p.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) || p.studentNo?.toLowerCase().includes(searchQuery.toLowerCase());
-        
-        let matchesBiz = true;
-        if (filterBusinessId !== 'All') {
-            const selectedBiz = businesses.find(b => b.id.toString() === filterBusinessId);
-            matchesBiz = p.business === selectedBiz?.name;
+        let matchesDate = true;
+        if (filters.dateFrom || filters.dateTo) {
+            const payDate = new Date(p.date);
+            if (filters.dateFrom && payDate < new Date(filters.dateFrom)) matchesDate = false;
+            if (filters.dateTo && payDate > new Date(filters.dateTo)) matchesDate = false;
         }
 
-        const matchesBatch = filterBatch === 'All' || p.batch === filterBatch;
-        const matchesType = filterPaymentType === 'All' || p.type === filterPaymentType;
-        
-        return matchesTab && matchesSearch && matchesBiz && matchesBatch && matchesType;
+        return matchesTab && matchesSearch && matchesBiz && matchesBatch && matchesGroup && matchesSubject && matchesDate && matchesMethod;
     });
 
-    const groupedAllByStudent = payments.reduce((acc, pay) => {
+    const stats = {
+        pending: payments.filter(p => p.status === 'Pending').length,
+        approved: payments.filter(p => p.status === 'Approved').length,
+        freeCards: payments.filter(p => p.status === 'Free Card').length,
+        discounts: payments.filter(p => p.status === 'Discount').length,
+    };
+
+    const groupedAllByStudent = filteredPayments.reduce((acc, pay) => {
         if (!acc[pay.studentId]) {
             acc[pay.studentId] = { studentId: pay.studentId, studentName: pay.studentName, studentNo: pay.studentNo, allPayments: [] };
         }
@@ -115,9 +182,7 @@ export default function PaymentManagement({ loggedInUser }) {
         return acc;
     }, {});
 
-    const visibleStudentIds = [...new Set(filteredPayments.map(p => p.studentId))];
-    const visibleStudents = visibleStudentIds.map(id => groupedAllByStudent[id]);
-
+    const visibleStudents = Object.values(groupedAllByStudent);
     const totalPages = Math.ceil(visibleStudents.length / itemsPerPage) || 1;
     const paginatedStudents = visibleStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -128,19 +193,13 @@ export default function PaymentManagement({ loggedInUser }) {
             setIsTestApprove(action === 'Test Approve');
             return;
         }
-
         if(!window.confirm(`Are you sure you want to ${action} this payment?`)) return;
-        
         try {
             setActioningPaymentId(payment.id);
             await axios.post('/admin/payments/action', { paymentId: payment.id, action: action });
             toast.success(`Payment processed as ${action}!`);
             refreshAfterAction(payment.studentId);
-        } catch (error) {
-            toast.error(`Failed to process payment.`);
-        } finally {
-            setActioningPaymentId(null);
-        }
+        } catch (error) { toast.error(`Failed to process payment.`); } finally { setActioningPaymentId(null); }
     };
 
     const handleInstallmentApprove = async (e) => {
@@ -148,59 +207,40 @@ export default function PaymentManagement({ loggedInUser }) {
         try {
             const actionType = isTestApprove ? 'Test Approve' : 'Approve';
             await axios.post('/admin/payments/action/installment', { 
-                paymentId: installmentModal.id, 
-                nextDueDate: nextDueDate,
-                action: actionType 
+                paymentId: installmentModal.id, nextDueDate: nextDueDate, action: actionType 
             });
             toast.success(`Installment ${actionType}d & Next Scheduled!`);
             const targetStudentId = installmentModal.studentId;
             setInstallmentModal(null);
             refreshAfterAction(targetStudentId);
-        } catch (error) {
-            toast.error("Failed to process installment.");
-        }
+        } catch (error) { toast.error("Failed to process installment."); }
     };
 
     const submitAdvancedAction = async () => {
         const { type, payment } = advancedActionModal;
-
         if ((type === 'Discount' || type === 'FreeCard') && actionRemark.trim() === '') {
             return toast.error("A remark is mandatory for Discounts and Free Cards.");
         }
-
         try {
             setActioningPaymentId(payment.id);
-
             if (type === 'PostPay') {
                 await axios.post('/admin/payments/post-pay', { paymentId: payment.id, days: postPayDays });
-                toast.success(`Post Pay granted for ${postPayDays} days!`);
+                toast.success(`Post Pay granted!`);
             } else {
-                let finalAmount = 0;
-                let detailedRemark = actionRemark;
-
+                let finalAmount = 0; let detailedRemark = actionRemark;
                 if (type === 'Discount') {
                     finalAmount = payment.subjectsList.reduce((sum, sub) => sum + (parseFloat(customPrices[sub.id]) || 0), 0);
                     const breakdownStr = payment.subjectsList.map(sub => `${sub.code}: LKR ${customPrices[sub.id] || 0}`).join(' | ');
                     detailedRemark = `Custom Breakdown: [${breakdownStr}]\nReason: ${actionRemark}`;
                 }
-
                 await axios.post('/admin/payments/action', {
-                    paymentId: payment.id,
-                    action: type === 'FreeCard' ? 'Free Card' : 'Discount',
-                    customAmount: finalAmount,
-                    remark: detailedRemark
+                    paymentId: payment.id, action: type === 'FreeCard' ? 'Free Card' : 'Discount',
+                    customAmount: finalAmount, remark: detailedRemark
                 });
-                toast.success(`Payment processed as ${type === 'FreeCard' ? 'Free Card' : 'Discount'}!`);
+                toast.success(`Payment processed as ${type}!`);
             }
-
-            setAdvancedActionModal(null);
-            setActionRemark('');
-            refreshAfterAction(payment.studentId);
-        } catch (error) {
-            toast.error("Failed to process action.");
-        } finally {
-            setActioningPaymentId(null);
-        }
+            setAdvancedActionModal(null); setActionRemark(''); refreshAfterAction(payment.studentId);
+        } catch (error) { toast.error("Failed to process action."); } finally { setActioningPaymentId(null); }
     };
 
     const refreshAfterAction = async (studentId) => {
@@ -214,18 +254,16 @@ export default function PaymentManagement({ loggedInUser }) {
     };
 
     const openAdvancedModal = (type, payment) => {
-        setAdvancedActionModal({ type, payment });
-        setActionRemark('');
+        setAdvancedActionModal({ type, payment }); setActionRemark('');
         if (type === 'Discount') {
             const initialPrices = {};
-            payment.subjectsList.forEach(s => initialPrices[s.id] = s.price || 0);
+            const subsList = payment.subjectsList || payment.subjects || payment.courses || [];
+            subsList.forEach(s => initialPrices[s.id || s.course_id] = s.price || 0);
             setCustomPrices(initialPrices);
         }
     };
-
-    const handleCustomPriceChange = (id, val) => {
-        setCustomPrices(prev => ({ ...prev, [id]: val }));
-    };
+    
+    const handleCustomPriceChange = (id, val) => setCustomPrices(prev => ({ ...prev, [id]: val }));
 
     const getTabClass = (tabName) => {
         const base = "px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 whitespace-nowrap border";
@@ -253,41 +291,20 @@ export default function PaymentManagement({ loggedInUser }) {
                 </div>
                 <div>
                     <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide">Payment Hub</h2>
-                    <p className="text-slate-400 font-medium text-sm mt-1">Manage student payments, slips, and tally with system prices.</p>
+                    <p className="text-slate-400 font-medium text-sm mt-1">Manage student payments, review slips, and filter effortlessly.</p>
                 </div>
             </div>
 
-            <div className="bg-[#1e2336]/60 p-5 rounded-2xl border border-white/5 mb-6 shadow-lg backdrop-blur-xl">
-                <div className="flex flex-col md:flex-row gap-4 items-center">
-                    <div className="flex-1 w-full relative">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-                        <input type="text" placeholder="Search by Student Name or ID..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl pl-11 pr-4 py-3 text-white outline-none focus:border-emerald-500/50 transition-colors text-sm" />
-                    </div>
-                    <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                        {isAdmin && (
-                            <select value={filterBusinessId} onChange={e => {setFilterBusinessId(e.target.value); setFilterBatch('All');}} className="bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-emerald-500/50 cursor-pointer min-w-[150px] appearance-none">
-                                <option value="All">All Businesses</option>
-                                {businesses.map(biz => <option key={biz.id} value={biz.id}>{biz.name}</option>)}
-                            </select>
-                        )}
-                        <select value={filterBatch} onChange={e => setFilterBatch(e.target.value)} className="bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-emerald-500/50 cursor-pointer min-w-[140px] appearance-none">
-                            <option value="All">All Batches</option>
-                            {availableBatches.map(batchName => <option key={batchName} value={batchName}>{batchName}</option>)}
-                        </select>
-                        <select value={filterPaymentType} onChange={e => setFilterPaymentType(e.target.value)} className="bg-black/40 border border-white/5 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:border-emerald-500/50 cursor-pointer min-w-[120px] appearance-none">
-                            <option value="All">All Types</option>
-                            <option value="Monthly">Monthly</option>
-                            <option value="Installment">Installments</option>
-                            <option value="Full">Full</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
+            <PaymentFilters 
+                isAdmin={isAdmin} filters={filters} setFilters={setFilters} 
+                businesses={businesses} batches={batches} groups={groups} 
+                subjects={subjects} stats={stats} onOpenStaffStats={() => setShowStaffModal(true)}
+            />
 
             <div className="flex gap-3 mb-8 pb-2 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveTab('Pending')} className={getTabClass('Pending')}><Clock size={16}/> Pending</button>
                 <button onClick={() => setActiveTab('Approved')} className={getTabClass('Approved')}><Check size={16}/> Approved</button>
-                <button onClick={() => setActiveTab('PayHere')} className={getTabClass('PayHere')}><CreditCard size={16}/> PayHere</button>
+                <button onClick={() => setActiveTab('PayHere')} className={getTabClass('PayHere')}><CreditCard size={16}/> Online (PayHere)</button>
                 <button onClick={() => setActiveTab('Free Card')} className={getTabClass('Free Card')}><Gift size={16}/> Free Card</button>
                 <button onClick={() => setActiveTab('Discount')} className={getTabClass('Discount')}><Tag size={16}/> Discount</button>
                 <button onClick={() => setActiveTab('Rejected')} className={getTabClass('Rejected')}><CloseIcon size={16}/> Rejected</button>
@@ -301,18 +318,11 @@ export default function PaymentManagement({ loggedInUser }) {
                 {loading ? (
                     <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40}/></div>
                 ) : paginatedStudents.length === 0 ? (
-                    <div className="text-center py-20 bg-[#1e2336]/40 rounded-[2rem] border border-white/5"><p className="text-slate-500 font-bold text-lg">No records found for this section.</p></div>
+                    <div className="text-center py-20 bg-[#1e2336]/40 rounded-[2rem] border border-white/5"><p className="text-slate-500 font-bold text-lg">No records found for the selected filters.</p></div>
                 ) : (
                     <>
                         {paginatedStudents.map(student => {
-                            const matchingPayments = student.allPayments.filter(p => {
-                                if (activeTab === 'PayHere') return p.method === 'PayHere' && p.status !== 'Trash';
-                                if (activeTab === 'Trash') return p.status === 'Trash';
-                                return p.status === activeTab && p.method !== 'PayHere' && p.status !== 'Trash';
-                            });
-                            
-                            const latestPayment = matchingPayments[0];
-
+                            const latestPayment = student.allPayments[0];
                             return (
                             <div key={student.studentId} className="bg-[#1e2336]/80 border border-white/5 hover:border-white/10 p-5 md:p-6 rounded-2xl flex flex-col md:flex-row items-start justify-between gap-6 transition-colors shadow-lg">
                                 <div className="flex items-start gap-4 flex-1 w-full">
@@ -334,16 +344,15 @@ export default function PaymentManagement({ loggedInUser }) {
                                                 <div className="flex flex-wrap gap-2 mt-3 items-center">
                                                     <span className="text-[10px] font-bold bg-blue-500/10 text-blue-400 px-3 py-1 rounded-md border border-blue-500/20 uppercase tracking-widest">Type: {latestPayment.type}</span>
                                                     <span className="text-[10px] font-bold bg-purple-500/10 text-purple-400 px-3 py-1 rounded-md border border-purple-500/20 uppercase tracking-widest">Method: {latestPayment.method}</span>
-                                                    {matchingPayments.length > 1 && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+{matchingPayments.length - 1} more in queue</span>}
+                                                    {student.allPayments.length > 1 && <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded uppercase tracking-widest">+{student.allPayments.length - 1} Payments</span>}
                                                 </div>
                                             </>
                                         )}
                                     </div>
                                 </div>
-                                
                                 <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-white/5 md:border-t-0 pt-4 md:pt-0 shrink-0">
                                     <button onClick={() => setStudentActionModal(student)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 px-8 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg whitespace-nowrap">
-                                        Review & Action
+                                        Review Payments
                                     </button>
                                 </div>
                             </div>
@@ -351,9 +360,9 @@ export default function PaymentManagement({ loggedInUser }) {
 
                         {totalPages > 1 && (
                             <div className="flex justify-between items-center mt-6 bg-[#1e2336]/40 p-4 rounded-xl border border-white/5">
-                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16}/> Prev</button>
+                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16}/> Prev</button>
                                 <span className="text-sm font-bold text-white bg-black/40 px-4 py-1.5 rounded-lg border border-white/5">Page {currentPage} of {totalPages}</span>
-                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">Next <ChevronRight size={16}/></button>
+                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16}/></button>
                             </div>
                         )}
                     </>
@@ -410,7 +419,6 @@ export default function PaymentManagement({ loggedInUser }) {
                                                 <h5 className="text-lg font-black text-white">{pay.business} <span className="text-slate-400 text-sm font-medium">| {pay.batch}</span></h5>
                                                 <div className="flex items-center gap-2 mt-2">
                                                     <span className="bg-white/10 text-white text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest">{pay.type}</span>
-                                                    {/* 🔥 FIX: Math.max to prevent "Phase 3 of 2" logic bugs */}
                                                     {pay.type === 'Installment' && (
                                                         <span className="bg-purple-500/20 text-purple-300 text-[10px] px-2 py-1 rounded font-bold uppercase tracking-widest border border-purple-500/30">
                                                             Phase {pay.installmentNo} of {Math.max(pay.installmentNo, pay.totalPhases || 1)}
@@ -462,7 +470,6 @@ export default function PaymentManagement({ loggedInUser }) {
                                             <div>
                                                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><FileImage size={14}/> Attached Slips</p>
                                                 <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
-                                                    {/* 🔥 FIX: Handling PDFs and clickable Iframe Views */}
                                                     {pay.slips.length > 0 ? pay.slips.map((imgStr, i) => {
                                                         const fileUrl = `http://72.62.249.211:5000/documents/${imgStr}`;
                                                         const isPdf = imgStr.toLowerCase().endsWith('.pdf');
@@ -628,7 +635,6 @@ export default function PaymentManagement({ loggedInUser }) {
                 document.body
             )}
 
-            {/* 🔥 NEW: Iframe / Large Image Viewer Portal (WITH DEBUG) 🔥 */}
             {viewSlipUrl && createPortal(
                 <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
                     <div className="relative w-full max-w-4xl h-[85vh] bg-[#15192b] border border-white/10 rounded-2xl overflow-hidden flex flex-col shadow-2xl">
@@ -641,7 +647,6 @@ export default function PaymentManagement({ loggedInUser }) {
                         <div className="flex-1 w-full h-full bg-black/80 flex items-center justify-center p-2 relative">
                             {viewSlipUrl.toLowerCase().endsWith('.pdf') ? (
                                 <div className="w-full h-full flex flex-col bg-white rounded-xl overflow-hidden">
-                                    {/* 🔥 DEBUG URL BAR: මේ ලින්ක් එක ක්ලික් කරලා බලන්න PDF එක කෙලින්ම load වෙනවද කියලා 🔥 */}
                                     <div className="bg-yellow-100 text-black p-3 text-xs font-bold break-all flex justify-between items-center">
                                         <span>DEBUG URL: <a href={viewSlipUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline ml-2">{viewSlipUrl}</a></span>
                                         <span className="text-red-500">Iframe එකේ පේන්නේ නැත්නම් ලින්ක් එක ක්ලික් කරලා බලන්න.</span>
@@ -660,6 +665,12 @@ export default function PaymentManagement({ loggedInUser }) {
                     </div>
                 </div>,
                 document.body
+            )}
+
+            {showStaffModal && (
+                <StaffPerformanceModal 
+                    onClose={() => setShowStaffModal(false)} 
+                />
             )}
         </div>
     );

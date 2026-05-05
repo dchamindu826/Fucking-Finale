@@ -1,10 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-    LayoutDashboard, Users, MonitorPlay, 
-    LogOut, HeadphonesIcon, Wallet, MessageCircle, Database, Truck, Image as ImageIcon,
-    Package, Clock, CheckCircle, Archive, UserPlus
-} from 'lucide-react'; 
+import { LayoutDashboard, Users, MonitorPlay, LogOut, HeadphonesIcon, Wallet, MessageCircle, Database, Truck, Image as ImageIcon, Package, Clock, 
+  CheckCircle, Archive, UserPlus, HardDrive, CalendarDays, CheckSquare } from 'lucide-react';
 
 export default function Sidebar({ userRole, loggedInUser, handleLogout, currentBg, setBgImage }) {
   const location = useLocation();
@@ -56,7 +53,7 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
             <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
             <NavLink to="/admin/crm-setup" className={getNavLinkClass}><HeadphonesIcon size={18} /> CRM Setup </NavLink>
-            
+            <NavLink to="/admin/database" className={getNavLinkClass}><HardDrive size={18} /> Database Manager</NavLink>
             <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Logistics & Delivery</div>
             <NavLink to="/delivery/dashboard?tab=overview" className={getNavLinkClass}><Truck size={18} /> Delivery Hub</NavLink>
           </>
@@ -86,6 +83,17 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
         {/* 🔥 CALLERS, ADMIN, MANAGER, STAFF Okkotama CRM eka penenawa 🔥 */}
         {(isSystemAdmin || isManager || isStaff || isCaller) && (
           <>
+          <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Workspace</div>
+            
+            {/* 🔥 TIMETABLE LINK EKA 🔥 */}
+            <NavLink to="/workspace/timetable" className={getNavLinkClass}>
+              <CalendarDays size={18} /> Class Timetable
+            </NavLink>
+
+            <NavLink to="/workspace/tasks" className={getNavLinkClass}>
+            <CheckSquare size={18} /> Task Center
+            </NavLink>
+
             <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Workspace</div>
             <NavLink to="/workspace/crm" className={getNavLinkClass}>
               <MessageCircle size={18} /> Free Seminar CRM
@@ -106,6 +114,9 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
           <>
             <div className="text-[10px] uppercase font-black text-slate-500 mt-3 mb-1 pl-2 tracking-widest">Student Portal</div>
             <NavLink to="/student/dashboard" className={getNavLinkClass}><LayoutDashboard size={18} /> My Dashboard</NavLink>
+            
+            {/* 🔥 NEW: Student Delivery Link 🔥 */}
+            <NavLink to="/student/delivery" className={getNavLinkClass}><Truck size={18} /> My Deliveries</NavLink>
           </>
         )}
       </nav>

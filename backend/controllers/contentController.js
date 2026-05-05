@@ -39,6 +39,19 @@ exports.deleteBusiness = async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Failed to delete business. Please delete its batches first." }); }
 };
 
+exports.toggleBusinessStatus = async (req, res) => {
+    try {
+        const { business_id, status } = req.body;
+        const updatedBiz = await prisma.business.update({
+            where: { id: parseInt(business_id) },
+            data: { status: parseInt(status) }
+        });
+        res.status(200).json(updatedBiz);
+    } catch (error) { 
+        res.status(500).json({ error: "Failed to update business visibility" }); 
+    }
+};
+
 // ================= BATCHES & LECTURERS =================
 exports.getBatchesByBusiness = async (req, res) => {
     try {
@@ -90,6 +103,19 @@ exports.updateBatchLecturers = async (req, res) => {
     } catch (e) { 
         console.error(e);
         res.status(500).json({ error: "Failed to update lecturers" }); 
+    }
+};
+
+exports.toggleBatchStatus = async (req, res) => {
+    try {
+        const { batch_id, status } = req.body;
+        const updatedBatch = await prisma.batch.update({
+            where: { id: parseInt(batch_id) },
+            data: { status: parseInt(status) }
+        });
+        res.status(200).json(updatedBatch);
+    } catch (error) { 
+        res.status(500).json({ error: "Failed to update batch visibility" }); 
     }
 };
 

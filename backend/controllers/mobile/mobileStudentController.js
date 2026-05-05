@@ -2,7 +2,10 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const bcrypt = require('bcryptjs');
 
-
+// ytdl-core අයින් කරලා මේ දෙක දාගන්න (yt-dlp පාවිච්චි කරන නිසා)
+const { execSync } = require('child_process');
+const path = require('path');
+const streamCache = {};
 
 const safeJson = (data) => JSON.parse(JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value));
 
@@ -378,5 +381,83 @@ exports.updateMobilePassword = async (req, res) => {
     } catch (error) {
         console.error("Password Update Error:", error);
         res.status(500).json({ error: "Failed to change password" });
+    }
+};
+
+// Image එකත් එක්කම Profile Update කරන Function එක
+exports.updateMobileProfile = async (req, res) => {
+    try {
+        const studentId = req.user?.userId || req.user?.id;
+        const { addressHouseNo, addressStreet, city, district } = req.body;
+
+        let updateData = { addressHouseNo, addressStreet, city, district };
+
+        // Multer හරහා Image එකක් ආවා නම් ඒකේ නම save කරගන්නවා
+        if (req.file) {
+            updateData.image = req.file.filename; 
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id: parseInt(studentId) },
+            data: updateData
+        });
+
+        res.status(200).json({ message: "Profile updated successfully", image: updatedUser.image });
+    } catch (error) {
+        console.error("Profile Update Error:", error);
+        res.status(500).json({ error: "Failed to update profile" });
+    }
+};
+
+exports.getVideoStream = async (req, res) => {
+    try {
+        const videoId = req.params.videoId;
+        // req.query.download කියලා ආවොත්, අපිට ඕනේ .m3u8 නෙමෙයි .mp4 එක.
+        const isDownloadRequest = req.query.download === 'true'; 
+        
+        console.log(`🎬 Extraction started for ID: ${videoId} (Download: ${isDownloadRequest})`);
+
+        if (!videoId) {
+            return res.status(400).json({ error: 'Invalid YouTube ID' });
+        }
+
+        // Cache Key එක (Play කරන්න එකයි, Download කරන්න එකයි දෙකක්)
+        const cacheKey = `${videoId}_${isDownloadRequest ? 'download' : 'stream'}`;
+
+        // 1. කලින් හොයාගත්තු URL එක Cache එකේ තියෙනවද බලනවා
+        if (streamCache[cacheKey] && streamCache[cacheKey].expires > Date.now()) {
+            console.log("⚡ Serving from Cache! (Instant load)");
+            return res.status(200).json({ stream_url: streamCache[cacheKey].url });
+        }
+
+        const url = `https://www.youtube.com/watch?v=${videoId}`;
+        const cookiesPath = path.resolve(__dirname, '../yt_cookies.txt');
+
+        // 2. yt-dlp Command එක.
+        // Download කරනවා නම් .mp4 format එක ගන්න ඕනේ (best[ext=mp4]). 
+        // නිකන් Play කරනවා නම් .m3u8 ගන්න එක තමයි (best) හොඳ.
+        let formatStr = isDownloadRequest ? "best[ext=mp4][height<=720]" : "best";
+
+        const command = `yt-dlp -f "${formatStr}" --cookies "${cookiesPath}" --js-runtimes node --no-playlist --no-warnings --no-write-subs --no-write-info-json --get-url "${url}"`;
+
+        const output = execSync(command, { timeout: 60000 }).toString().trim();
+
+        if (!output || !output.startsWith('http')) {
+            return res.status(404).json({ error: 'Stream URL not found' });
+        }
+
+        console.log("✅ Stream URL extracted successfully");
+
+        // 3. අලුත් URL එක පැය 10ක් Cache එකේ save කරනවා
+        streamCache[cacheKey] = {
+            url: output,
+            expires: Date.now() + (10 * 60 * 60 * 1000) // පැය 10යි (10 hours)
+        };
+
+        res.status(200).json({ stream_url: output });
+
+    } catch (error) {
+        console.error("❌ yt-dlp Error:", error.message);
+        res.status(500).json({ error: 'Failed to extract video stream', details: error.message });
     }
 };

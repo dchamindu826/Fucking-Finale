@@ -579,3 +579,63 @@ exports.ghostLogin = async (req, res) => {
         res.status(500).json({ error: "Failed to ghost login" });
     }
 };
+
+// ==========================================
+// 🚚 STUDENT DELIVERY MODULE 
+// ==========================================
+
+// 1. Get Student's Deliveries
+exports.getMyDeliveries = async (req, res) => {
+    try {
+        const studentId = req.user?.userId || req.user?.id;
+
+        if (!studentId) {
+            return res.status(401).json({ error: "Unauthorized access" });
+        }
+
+        const deliveries = await prisma.delivery.findMany({
+            where: { studentId: studentId.toString() },
+            include: { items: true },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.status(200).json(safeJson(deliveries));
+    } catch (error) {
+        console.error("Fetch Deliveries Error:", error);
+        res.status(500).json({ error: "Failed to fetch deliveries." });
+    }
+};
+
+// 2. Student confirms delivery status (Received / Not Received)
+exports.confirmDelivery = async (req, res) => {
+    try {
+        const { deliveryId, status } = req.body;
+        const studentId = req.user?.userId || req.user?.id;
+
+        if (!studentId) {
+            return res.status(401).json({ error: "Unauthorized access" });
+        }
+
+        // Check if the delivery belongs to the student and is currently "On the way"
+        const existingDelivery = await prisma.delivery.findFirst({
+            where: { id: parseInt(deliveryId), studentId: studentId.toString() }
+        });
+
+        if (!existingDelivery || existingDelivery.status !== 'On the way') {
+            return res.status(400).json({ error: "Invalid request or delivery is not 'On the way'." });
+        }
+
+        const updatedDelivery = await prisma.delivery.update({
+            where: { id: parseInt(deliveryId) },
+            data: { 
+                status: status, // 'Received' or 'Not Received'
+                resolvedAt: new Date()
+            }
+        });
+
+        res.status(200).json({ message: `Delivery marked as ${status}`, data: safeJson(updatedDelivery) });
+    } catch (error) {
+        console.error("Confirm Delivery Error:", error);
+        res.status(500).json({ error: "Failed to update delivery status." });
+    }
+};
