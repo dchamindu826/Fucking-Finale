@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { Loader2, Save, Users, TrendingDown, TrendingUp, CalendarDays } from 'lucide-react';
 import { FaCommentDots } from 'react-icons/fa';
 
-export default function AfterSeminarPaidCampaign({ filters, setChatModalLead }) {
+export default function AfterSeminarPaidCampaign({ filters, setChatModalLead, externalSearch }) {
     const currentUserId = JSON.parse(localStorage.getItem('user'))?.id;
 
     const [leads, setLeads] = useState([]);

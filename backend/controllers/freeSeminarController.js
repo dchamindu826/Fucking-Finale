@@ -440,7 +440,7 @@ const downloadMetaMedia = async (mediaId, metaApiKey) => {
 };
 
 // ==========================================
-// 6. RECEIVE MESSAGE WEBHOOK (FULLY FIXED)
+// 6. RECEIVE MESSAGE WEBHOOK (UNIFIED FIX)
 // ==========================================
 exports.receiveMessage = async (req, res) => {
     try {
@@ -448,21 +448,12 @@ exports.receiveMessage = async (req, res) => {
 
         if (body.object === "whatsapp_business_account") {
 
-            // 🔥 1. META DELIVERY STATUS TRACKER (Failed Messages Allaganna) 🔥
+            // 1. DELIVERY STATUS TRACKER (Failed Messages අල්ලගන්න)
             if (body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]) {
-                let statusData = body.entry[0].changes[0].value.statuses[0];
-
-                if (statusData.status === 'failed') {
-                    console.error("\n🚨 ================= MESSAGE DELIVERY FAILED =================");
-                    console.error("📱 Recipient:", statusData.recipient_id);
-                    console.error("🆔 Message ID (WAMID):", statusData.id);
-                    console.error("❌ Reason / Error:", JSON.stringify(statusData.errors, null, 2));
-                    console.error("==============================================================\n");
-                }
                 return res.status(200).send("EVENT_RECEIVED");
             }
 
-            // 💬 2. INCOMING MESSAGES TRACKER (Customer ewana messages)
+            // 2. INCOMING MESSAGES TRACKER
             if (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]) {
                 let msgData = body.entry[0].changes[0].value.messages[0];
                 let contactData = body.entry?.[0]?.changes?.[0]?.value?.contacts?.[0] || {};
@@ -476,7 +467,12 @@ exports.receiveMessage = async (req, res) => {
                 let metadata = body.entry[0].changes[0].value.metadata;
                 let receivingWaNumId = metadata ? metadata.phone_number_id : null;
 
-                const settings = await prisma.crmSettings.findFirst({ where: { waNumId: receivingWaNumId } });
+                // 🔥 Fix: Aluthma settings eka ganna orderBy desc damma
+                const settings = await prisma.crmSettings.findFirst({ 
+                    where: { waNumId: receivingWaNumId },
+                    orderBy: { id: 'desc' } 
+                });
+
                 if (!settings) return res.status(200).send("EVENT_RECEIVED");
                 
                 let messageText = "Media Message";
@@ -502,24 +498,38 @@ exports.receiveMessage = async (req, res) => {
                 let dbPhone = `${phone}_BIZ_${settings.businessId}`;
                 if (parsedBatchId) dbPhone += `_BATCH_${parsedBatchId}`;
 
-                // AFTER SEMINAR LOGIC
+                const msgLower = messageText.toLowerCase().trim();
+                const isRestartCommand = ['hi', 'hello', 'hey', 'menu', 'start'].includes(msgLower);
+
+                // ========================================================
+                // 🟢 AFTER SEMINAR LOGIC (Auto Reply ඇතුලත් කර ඇත)
+                // ========================================================
                 if (settings.campaignType === 'AFTER_SEMINAR') {
-                    const msgLower = messageText.toLowerCase().trim();
                     
-                    const isOpenSeminar = msgLower.includes('open seminar') || msgLower.includes('opening seminar');
-                    const isYesMsg = msgLower === 'yes';
+                    const existingLeadCheck = await prisma.lead.findUnique({ where: { phone: dbPhone } });
+                    const timeSinceLastMsg = existingLeadCheck && existingLeadCheck.updatedAt ? new Date() - new Date(existingLeadCheck.updatedAt) : 10000;
+                    const isSpamming = timeSinceLastMsg < 2000; 
+
+                    let resetData = {};
+                    if (isRestartCommand) resetData = { autoReplyStep: 0, sequenceCompleted: false };
 
                     let detInquiryType = 'NEW_INQ';
-                    if (isOpenSeminar) detInquiryType = 'OPEN_SEMINAR';
-                    else if (isYesMsg) detInquiryType = 'NORMAL';
+                    let newInqTs = null;
 
-                    const newInqTs = (!isOpenSeminar && !isYesMsg) ? new Date() : null;
+                    if (!existingLeadCheck) {
+                        if (msgLower === 'opening seminar') detInquiryType = 'OPEN_SEMINAR';
+                        else if (msgLower === 'yes') detInquiryType = 'NORMAL';
+                        else { detInquiryType = 'NEW_INQ'; newInqTs = new Date(); }
+                    } else {
+                        detInquiryType = existingLeadCheck.inquiryType || 'NEW_INQ';
+                        if (msgLower === 'opening seminar') detInquiryType = 'OPEN_SEMINAR';
+                    }
 
                     let createDataAfterSeminar = { 
                         name: name, phone: dbPhone, source: 'whatsapp', campaignType: 'AFTER_SEMINAR', 
                         lastMessage: messageText || 'Received Media', unreadCount: 1, status: 'NEW', 
                         phase: 1, callStatus: 'pending', paymentIntention: 'NOT_DECIDED', enrollmentStatus: 'NON_ENROLLED',
-                        inquiryType: detInquiryType, newInqTimestamp: newInqTs
+                        inquiryType: detInquiryType, newInqTimestamp: newInqTs, autoReplyStep: 0, sequenceCompleted: false
                     };
                     if (parsedBatchId) createDataAfterSeminar.batch = { connect: { id: parsedBatchId } };
 
@@ -528,89 +538,19 @@ exports.receiveMessage = async (req, res) => {
                         existingLead = await prisma.lead.upsert({
                             where: { phone: dbPhone },
                             update: { 
-                                name: name, 
-                                lastMessage: messageText || 'Received Media', 
-                                unreadCount: { increment: 1 }, 
-                                status: 'OPEN', 
-                                updatedAt: new Date(), 
-                                inquiryType: detInquiryType,
-                                campaignType: 'AFTER_SEMINAR',
-                                newInqTimestamp: (!isOpenSeminar && !isYesMsg) ? new Date() : undefined
+                                name: name, lastMessage: messageText || 'Received Media', unreadCount: { increment: 1 }, 
+                                status: existingLeadCheck?.assignedTo ? 'OPEN' : 'NEW', updatedAt: new Date(), 
+                                inquiryType: detInquiryType, ...resetData
                             },
                             create: createDataAfterSeminar
                         });
                     } catch (upsertError) {
-                        // 🔥 CONCURRENCY FIX FOR AFTER_SEMINAR
-                        if (upsertError.code === 'P2002' && upsertError.meta?.target?.includes('phone')) {
-                            console.warn(`⚠️ Concurrency issue detected for ${dbPhone} (AFTER_SEMINAR). Retrying as an update...`);
+                        if (upsertError.code === 'P2002') {
                             await new Promise(resolve => setTimeout(resolve, 50)); 
-                            
                             existingLead = await prisma.lead.update({
                                 where: { phone: dbPhone },
-                                data: { 
-                                    name: name, 
-                                    lastMessage: messageText || 'Received Media', 
-                                    unreadCount: { increment: 1 }, 
-                                    status: 'OPEN', 
-                                    updatedAt: new Date(), 
-                                    inquiryType: detInquiryType,
-                                    campaignType: 'AFTER_SEMINAR',
-                                    newInqTimestamp: (!isOpenSeminar && !isYesMsg) ? new Date() : undefined
-                                }
+                                data: { name: name, lastMessage: messageText, unreadCount: { increment: 1 }, status: 'OPEN', updatedAt: new Date(), inquiryType: detInquiryType, ...resetData }
                             });
-                        } else {
-                            throw upsertError;
-                        }
-                    }
-
-                    await prisma.chatMessage.create({ 
-                        data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
-                    });
-                    return res.status(200).send("EVENT_RECEIVED");
-                }
-
-                // FREE SEMINAR LOGIC
-                if (settings.campaignType === 'FREE_SEMINAR') {
-                    const isRestartCommand = ['hi', 'hello', 'hey', 'menu', 'start'].includes(messageText.toLowerCase().trim());
-                    let existingLead = await prisma.lead.findUnique({ where: { phone: dbPhone } });
-                    
-                    const timeSinceLastMsg = existingLead && existingLead.updatedAt ? new Date() - new Date(existingLead.updatedAt) : 10000;
-                    const isSpamming = timeSinceLastMsg < 2000; 
-                    
-                    let resetData = {};
-                    if (isRestartCommand) resetData = { autoReplyStep: 0, sequenceCompleted: false };
-
-                    let createDataFreeSeminar = { 
-                        name: name, phone: dbPhone, source: 'whatsapp', campaignType: 'FREE_SEMINAR', 
-                        lastMessage: messageText || 'Received Media', unreadCount: 1, status: 'NEW', 
-                        phase: 1, callStatus: 'pending', autoReplyStep: 0, sequenceCompleted: false 
-                    };
-                    if (parsedBatchId) createDataFreeSeminar.batch = { connect: { id: parsedBatchId } };
-
-                    try {
-                        existingLead = await prisma.lead.upsert({
-                            where: { phone: dbPhone },
-                            update: { 
-                                name: name, lastMessage: messageText || 'Received Media', unreadCount: { increment: 1 }, 
-                                status: existingLead?.assignedTo ? 'OPEN' : 'NEW', updatedAt: new Date(), ...resetData 
-                            },
-                            create: createDataFreeSeminar
-                        });
-                    } catch (upsertError) {
-                        // 🔥 CONCURRENCY FIX FOR FREE_SEMINAR
-                        if (upsertError.code === 'P2002' && upsertError.meta?.target?.includes('phone')) {
-                            console.warn(`⚠️ Concurrency issue detected for ${dbPhone} (FREE_SEMINAR). Retrying as an update...`);
-                            await new Promise(resolve => setTimeout(resolve, 50)); 
-                            
-                            existingLead = await prisma.lead.update({
-                                where: { phone: dbPhone },
-                                data: { 
-                                    name: name, lastMessage: messageText || 'Received Media', unreadCount: { increment: 1 }, 
-                                    status: existingLead?.assignedTo ? 'OPEN' : 'NEW', updatedAt: new Date(), ...resetData 
-                                }
-                            });
-                        } else {
-                            throw upsertError;
                         }
                     }
 
@@ -618,10 +558,11 @@ exports.receiveMessage = async (req, res) => {
                         data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
                     });
 
+                    // 🔥 AFTER SEMINAR AUTO REPLY SENDER 🔥
                     const botAllowed = (settings?.botMode === 'ON' || settings?.botMode === 'AUTO_REPLY_ONLY');
                     if (botAllowed && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
                         const autoReplies = await prisma.autoReply.findMany({ 
-                            where: { campaignType: 'FREE_SEMINAR', businessId: settings.businessId }, 
+                            where: { campaignType: 'AFTER_SEMINAR', businessId: settings.businessId }, 
                             orderBy: { stepOrder: 'asc' } 
                         });
                         
@@ -644,11 +585,81 @@ exports.receiveMessage = async (req, res) => {
                                 }
 
                                 try {
+                                    const axios = require('axios');
                                     await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
                                     await prisma.chatMessage.create({ data: { leadId: existingLead.id, message: nextReply.message, mediaUrl: nextReply.attachment, mediaType: nextReply.attachmentType, direction: 'outbound', senderType: 'SYSTEM', senderName: 'AutoBot' } });
                                     const isLastStep = autoReplies[autoReplies.length - 1].id === nextReply.id;
                                     await prisma.lead.update({ where: { id: existingLead.id }, data: { autoReplyStep: nextReply.stepOrder, sequenceCompleted: isLastStep } });
-                                } catch (sendErr) { }
+                                } catch (sendErr) { console.error("Auto Reply Error:", sendErr.message); }
+                            }
+                        }
+                    }
+                    return res.status(200).send("EVENT_RECEIVED");
+                }
+
+                // ========================================================
+                // 🔵 FREE SEMINAR LOGIC
+                // ========================================================
+                if (settings.campaignType === 'FREE_SEMINAR') {
+                    
+                    let existingLead = await prisma.lead.findUnique({ where: { phone: dbPhone } });
+                    const timeSinceLastMsg = existingLead && existingLead.updatedAt ? new Date() - new Date(existingLead.updatedAt) : 10000;
+                    const isSpamming = timeSinceLastMsg < 2000; 
+                    
+                    let resetData = {};
+                    if (isRestartCommand) resetData = { autoReplyStep: 0, sequenceCompleted: false };
+
+                    let createDataFreeSeminar = { 
+                        name: name, phone: dbPhone, source: 'whatsapp', campaignType: 'FREE_SEMINAR', 
+                        lastMessage: messageText || 'Received Media', unreadCount: 1, status: 'NEW', 
+                        phase: 1, callStatus: 'pending', autoReplyStep: 0, sequenceCompleted: false 
+                    };
+                    if (parsedBatchId) createDataFreeSeminar.batch = { connect: { id: parsedBatchId } };
+
+                    try {
+                        existingLead = await prisma.lead.upsert({
+                            where: { phone: dbPhone },
+                            update: { name: name, lastMessage: messageText || 'Received Media', unreadCount: { increment: 1 }, status: existingLead?.assignedTo ? 'OPEN' : 'NEW', updatedAt: new Date(), ...resetData },
+                            create: createDataFreeSeminar
+                        });
+                    } catch(e) {
+                         existingLead = await prisma.lead.update({ where: { phone: dbPhone }, data: { name: name, lastMessage: messageText, unreadCount: { increment: 1 }, status: 'OPEN', updatedAt: new Date(), ...resetData } });
+                    }
+
+                    await prisma.chatMessage.create({ 
+                        data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
+                    });
+
+                    // 🔥 FREE SEMINAR AUTO REPLY SENDER 🔥
+                    const botAllowed = (settings?.botMode === 'ON' || settings?.botMode === 'AUTO_REPLY_ONLY');
+                    if (botAllowed && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
+                        const autoReplies = await prisma.autoReply.findMany({ where: { campaignType: 'FREE_SEMINAR', businessId: settings.businessId }, orderBy: { stepOrder: 'asc' } });
+                        
+                        if (autoReplies.length > 0) {
+                            const currentStep = existingLead.autoReplyStep || 0;
+                            const nextReply = autoReplies.find(r => r.stepOrder > currentStep);
+
+                            if (nextReply) {
+                                let formattedPhone = phone.startsWith('0') ? '94' + phone.substring(1) : phone;
+                                let metaPayload = { messaging_product: "whatsapp", recipient_type: "individual", to: formattedPhone };
+
+                                if (nextReply.attachment) {
+                                    const attachmentPath = nextReply.attachment.startsWith('/') ? nextReply.attachment : `/${nextReply.attachment}`;
+                                    const liveMediaUrl = `https://imacampus.online${attachmentPath}`; 
+                                    if (nextReply.attachmentType === 'Image') { metaPayload.type = "image"; metaPayload.image = { link: liveMediaUrl, caption: nextReply.message || "" }; } 
+                                    else if (nextReply.attachmentType === 'Video') { metaPayload.type = "video"; metaPayload.video = { link: liveMediaUrl, caption: nextReply.message || "" }; } 
+                                    else { metaPayload.type = "document"; metaPayload.document = { link: liveMediaUrl, caption: nextReply.message || "" }; }
+                                } else { 
+                                    metaPayload.type = "text"; metaPayload.text = { body: nextReply.message }; 
+                                }
+
+                                try {
+                                    const axios = require('axios');
+                                    await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
+                                    await prisma.chatMessage.create({ data: { leadId: existingLead.id, message: nextReply.message, mediaUrl: nextReply.attachment, mediaType: nextReply.attachmentType, direction: 'outbound', senderType: 'SYSTEM', senderName: 'AutoBot' } });
+                                    const isLastStep = autoReplies[autoReplies.length - 1].id === nextReply.id;
+                                    await prisma.lead.update({ where: { id: existingLead.id }, data: { autoReplyStep: nextReply.stepOrder, sequenceCompleted: isLastStep } });
+                                } catch (sendErr) { console.error("Auto Reply Error:", sendErr.message); }
                             }
                         }
                     }
@@ -847,41 +858,59 @@ exports.getMetaTemplates = async (req, res) => {
         const { businessId, batchId } = req.query;
         console.log("📥 1. Incoming Request Query:", req.query);
 
-        let whereClause = {};
+        let whereClause = { campaignType: 'FREE_SEMINAR' };
         
-        // Batch id hari business id hari ganna
-        if (batchId && batchId !== '' && batchId !== 'undefined') {
-            whereClause.batchId = parseInt(batchId); // String nam String(batchId) karanna
-        } else if (businessId && businessId !== '' && businessId !== 'undefined') {
+        if (batchId && batchId !== '' && batchId !== 'undefined' && batchId !== 'null') {
+            whereClause.batchId = String(batchId); 
+        } else if (businessId && businessId !== '' && businessId !== 'undefined' && businessId !== 'null') {
             whereClause.businessId = parseInt(businessId);
         }
 
-        console.log("🧩 2. Prisma DB Where Clause:", whereClause);
-
-        // Database eken settings gannawa
         const settings = await prisma.crmSettings.findFirst({ 
             where: whereClause,
-            orderBy: { id: 'desc' } // Get latest
+            orderBy: { id: 'desc' }
         });
 
-        if (!settings) {
-            console.log("❌ 3. Error: No CRM Settings found in DB for this query!");
-            console.log("🔍 === DEBUG END ===\n");
-            return res.status(400).json({ error: "No CRM Settings found in Database." });
-        }
+        if (!settings) return res.status(400).json({ error: "No CRM Settings found in Database." });
 
-        console.log(`⚙️ 3. Found DB Settings -> ID: ${settings.id}, waId: ${settings.waId ? settings.waId : 'MISSING'}, metaApiKey: ${settings.metaApiKey ? 'EXISTS' : 'MISSING'}`);
+        console.log(`⚙️ 2. Found DB Settings -> ID: ${settings.id}, waId: ${settings.waId}, waNumId: ${settings.waNumId}`);
 
         if (!settings.metaApiKey || !settings.waId) {
-            console.log("❌ 4. Error: Meta Config (waId or metaApiKey) is null/empty in DB!");
-            console.log("🔍 === DEBUG END ===\n");
             return res.status(400).json({ error: "WABA ID or API Key is missing in CRM Settings." });
         }
 
-        const url = `https://graph.facebook.com/v19.0/${settings.waId}/message_templates`;
+        // ========================================================
+        // 🔥 DEBUG 1: waId එක යටතේ තියෙන Phone Numbers Check කිරීම
+        // ========================================================
+        try {
+            console.log(`\n🕵️‍♂️ DEBUG: Checking phone numbers under waId: ${settings.waId}...`);
+            const phoneCheck = await axios.get(`https://graph.facebook.com/v19.0/${settings.waId}/phone_numbers`, { 
+                headers: { Authorization: `Bearer ${settings.metaApiKey}` } 
+            });
+            
+            console.log("📱 3. Phone Numbers found under this WABA ID:");
+            let isPhoneMatched = false;
+            phoneCheck.data.data.forEach(p => {
+                console.log(`   - Name: ${p.verified_name || 'N/A'}, Phone: ${p.display_phone_number}, ID: ${p.id}`);
+                if (p.id === settings.waNumId) isPhoneMatched = true;
+            });
+            
+            if (!isPhoneMatched) {
+                console.log(`\n🚨 CRITICAL WARNING 🚨`);
+                console.log(`ඔයාගේ DB එකේ තියෙන waNumId (${settings.waNumId}) මේ waId (${settings.waId}) එක ඇතුලේ නෑ!`);
+                console.log(`ඒ කියන්නේ waId එක වැරදියි! Templates පෙන්නන්නේ නැත්තේ මේකයි.\n`);
+            } else {
+                console.log(`✅ SUCCESS: waId එකයි waNumId එකයි හරියට Match වෙනවා!\n`);
+            }
+        } catch(e) {
+            console.log("🚨 Failed to verify waId. Error:", e.response?.data?.error?.message || e.message);
+        }
+        // ========================================================
+
+        // Fetching Templates
+        const url = `https://graph.facebook.com/v19.0/${settings.waId}/message_templates?limit=100`;
         console.log("🌐 4. Calling Meta API URL:", url);
 
-        // Meta eken fetch karanawa
         const response = await axios.get(url, { 
             headers: { Authorization: `Bearer ${settings.metaApiKey}` } 
         });
@@ -893,15 +922,6 @@ exports.getMetaTemplates = async (req, res) => {
 
     } catch (error) { 
         console.error("🚨 META API ERROR DETAILS:", error.response?.data || error.message);
-        if (error.response) {
-            console.log("❌ Meta API Rejected Request!");
-            console.log("Status Code:", error.response.status);
-            console.log("Error Details:", JSON.stringify(error.response.data, null, 2));
-        } else {
-            console.log("❌ Server/Network Error:", error.message);
-        }
-        console.log("==================================\n");
-        
         res.status(500).json({ 
             error: "Failed to fetch templates", 
             details: error.response?.data?.error?.message || error.message 
@@ -1135,7 +1155,8 @@ exports.getCampaignStats = async (req, res) => {
 
 exports.sendBroadcast = async (req, res) => {
     try {
-        const { leadIds, type, message, templateName } = req.body;
+        // 🔥 FIX: req.body එකෙන් templateLanguage එක ගන්නවා
+        const { leadIds, type, message, templateName, templateLanguage } = req.body;
         const parsedLeadIds = typeof leadIds === 'string' ? JSON.parse(leadIds) : leadIds;
         const leads = await prisma.lead.findMany({ where: { id: { in: parsedLeadIds } } });
         
@@ -1151,6 +1172,9 @@ exports.sendBroadcast = async (req, res) => {
             let formattedPhone = lead.phone.split('_')[0].replace(/[^0-9]/g, ''); 
             if (formattedPhone.startsWith('0')) formattedPhone = '94' + formattedPhone.substring(1);
             
+            // ==========================================
+            // 🔥 මේ ටික තමයි අත්වැරදීමකින් delete වෙලා තිබ්බේ
+            // ==========================================
             let leadSettings = defaultSettings;
             if (lead.batchId) {
                 if (settingsCache[lead.batchId]) {
@@ -1167,6 +1191,7 @@ exports.sendBroadcast = async (req, res) => {
             } else if (lead.campaignType) {
                 leadSettings = await prisma.crmSettings.findFirst({ where: { campaignType: lead.campaignType } }) || defaultSettings;
             }
+            // ==========================================
 
             if (!leadSettings?.metaApiKey) {
                 results.failed += 1; results.reasons.push({ phone: formattedPhone, error: "Meta Config Missing for this lead" });
@@ -1189,7 +1214,12 @@ exports.sendBroadcast = async (req, res) => {
                 }
             } else {
                 metaPayload.type = "template"; 
-                metaPayload.template = { name: templateName, language: { code: "en_US" } };
+                
+                // 🔥 FIX: Template එකේ Language එක dynamic විදියට මෙතනින් යනවා
+                metaPayload.template = { 
+                    name: templateName, 
+                    language: { code: templateLanguage || "en_US" } 
+                };
 
                 let templateComponents = [];
 
@@ -1219,12 +1249,13 @@ exports.sendBroadcast = async (req, res) => {
             }
 
             try {
+                const axios = require('axios');
                 // Meta API එකට යවනවා
                 const metaRes = await axios.post(`https://graph.facebook.com/v19.0/${leadSettings.waNumId}/messages`, metaPayload, { 
                     headers: { 'Authorization': `Bearer ${leadSettings.metaApiKey}`, 'Content-Type': 'application/json' } 
                 });
                 
-                // 🔥 FIX: Message එක Database එකට Save කරනවා (CRM Chat එකේ පේන්න)
+                // Database එකට Save කරනවා
                 await prisma.chatMessage.create({
                     data: {
                         leadId: lead.id,

@@ -191,7 +191,44 @@ exports.payhereNotify = async (req, res) => {
         if (localMd5sig === md5sig && status_code === "2") {
             // PayHere successfully verified the payment!
             console.log(`[PayHere] Payment successfully verified for Order ID: ${order_id}`);
-            // (Your frontend is already saving the enrollment to the DB, so we just acknowledge it here)
+            
+            // 1. Payment status eka Approve (1) karanna
+            const updatedPayment = await prisma.payment.update({
+                where: { id: parseInt(order_id) },
+                data: { status: 1 } 
+            });
+
+            // 2. Auto Delivery eka hadanna
+            const existingDelivery = await prisma.delivery.findUnique({
+                where: { paymentId: updatedPayment.id }
+            });
+
+            if (!existingDelivery && updatedPayment.subjects) {
+                const subIds = JSON.parse(updatedPayment.subjects).map(id => parseInt(id));
+                const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
+
+                if (courses.length > 0) {
+                    const paymentTypeStr = updatedPayment.payment_type === 1 ? 'Monthly' : (updatedPayment.payment_type === 2 ? 'Installment' : 'Full');
+
+                    await prisma.delivery.create({
+                        data: {
+                            paymentId: updatedPayment.id,
+                            studentId: updatedPayment.studentId.toString(),
+                            businessId: updatedPayment.businessId,
+                            paymentType: paymentTypeStr,
+                            status: 'Pending',
+                            items: {
+                                create: courses.map(c => ({
+                                    courseId: c.id,
+                                    tuteName: c.name || "Tute", 
+                                    quantity: 1
+                                }))
+                            }
+                        }
+                    });
+                    console.log(`🚚 Auto-Delivery created for PayHere Payment ID: ${order_id}`);
+                }
+            }
         }
         
         // You MUST return a 200 OK so PayHere knows the webhook was received
@@ -337,7 +374,7 @@ exports.getCourseModules = async (req, res) => {
     }
 };
 
-// 7. Payment History
+// 7. Payment History (Updated to send excess, arrears and wallet balance)
 exports.getMyPayments = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id;
@@ -346,6 +383,12 @@ exports.getMyPayments = async (req, res) => {
             where: { studentId: parseInt(studentId) },
             include: { business: true, batch: true },
             orderBy: { created_at: 'desc' }
+        });
+
+        // ළමයාගේ දැනට තියෙන Wallet Balance එකත් ගන්නවා
+        const studentData = await prisma.user.findUnique({ 
+            where: { id: parseInt(studentId) }, 
+            select: { walletBalance: true } 
         });
 
         const formattedPayments = payments.map(p => {
@@ -362,15 +405,22 @@ exports.getMyPayments = async (req, res) => {
                 dueDate: p.due_date,
                 isInstallment: p.payment_type === 2,
                 installmentNo: p.installment_no,
-                method: p.method
+                method: p.method,
+                excessAmount: p.excessAmount || 0,  // 🔥 ළමයාට පෙන්වන්න යවනවා
+                arrearsAmount: p.arrearsAmount || 0 // 🔥 ළමයාට පෙන්වන්න යවනවා
             };
         });
 
-        const safeData = safeJson(formattedPayments);
+        // Object එකක් විදිහට යවන්න ඕනේ React එකෙන් catch කරගන්න ලේසි වෙන්න
+        const safeData = safeJson({
+            oldPayments: formattedPayments,
+            walletBalance: studentData?.walletBalance || 0
+        });
+        
         res.status(200).json(safeData); 
     } catch (error) {
         console.error("History Error:", error);
-        res.status(200).json([]); 
+        res.status(200).json({ oldPayments: [], walletBalance: 0 }); 
     }
 };
 

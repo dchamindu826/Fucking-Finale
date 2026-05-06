@@ -15,9 +15,10 @@ exports.getManagerDashboardStats = async (req, res) => {
             courseWhere.groupId = { in: batchGroups.map(g => g.id) };
         } else if (businessId && businessId !== 'ALL') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
             const bizBatches = await prisma.batch.findMany({ where: { businessId: parseInt(businessId) }, select: { id: true } });
             const bizGroups = await prisma.group.findMany({ where: { batchId: { in: bizBatches.map(b => b.id) } }, select: { id: true } });
             courseWhere.groupId = { in: bizGroups.map(g => g.id) };
@@ -182,9 +183,10 @@ exports.getNewInquiryStats = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         const leads = await prisma.lead.findMany({
@@ -242,9 +244,10 @@ exports.getOpenSeminarStats = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         const leads = await prisma.lead.findMany({
@@ -302,9 +305,10 @@ exports.getBridgePerformanceStats = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         const leads = await prisma.lead.findMany({
@@ -360,9 +364,10 @@ exports.getPaidCampaignStats = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         const leads = await prisma.lead.findMany({
@@ -412,9 +417,10 @@ exports.getMasterDirectory = async (req, res) => {
         // Business Filter eka apply karanawa
         if (businessId && businessId !== 'ALL' && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         // DB eken real leads data gannawa

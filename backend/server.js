@@ -26,7 +26,8 @@ const teamRoutes = require('./routes/teamRoutes');
 
 // ================= STATIC FOLDERS =================
 // Kalin thibuna routes (meka mehema thiyenna arinna wena ewata one wenna puluwan)
-app.use('/documents', express.static(path.join(__dirname, 'storage/documents')));
+app.use('/documents', express.static(path.join(__dirname, 'documents')));
+app.use('/api/documents', express.static(path.join(__dirname, 'documents')));
 app.use('/storage/icons', express.static(path.join(__dirname, 'storage/icons'))); 
 app.use('/storage/posts', express.static(path.join(__dirname, 'storage/posts'))); 
 app.use('/storage/images', express.static(path.join(__dirname, 'storage/images')));

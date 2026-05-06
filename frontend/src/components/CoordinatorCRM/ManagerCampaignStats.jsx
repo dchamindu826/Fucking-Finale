@@ -85,10 +85,11 @@ export default function ManagerCampaignStats({ filters }) {
     };
 
     // 🔥 FIX: Template Fetch eka safe karala cache bypass damma
-    const fetchTemplates = async () => {
+        const fetchTemplates = async () => {
         try { 
-            const targetBusinessId = filters?.selectedBusiness || user.businessId;
-            const targetBatchId = filters?.selectedBatch || user.batchId;
+            const targetBusinessId = filters?.selectedBusiness || user.businessId || "";
+            const targetBatchId = filters?.selectedBatch || user.batchId || "";
+            
             const token = localStorage.getItem('token');
             const res = await axios.get('/coordinator-crm/meta-templates', { 
                 headers: { 
@@ -97,8 +98,9 @@ export default function ManagerCampaignStats({ filters }) {
                     'Pragma': 'no-cache'
                 },
                 params: { 
-                    businessId: targetBusinessId, 
-                    batchId: targetBatchId,
+                    // 🔥 FIX: empty unath string widiyata yawanawa params missing wenne nathi wenna
+                    businessId: String(targetBusinessId), 
+                    batchId: String(targetBatchId),
                     t: Date.now() 
                 }
             }); 
@@ -235,11 +237,20 @@ export default function ManagerCampaignStats({ filters }) {
             const chunk = selectedLeads.slice(i, i + chunkSize);
             
             const formData = new FormData();
-            formData.append('leadIds', JSON.stringify(chunk));
-            formData.append('type', bcastType);
-            formData.append('message', bcastMessage);
-            formData.append('templateName', bcastTemplate);
-            if (bcastFile) formData.append('media', bcastFile);
+formData.append('leadIds', JSON.stringify(chunk));
+formData.append('type', bcastType);
+formData.append('message', bcastMessage);
+
+// 🔥 FIX: Template එකේ නමයි Language එකයි වෙන් කරලා Backend එකට යවනවා
+if (bcastType === 'TEMPLATE' && bcastTemplate) {
+    const [tplName, tplLang] = bcastTemplate.split('|');
+    formData.append('templateName', tplName);
+    formData.append('templateLanguage', tplLang || 'en_US');
+} else {
+    formData.append('templateName', bcastTemplate);
+}
+
+if (bcastFile) formData.append('media', bcastFile);
 
             try {
                 const token = localStorage.getItem('token');
@@ -616,9 +627,14 @@ export default function ManagerCampaignStats({ filters }) {
                                         <>
                                             <p className="text-[10px] text-blue-400 mb-2 leading-tight">Templates can be sent to anyone. If your template has variables or a Header Media, add them below.</p>
                                             <select value={bcastTemplate} onChange={e=>setBcastTemplate(e.target.value)} className="w-full bg-[#0f172a] text-white p-3 rounded-xl border border-slate-700 mb-3">
-                                                <option value="">Select Approved Template...</option>
-                                                {templates.filter(t => t.status === 'APPROVED').map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                                            </select>
+    <option value="">Select Approved Template...</option>
+    {templates.filter(t => t.status === 'APPROVED').map(t => (
+        // 🔥 FIX: නමයි Language එකයි දෙකම Value එකට දැම්මා
+        <option key={t.id} value={`${t.name}|${t.language}`}>
+            {t.name} ({t.language})
+        </option>
+    ))}
+</select>
                                             
                                             <textarea rows="2" value={bcastMessage} onChange={e=>setBcastMessage(e.target.value)} placeholder="Variable Text (e.g. Hi there!)" className="w-full bg-[#0f172a] text-white p-3 rounded-xl border border-slate-700 custom-scrollbar resize-none mb-3"></textarea>
                                             <input type="file" onChange={e=>setBcastFile(e.target.files[0])} className="w-full text-slate-400 text-xs file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-700 file:text-slate-300" />

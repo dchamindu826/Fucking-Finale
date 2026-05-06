@@ -34,9 +34,11 @@ import CoordinatorDashboard from './pages/ClassCoordinator/CoordinatorDashboard'
 import ManagerDashboard from './pages/class_coordinator/manager/ManagerDashboard';
 import DeliveryDashboard from './pages/delivery/DeliveryDashboard'; 
 
+// 🔥 NEW: Finance Dashboard Import 🔥
+import FinanceOverview from './pages/finance/FinanceOverview';
+
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
-// 🔥 NEW: Student Delivery Hub Import 🔥
 import StudentDeliveryHub from './pages/student/components/DeliveryHub'; 
 
 export default function App() {
@@ -110,7 +112,10 @@ export default function App() {
             
             <Route path="/manager/dashboard" element={<ManagerDashboard />} /> 
             <Route path="/coordinator/dashboard" element={<ManagerDashboard />} /> 
-            <Route path="/finance/dashboard" element={<ManagerDashboard />} /> 
+            
+            {/* 🔥 FIX: Changed to load the actual Finance Overview component 🔥 */}
+            <Route path="/finance/dashboard" element={<FinanceOverview />} /> 
+            
             <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
             <Route path="/technical/dashboard" element={<ManagerDashboard />} />
             <Route path="/workspace/call-campaign" element={<CallCampaignModule loggedInUser={loggedInUser} />} />
@@ -142,7 +147,6 @@ export default function App() {
           element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDashboard /> : <Navigate to="/login" />} 
         />
         
-        {/* 🔥 NEW: Student Delivery Route 🔥 */}
         <Route 
           path="/student/delivery" 
           element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDeliveryHub /> : <Navigate to="/login" />} 

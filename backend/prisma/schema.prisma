@@ -39,6 +39,7 @@ model User {
   autoAssignedTemplates CustomTaskTemplate[] @relation("AutoAssignedUser")
 
   actionedPayments Payment[] @relation("ActionedPayments")
+  walletBalance Float @default(0)
 }
 
 model Business {
@@ -222,6 +223,8 @@ model Payment {
   actionedById Int?
   actionedUser User?     @relation("ActionedPayments", fields: [actionedById], references: [id])
   delivery     Delivery?
+  excessAmount  Float @default(0) // 🔥 අලුතෙන් (වැඩියෙන් ගෙවපු ගාණ)
+  arrearsAmount Float @default(0)
 }
 
 model CrmSettings {
@@ -522,4 +525,16 @@ model DeliveryItem {
 
   delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
   course      Course   @relation(fields: [courseId], references: [id])
+}
+
+model TuteStockHistory {
+  id          Int      @id @default(autoincrement())
+  stockId     Int
+  courseId    Int?
+  tuteName    String
+  action      String   // "ADDED", "REDUCED", "EDITED", "DELETED"
+  oldQuantity Int
+  newQuantity Int
+  reason      String?
+  createdAt   DateTime @default(now())
 }

@@ -27,6 +27,10 @@ export default function AfterSeminarDashboard() {
 
   const [isFollowUpOn, setIsFollowUpOn] = useState(false);
 
+  // 🔥 අලුතින් දාපු State 2 (Campaign Redirect එකට) 🔥
+  const [targetCampaignTab, setTargetCampaignTab] = useState('OPEN_SEM');
+  const [campaignSearchPhone, setCampaignSearchPhone] = useState('');
+
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     let parsedUser = { role: 'SYSTEM_ADMIN' };
@@ -115,6 +119,27 @@ export default function AfterSeminarDashboard() {
     }
   };
 
+  // 🔥 UPDATE කරපු Redirect Function එක (කෙලින්ම Campaign එකට යන්න) 🔥
+  const handleRedirectToCampaign = (lead) => {
+      setActiveMode('CALL_CAMPAIGN'); 
+      setSelectedLead(null); // Chat modal එක open වෙන එක නවත්තනවා
+      
+      // Auto Search වෙන්න Phone Number එක ගන්නවා
+      const phoneBase = lead.phone.split('_')[0];
+      setCampaignSearchPhone(phoneBase);
+
+      // හරියටම අදාල Tab එක හොයාගන්නවා
+      if (lead.source === 'bridge_transfer' && lead.enrollmentStatus !== 'ENROLLED') {
+          setTargetCampaignTab('BRIDGE');
+      } else if (lead.enrollmentStatus === 'ENROLLED') {
+          setTargetCampaignTab('PAID');
+      } else if (lead.inquiryType === 'NEW_INQ') {
+          setTargetCampaignTab('NEW_INQ');
+      } else {
+          setTargetCampaignTab('OPEN_SEM');
+      }
+  };
+
   return (
     <div className="h-full flex flex-col gap-4 animate-fade-in-up text-slate-300 relative">
       <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-[#23303f] p-3 rounded-2xl shadow-md border border-white/5">
@@ -160,7 +185,13 @@ export default function AfterSeminarDashboard() {
         </div>
       ) : activeMode === 'CRM' ? (
         <div className="flex-1 flex gap-4 h-[calc(100%-6rem)] overflow-hidden">
-          <AfterSeminarContactSidebar activeMode={activeMode} selectedLead={selectedLead} setSelectedLead={setSelectedLead} filters={{ selectedBusiness: activeBusinessId, selectedBatch }} />
+          <AfterSeminarContactSidebar 
+           activeMode={activeMode} 
+           selectedLead={selectedLead} 
+           setSelectedLead={setSelectedLead} 
+           filters={{ selectedBusiness: activeBusinessId, selectedBatch }} 
+           onRedirectToCampaign={handleRedirectToCampaign} 
+           />
           {selectedLead ? (
             <><AfterSeminarChatArea selectedLead={selectedLead} /><AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} /></>
           ) : (
@@ -175,19 +206,22 @@ export default function AfterSeminarDashboard() {
             {isManager ? (
                 <AfterSeminarManagerCampaignStats filters={{ selectedBusiness: activeBusinessId, selectedBatch }} allBatches={displayBatches} />
             ) : (
-                <AfterSeminarStaffExecution filters={{ selectedBusiness: activeBusinessId, selectedBatch }} allBatches={displayBatches} setSelectedLead={setSelectedLead} />
+                <AfterSeminarStaffExecution 
+                    filters={{ selectedBusiness: activeBusinessId, selectedBatch }} 
+                    allBatches={displayBatches} 
+                    setSelectedLead={setSelectedLead} 
+                    externalTab={targetCampaignTab} 
+                    campaignSearchPhone={campaignSearchPhone} 
+                />
             )}
         </div>
       )}
 
-      {/* 🔥 CALL CAMPAIGN CHAT MODAL (IFRAME TYPE POPUP) 🔥 */}
-      {/* 🔥 CALL CAMPAIGN CHAT MODAL (IFRAME TYPE POPUP) 🔥 */}
+      {/* CALL CAMPAIGN CHAT MODAL (IFRAME TYPE POPUP) */}
       {activeMode === 'CALL_CAMPAIGN' && selectedLead && (
-        // 👇 Methana p-4 ekata passe pl-[280px] wage padding ekak add kara
         <div className="fixed inset-0 z-[100] bg-[#020617]/90 backdrop-blur-sm flex items-center justify-center p-4 md:pl-[280px] lg:pl-[320px] animate-fade-in">
             <div className="bg-[#1a2430] w-full max-w-[1500px] h-full max-h-[90vh] rounded-3xl flex flex-col overflow-hidden border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative">
                 
-                {/* Modal Header */}
                 <div className="bg-[#0f172a] px-6 py-4 flex justify-between items-center border-b border-slate-700">
                     <div>
                         <h3 className="text-white font-bold text-lg">Campaign Workspace</h3>
@@ -201,7 +235,6 @@ export default function AfterSeminarDashboard() {
                     </button>
                 </div>
 
-                {/* Modal Content - Chat & Panel */}
                 <div className="flex-1 flex gap-4 p-4 h-[calc(100%-70px)] bg-[#0b141a]">
                     <AfterSeminarChatArea selectedLead={selectedLead} />
                     <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />

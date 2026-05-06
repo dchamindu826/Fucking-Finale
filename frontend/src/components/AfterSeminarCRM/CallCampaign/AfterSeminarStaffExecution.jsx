@@ -7,10 +7,9 @@ import { Loader2 } from 'lucide-react';
 import AfterSeminarOpenSem from './AfterSeminarOpenSem';
 import AfterSeminarNewInq from './AfterSeminarNewInq';
 import AfterSeminarPaidCampaign from './AfterSeminarPaidCampaign';
-// Path එක CampaignStatsModules ෆෝල්ඩරේට හැදුවා
 import BridgeStaffExecution from "./BridgeStaffExecution";
 
-export default function AfterSeminarStaffExecution({ filters, allBatches, setSelectedLead }) {
+export default function AfterSeminarStaffExecution({ filters, allBatches, setSelectedLead, externalTab, campaignSearchPhone }) {
     const [activeTab, setActiveTab] = useState('OPEN_SEM'); // OPEN_SEM, NEW_INQ, BRIDGE, PAID
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -18,6 +17,13 @@ export default function AfterSeminarStaffExecution({ filters, allBatches, setSel
 
     const currentUser = JSON.parse(localStorage.getItem('user'));
     const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER', 'ADMIN'].includes(currentUser?.role?.toUpperCase().replace(/ /g, '_'));
+
+    // 🔥 Dashboard එකෙන් එන Tab එකට මාරු වෙන්න 🔥
+    useEffect(() => {
+        if (externalTab) {
+            setActiveTab(externalTab);
+        }
+    }, [externalTab]);
 
     useEffect(() => {
         if (activeTab === 'OPEN_SEM' || activeTab === 'NEW_INQ') {
@@ -32,12 +38,12 @@ export default function AfterSeminarStaffExecution({ filters, allBatches, setSel
             const res = await axios.get('/after-seminar-crm/leads', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: {
-                    tab: 'ASSIGNED',
-                    loggedUserId: currentUser?.id,
-                    loggedUserRole: currentUser?.role,
-                    businessId: isManager ? (filters.selectedBusiness || '') : '',
-                    batchId: isManager ? (filters.selectedBatch || '') : ''
-                }
+    tab: 'ASSIGNED',
+    loggedUserId: currentUser?.id,
+    loggedUserRole: currentUser?.role,
+    businessId: filters?.selectedBusiness || '', // 🔥 isManager condition එක අයින් කළා
+    batchId: filters?.selectedBatch || ''        // 🔥 isManager condition එක අයින් කළා
+}
             });
             
             const regularLeads = (res.data.leads || []).filter(l => l.source !== 'bridge_transfer');
@@ -146,6 +152,7 @@ export default function AfterSeminarStaffExecution({ filters, allBatches, setSel
                                     handleUpdateLocalLead={handleUpdateLocalLead} handleSaveCallData={handleSaveCallData} 
                                     handleTempUnlock={handleTempUnlock} setChatModalLead={setSelectedLead} 
                                     isManager={isManager} allBatches={allBatches} filters={filters}
+                                    externalSearch={campaignSearchPhone} // 🔥 අලුත් PROP එක 
                                 />
                             </div>
                         )}
@@ -157,6 +164,7 @@ export default function AfterSeminarStaffExecution({ filters, allBatches, setSel
                                     handleUpdateLocalLead={handleUpdateLocalLead} handleSaveCallData={handleSaveCallData} 
                                     handleTempUnlock={handleTempUnlock} setChatModalLead={setSelectedLead} 
                                     isManager={isManager} 
+                                    externalSearch={campaignSearchPhone} // 🔥 අලුත් PROP එක 
                                 />
                             </div>
                         )}
@@ -165,13 +173,21 @@ export default function AfterSeminarStaffExecution({ filters, allBatches, setSel
 
                 {activeTab === 'BRIDGE' && (
                     <div className="animate-fade-in-up h-full">
-                        <BridgeStaffExecution filters={filters} setChatModalLead={setSelectedLead} />
+                        <BridgeStaffExecution 
+                           filters={filters} 
+                           setChatModalLead={setSelectedLead} 
+                           externalSearch={campaignSearchPhone} // 🔥 අලුත් PROP එක 
+                        />
                     </div>
                 )}
 
                 {activeTab === 'PAID' && (
                     <div className="animate-fade-in-up h-full">
-                        <AfterSeminarPaidCampaign filters={filters} setChatModalLead={setSelectedLead} />
+                        <AfterSeminarPaidCampaign 
+                           filters={filters} 
+                           setChatModalLead={setSelectedLead} 
+                           externalSearch={campaignSearchPhone} // 🔥 අලුත් PROP එක 
+                        />
                     </div>
                 )}
 

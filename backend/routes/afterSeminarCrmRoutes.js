@@ -59,7 +59,7 @@ router.post('/leads/test-followup', afterSeminarInquiryController.testDirectFoll
 // ============================================================================
 router.get('/bridge/pending', afterSeminarBridgeController.getPendingBridgeLeads);
 router.post('/bridge/push', afterSeminarBridgeController.pushToAfterSeminar);
-
+router.post('/bridge/revert-pending', afterSeminarBridgeController.revertPendingBridgeLeads);
 
 // ============================================================================
 // 🏆 MODULE 3: THE FINALE (Enrolled Retention & Monthly Tracking)

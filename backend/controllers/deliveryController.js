@@ -18,28 +18,72 @@ exports.getPendingDeliveries = async (req, res) => {
                 items: true,
                 payment: { 
                     include: { 
-                        student: true 
+                        student: true, // ළමයාගේ විස්තර Payment එක හරහා ගන්නවා
+                        batch: true    // 🔥 ළමයාගේ Batch එක Payment එක හරහා ගන්නවා
                     } 
                 }
-            }
+            },
+            orderBy: { createdAt: 'desc' }
         });
 
-        const formatted = deliveries.map(d => ({
-            ...d,
-            studentName: d.payment?.student ? `${d.payment.student.firstName} ${d.payment.student.lastName}` : 'Unknown',
-            studentNo: d.payment?.student ? `STU-${d.payment.student.id}` : 'STU-000',
-            address: d.payment?.address || 'N/A',
-            phone: d.payment?.phone || 'N/A'
-        }));
+        // Tute හා Lecturer විස්තර ගන්න අදාල Courses ටික අදිනවා
+        const courseIds = [...new Set(deliveries.flatMap(d => d.items.map(i => i.courseId)).filter(Boolean))];
+        const courses = await prisma.course.findMany({
+            where: { id: { in: courseIds.map(id => parseInt(id)) } }
+        });
 
-        // 🔥 මෙතන return එකක් දාන්න. එතකොට මෙතනින් function එක නතර වෙනවා.
+        const formatted = deliveries.map(d => {
+            // Student data එක හරි තැනින් ගන්නවා
+            const std = d.payment?.student || {};
+            
+            const addressParts = [std.addressHouseNo, std.addressStreet, std.city, std.district].filter(Boolean);
+            const finalAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No Address Provided';
+            const finalPhone = std.phone || std.whatsapp || std.optionalPhone || 'No Phone';
+            const finalName = std.firstName ? `${std.firstName} ${std.lastName}` : 'Unknown Student';
+
+            // Items (Subjects) වලට Lecturer සහ Tute image එකතු කිරීම
+            const itemsWithDetails = d.items.map(item => {
+                const course = courses.find(c => c.id === item.courseId);
+                let lecturerName = course?.lecturerName || 'Lecturer';
+                let lecturerImage = 'default.png';
+                let tuteCover = 'default-tute.png';
+
+                // Course එකේ Group Prices ඇතුලෙන් අදාල Tute Image සහ Lecturer Image ගන්නවා
+                if (course && course.groupPrices) {
+                    try {
+                        const gpArr = JSON.parse(course.groupPrices);
+                        const matchedGp = gpArr.find(g => g.tuteName === item.tuteName) || gpArr[0];
+                        if (matchedGp) {
+                            if (matchedGp.lecturerImage) lecturerImage = matchedGp.lecturerImage;
+                            if (matchedGp.tuteCover) tuteCover = matchedGp.tuteCover;
+                        }
+                    } catch (e) {}
+                }
+
+                return {
+                    ...item,
+                    courseName: course?.name || 'Subject',
+                    lecturerName,
+                    lecturerImage,
+                    tuteCover
+                };
+            });
+
+            return {
+                ...d,
+                studentName: finalName,
+                studentNo: std.id ? `STU-${std.id}` : 'STU-000',
+                address: finalAddress,
+                phone: finalPhone,
+                batchName: d.payment?.batch?.name || 'Batch Not Assigned', // 🔥 Batch Name එක මෙතනින් යවනවා
+                items: itemsWithDetails
+            };
+        });
+
         return res.status(200).json(formatted);
 
     } catch (error) {
         console.error("Fetch Pending Deliveries Error:", error);
-        
-        // 🔥 Error එකක් ආවොත් පමණක් මේක වැඩ කරනවා. 
-        // හැබැයි උඩ එක වැඩ කරලා තිබුනොත් return එක නිසා මේක වැඩ කරන්නේ නැහැ.
         if (!res.headersSent) {
             return res.status(500).json({ error: "Failed to fetch pending deliveries" });
         }
@@ -201,4 +245,250 @@ exports.confirmDelivery = async (req, res) => {
         console.error(error);
         res.status(500).json({ error: "Failed to update delivery status." });
     }
+};
+
+// ================= TUTE STOCK MANAGEMENT (POS STYLE) =================
+
+// 1. Batch එකට අදාල Stock ගන්න
+exports.getBatchStock = async (req, res) => {
+    try {
+        const batchId = parseInt(req.params.batchId);
+        
+        const groups = await prisma.group.findMany({
+            where: { batchId },
+            include: { courses: true }
+        });
+
+        let allCourseIds = [];
+        let requiredTutes = [];
+
+        groups.forEach(g => {
+            g.courses.forEach(c => {
+                allCourseIds.push(c.id);
+
+                let gpPrices = [];
+                try { gpPrices = typeof c.groupPrices === 'string' ? JSON.parse(c.groupPrices) : (c.groupPrices || []); } catch(e){}
+
+                const gpData = gpPrices.find(p => parseInt(p.groupId) === g.id);
+
+                let tName = c.name + " - Tute";
+                let tCover = 'default-tute.png';
+
+                if (gpData) {
+                    if (gpData.tuteName && gpData.tuteName.trim() !== '') tName = gpData.tuteName;
+                    if (gpData.tuteCover) tCover = gpData.tuteCover;
+                }
+
+                requiredTutes.push({
+                    courseId: c.id,
+                    tuteName: tName,
+                    tuteImage: tCover
+                });
+            });
+        });
+
+        if (requiredTutes.length > 0) {
+            for (const rt of requiredTutes) {
+                const exists = await prisma.tuteStock.findFirst({
+                    where: { courseId: rt.courseId, tuteName: rt.tuteName }
+                });
+
+                if (!exists) {
+                    await prisma.tuteStock.create({
+                        data: {
+                            courseId: rt.courseId,
+                            tuteName: rt.tuteName,
+                            tuteImage: rt.tuteImage,
+                            availableQuantity: 0
+                        }
+                    });
+                }
+            }
+        }
+
+        if (allCourseIds.length === 0) {
+            return res.status(200).json([]);
+        }
+
+        const allStocks = await prisma.tuteStock.findMany({
+            where: { courseId: { in: allCourseIds.map(id => Number(id)) } },
+            include: { 
+                course: { 
+                    include: { group: true } // 🔥 FIX: Monthly/Full filter කරන්න group එක ගන්නවා
+                } 
+            },
+            orderBy: { updatedAt: 'desc' }
+        });
+
+        const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        res.status(200).json(safeJson(allStocks));
+
+    } catch (error) {
+        console.error("Get Batch Stock Error:", error);
+        res.status(500).json({ error: "Failed to fetch batch stock." });
+    }
+};
+
+exports.addTuteStock = async (req, res) => {
+    try {
+        const { stockId, quantity, reason } = req.body;
+        const oldStock = await prisma.tuteStock.findUnique({ where: { id: parseInt(stockId) } });
+        
+        const updated = await prisma.tuteStock.update({
+            where: { id: parseInt(stockId) },
+            data: { availableQuantity: { increment: parseInt(quantity) } }
+        });
+
+        await prisma.tuteStockHistory.create({
+            data: {
+                stockId: updated.id, courseId: updated.courseId, tuteName: updated.tuteName,
+                action: "ADDED", oldQuantity: oldStock.availableQuantity, newQuantity: updated.availableQuantity,
+                reason: reason || "New stock added"
+            }
+        });
+        res.status(200).json(updated);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to update stock" });
+    }
+};
+
+exports.addCustomTute = async (req, res) => {
+    try {
+        const { courseId, tuteName } = req.body;
+        const tuteCover = req.file ? req.file.filename : null;
+
+        if (!courseId || courseId === "null" || courseId === "") {
+            return res.status(400).json({ error: "Please select a Subject to link this Extra Tute." });
+        }
+
+        const newStock = await prisma.tuteStock.create({
+            data: {
+                courseId: parseInt(courseId),
+                tuteName: tuteName,
+                tuteImage: tuteCover,
+                availableQuantity: 0
+            }
+        });
+        res.status(201).json(newStock);
+    } catch (error) {
+        res.status(500).json({ error: "Failed to create custom tute" });
+    }
+};
+
+exports.editTuteStock = async (req, res) => {
+    try {
+        const { stockId, newQuantity, reason } = req.body;
+        const oldStock = await prisma.tuteStock.findUnique({ where: { id: parseInt(stockId) } });
+        const updated = await prisma.tuteStock.update({
+            where: { id: parseInt(stockId) },
+            data: { availableQuantity: parseInt(newQuantity) }
+        });
+        await prisma.tuteStockHistory.create({
+            data: {
+                stockId: updated.id, courseId: updated.courseId, tuteName: updated.tuteName,
+                action: oldStock.availableQuantity > newQuantity ? "REDUCED" : "EDITED",
+                oldQuantity: oldStock.availableQuantity, newQuantity: updated.availableQuantity, reason: reason
+            }
+        });
+        res.status(200).json({ message: "Stock adjusted successfully" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to edit stock" });
+    }
+};
+
+exports.deleteTuteStock = async (req, res) => {
+    try {
+        const stockId = parseInt(req.params.id);
+        const { reason } = req.query;
+        const oldStock = await prisma.tuteStock.findUnique({ where: { id: stockId } });
+        await prisma.tuteStockHistory.create({
+            data: {
+                stockId: oldStock.id, courseId: oldStock.courseId, tuteName: oldStock.tuteName,
+                action: "DELETED", oldQuantity: oldStock.availableQuantity, newQuantity: 0, reason: reason || "Item removed"
+            }
+        });
+        await prisma.tuteStock.delete({ where: { id: stockId } });
+        res.status(200).json({ message: "Stock item deleted" });
+    } catch (error) {
+        res.status(500).json({ error: "Failed to delete stock" });
+    }
+};
+
+// 🔥 FULLY UPGRADED HISTORY FUNCTION WITH DATE & PAGINATION 🔥
+exports.getStockHistory = async (req, res) => {
+    try {
+        const { startDate, endDate, page = 1, limit = 10 } = req.query;
+        const courseIds = req.params.courseIds ? req.params.courseIds.split(',').map(id => parseInt(id)) : [];
+
+        let whereClause = { courseId: { in: courseIds } };
+
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            whereClause.createdAt = { gte: start, lte: end };
+        }
+
+        const total = await prisma.tuteStockHistory.count({ where: whereClause });
+        const history = await prisma.tuteStockHistory.findMany({
+            where: whereClause,
+            orderBy: { createdAt: 'desc' },
+            skip: (parseInt(page) - 1) * parseInt(limit),
+            take: parseInt(limit)
+        });
+
+        const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        res.status(200).json({
+            data: safeJson(history),
+            total,
+            page: parseInt(page),
+            totalPages: Math.ceil(total / limit)
+        });
+    } catch (error) {
+        console.error("History Error:", error);
+        res.status(500).json({ error: "Failed to fetch history" });
+    }
+};
+
+exports.getGlobalStock = async (req, res) => {
+    try {
+        const stocks = await prisma.tuteStock.findMany({
+            include: { course: { include: { group: { include: { batch: { include: { business: true } } } } } } },
+            orderBy: { availableQuantity: 'asc' }
+        });
+        const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        res.status(200).json(safeJson(stocks));
+    } catch (error) { res.status(500).json({ error: "Failed to fetch global stock" }); }
+};
+
+exports.getGlobalStockHistory = async (req, res) => {
+    try {
+        const { startDate, endDate, page = 1, limit = 10 } = req.query;
+        let whereClause = {};
+
+        if (startDate && endDate) {
+            const start = new Date(startDate);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate);
+            end.setHours(23, 59, 59, 999);
+            whereClause.createdAt = { gte: start, lte: end };
+        }
+
+        const total = await prisma.tuteStockHistory.count({ where: whereClause });
+        const history = await prisma.tuteStockHistory.findMany({
+            where: whereClause,
+            orderBy: { createdAt: 'desc' },
+            skip: (parseInt(page) - 1) * parseInt(limit),
+            take: parseInt(limit)
+        });
+
+        const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        res.status(200).json({
+            data: safeJson(history),
+            total,
+            page: parseInt(page),
+            totalPages: Math.ceil(total / limit)
+        });
+    } catch (error) { res.status(500).json({ error: "Failed to fetch global history" }); }
 };

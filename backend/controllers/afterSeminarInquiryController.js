@@ -83,14 +83,15 @@ exports.getLeads = async (req, res) => {
 
         if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
         if (batchId && batchId !== '') whereClause.batchId = parseInt(batchId);
         if (paymentGroup && paymentGroup !== '') whereClause.paymentIntention = paymentGroup;
         if (enrollmentStatus && enrollmentStatus !== '') whereClause.enrollmentStatus = enrollmentStatus;
-        if (inquiryType && inquiryType !== '') whereClause.inquiryType = inquiryType; // 🔥 Filter by Inquiry Type (NEW_INQ, OPEN_SEMINAR, etc.)
+        if (inquiryType && inquiryType !== '') whereClause.inquiryType = inquiryType; 
 
         if (tab === 'NEW') {
             if (isManager) whereClause.assignedTo = null; 
@@ -114,30 +115,32 @@ exports.getLeads = async (req, res) => {
         for (let i = 0; i < leads.length; i++) {
             let l = leads[i];
 
-            // 🔥 DELAY KPI LOGIC (24H & 5 Days) 🔥
             if (['NEW_INQ', 'OPEN_SEMINAR', 'NORMAL'].includes(l.inquiryType)) {
-                // Use newInqTimestamp if available, otherwise fallback to updatedAt
                 const referenceTime = new Date(l.newInqTimestamp || l.updatedAt || l.createdAt);
                 const hoursPassed = (now - referenceTime) / (1000 * 60 * 60);
                 const daysPassed = hoursPassed / 24;
 
                 // 24 Hour Delay Check (For pending calls)
-                // App eke red mark eka pennanne isLocked = true unama
                 if (hoursPassed >= 24 && l.phase === 1 && (!l.callStatus || l.callStatus === 'pending')) {
-                    leads[i].isLocked = true; // Frontend eke red alert eka pennanna
+                    // 🔥 NEW_INQ වලට විතරක් Lock එක අයින් කළා 🔥
+                    if (l.inquiryType !== 'NEW_INQ') {
+                        leads[i].isLocked = true; 
+                    } else {
+                        leads[i].isLocked = false;
+                    }
                 } else {
                     leads[i].isLocked = false;
                 }
 
                 // 5 Days Non-Enrolled Delay Check
                 if (daysPassed >= 5 && l.enrollmentStatus === 'NON_ENROLLED') {
-                    leads[i].needs5DayCall = true; // Frontend eke thawa indicator ekak
+                    leads[i].needs5DayCall = true; 
                 } else {
                     leads[i].needs5DayCall = false;
                 }
             }
 
-            // Sync with actual student payments (Already correct in your code)
+            // Sync with actual student payments
             const bizMatch = l.phone ? l.phone.match(/_BIZ_(\d+)/) : null;
             const extractedBizId = bizMatch ? parseInt(bizMatch[1]) : null;
 
@@ -193,16 +196,17 @@ exports.getLeads = async (req, res) => {
                 }
             }
 
-            // Clean phone number for frontend
             leads[i].phone = l.phone ? l.phone.split('_BIZ')[0] : '';
         }
 
         // --- Calculate Counts ---
-        let countWhere = { campaignType: 'AFTER_SEMINAR' };
+        let countWhere = { campaignType: 'AFTER_SEMINAR' }; 
+
         if (businessId && businessId !== '') {
             countWhere.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
+                { phone: { endsWith: `BIZ_${businessId}` } },
+                { phone: { endsWith: `BIZ_${businessId}_AS` } },
+                { phone: { contains: `BIZ_${businessId}_BATCH_` } }
             ];
         }
         if (batchId && batchId !== '') countWhere.batchId = parseInt(batchId);
@@ -348,9 +352,10 @@ exports.assignLeads = async (req, res) => {
                 whereClause.batchId = parseInt(batchId);
             } else if (businessId && businessId !== '') {
                 whereClause.OR = [
-                    { phone: { endsWith: `_BIZ_${businessId}` } },
-                    { phone: { contains: `_BIZ_${businessId}_` } }
-                ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
             }
 
             if (assignType === 'NEW_INQ') whereClause.inquiryType = 'NEW_INQ';
@@ -464,9 +469,10 @@ exports.getAllCampaignLeads = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
         
         const leads = await prisma.lead.findMany({ where: whereClause, orderBy: { updatedAt: 'desc' } }); 

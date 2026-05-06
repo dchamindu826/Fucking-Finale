@@ -1,7 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
-// 1. Get all payments
+const safeJson = (data) => JSON.parse(JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value));
+
+// ==========================================
+// 🏦 PAYMENT CONTROLLER LOGIC (ADMIN)
+// ==========================================
+
+// 1. Get All Payments
 exports.getPayments = async (req, res) => {
     try {
         const rawPayments = await prisma.payment.findMany({
@@ -9,9 +15,7 @@ exports.getPayments = async (req, res) => {
             orderBy: { created_at: 'desc' }
         });
 
-        const allCourses = await prisma.course.findMany({
-            select: { id: true, name: true, price: true, code: true }
-        });
+        const allCourses = await prisma.course.findMany({ select: { id: true, name: true, price: true, code: true } });
         const courseMap = {};
         allCourses.forEach(c => courseMap[c.id] = c);
 
@@ -21,37 +25,28 @@ exports.getPayments = async (req, res) => {
         const formattedPayments = await Promise.all(rawPayments.map(async (p) => {
             let currentStatus = 'Pending';
             
-            // 🔥 Status Identification Logic
-            if (p.status === 5) {
-                currentStatus = 'Trash'; // 5 = Deleted/Trash
-            }
+            if (p.status === 5) currentStatus = 'Trash'; 
             else if (p.payment_type === 1 && p.status === 1 && p.valid_until && new Date(p.valid_until) < today) {
                 currentStatus = 'Non Paid';
                 await prisma.payment.update({ where: { id: p.id }, data: { status: 3 } });
             } 
-            else if (p.status === 0 && p.method === 'Upcoming') {
-                currentStatus = 'Upcoming';
-            }
-            else if (p.status === 0) {
+            // 🔥 FIX: Post Pay 7 Days Expire Check (Auto revert to Pending)
+            else if (p.status === 4 && p.valid_until && new Date(p.valid_until) < today) {
                 currentStatus = 'Pending';
+                await prisma.payment.update({ where: { id: p.id }, data: { status: 0, valid_until: null, post_pay_days: 0 } });
             }
+            else if (p.status === 0 && p.method === 'Upcoming') currentStatus = 'Upcoming';
+            else if (p.status === 0) currentStatus = 'Pending';
             else if (p.status === 1) {
-                // Free Card & Discount Identification
-                if (p.amount === 0 && p.remark && p.remark.includes('Free Card')) {
-                    currentStatus = 'Free Card';
-                } else if (p.remark && p.remark.includes('Custom Breakdown')) {
-                    currentStatus = 'Discount';
-                } else {
-                    currentStatus = 'Approved';
-                }
+                if (p.amount === 0 && p.remark && p.remark.includes('Free Card')) currentStatus = 'Free Card';
+                else if (p.remark && p.remark.includes('Custom Breakdown')) currentStatus = 'Discount';
+                else currentStatus = 'Approved';
             }
             else if (p.status === 2) currentStatus = 'Rejected';
             else if (p.status === 3) currentStatus = 'Non Paid';
             else if (p.status === 4) currentStatus = 'Post Pay';
 
-            let systemTotal = 0;
-            let parsedSubjects = [];
-            let totalPhases = 1;
+            let systemTotal = 0; let parsedSubjects = []; let totalPhases = 1;
 
             if (p.subjects) {
                 try {
@@ -65,24 +60,19 @@ exports.getPayments = async (req, res) => {
                     if (p.payment_type === 2) {
                         const plan = allInstallments.find(i => i.batchId === p.batchId && i.subjectCount <= subIds.length);
                         if (plan && plan.details) {
-                            try {
-                                const parsedDetails = JSON.parse(plan.details);
-                                totalPhases = parsedDetails.length;
-                            } catch(e) {}
+                            try { totalPhases = JSON.parse(plan.details).length; } catch(e) {}
                         }
                     }
                 } catch(e) {}
             }
-
-            const slips = p.slip_image ? p.slip_image.split(',') : [];
 
             return {
                 id: p.id,
                 studentId: p.studentId,
                 studentName: p.student ? `${p.student.firstName} ${p.student.lastName}` : 'Unknown',
                 studentNo: p.student?.id ? `STU-${p.student.id}` : 'STU-000',
-                business: p.business?.name || 'N/A',
-                batch: p.batch?.name || 'N/A',
+                businessId: p.businessId, batchId: p.batchId, groupId: p.groupId,
+                business: p.business?.name || 'N/A', batch: p.batch?.name || 'N/A',
                 amount: p.amount || 0,
                 systemTotal: systemTotal, 
                 subjectsList: parsedSubjects, 
@@ -93,36 +83,77 @@ exports.getPayments = async (req, res) => {
                 dueDate: p.due_date ? new Date(p.due_date).toISOString().split('T')[0] : null,
                 installmentNo: p.installment_no || 1,
                 totalPhases: totalPhases,
-                slips: slips,
+                slips: p.slip_image ? p.slip_image.split(',') : [],
                 remark: p.remark || '',
-                daysLeft: p.post_pay_days || 0
+                daysLeft: p.post_pay_days || 0,
+                validUntil: p.valid_until,
+                excessAmount: p.excessAmount || 0,
+                arrearsAmount: p.arrearsAmount || 0
             };
         }));
 
-        const safeData = JSON.parse(JSON.stringify(formattedPayments, (key, value) =>
-            typeof value === 'bigint' ? value.toString() : value
-        ));
-
-        res.status(200).json(safeData);
-    } catch (error) {
-        console.error("Payment Fetch Error:", error);
-        res.status(200).json([]); 
+        res.status(200).json(safeJson(formattedPayments));
+    } catch (error) { 
+        res.status(500).json([]); 
     }
 };
 
-// 2. Action (Approve, Reject, Free Card, Discount, Trash)
+// 2. Action for Standard Payments (Approve/Reject/Trash/SendToDelivery)
 exports.paymentAction = async (req, res) => {
     try {
-        const { paymentId, action, customAmount, remark } = req.body;
+        const { paymentId, action, customAmount, remark, isSelfPicked, actualAmountPaid } = req.body;
         let updateData = {};
+        
+        const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
+        if (!payRecord) return res.status(404).json({ error: "Payment not found" });
 
-        // 🔥 Trash Logic
+        // 🔥 FIX: Send to Delivery Hub manually for Free Cards / Discounts
+        if (action === 'SendToDelivery') {
+            const existingDelivery = await prisma.delivery.findUnique({ where: { paymentId: parseInt(paymentId) } });
+            if (!existingDelivery && payRecord.subjects) {
+                try {
+                    const subIds = JSON.parse(payRecord.subjects).map(id => parseInt(id));
+                    const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
+                    if (courses.length > 0) {
+                        const paymentTypeStr = payRecord.payment_type === 1 ? 'Monthly' : (payRecord.payment_type === 2 ? 'Installment' : 'Full');
+                        await prisma.delivery.create({
+                            data: {
+                                paymentId: payRecord.id, studentId: payRecord.studentId.toString(), businessId: payRecord.businessId,
+                                paymentType: paymentTypeStr, status: 'Pending',
+                                items: { create: courses.map(c => ({ courseId: c.id, tuteName: c.name || "Tute", quantity: 1 })) }
+                            }
+                        });
+                        return res.status(200).json({ message: `Sent to Delivery Hub successfully` });
+                    }
+                } catch(e) { return res.status(500).json({ error: "Failed to create delivery" }); }
+            }
+            return res.status(200).json({ message: `Already in Delivery Hub` });
+        }
+
         if (action === 'Trash') {
             updateData.status = 5; 
         } else if (action === 'Reject') {
             updateData.status = 2;
         } else if (action === 'Approve') {
             updateData.status = 1;
+            
+            // 🔥 WALLET LOGIC INTEGRATION
+            const expectedAmount = parseFloat(payRecord.amount);
+            const actualPaid = actualAmountPaid ? parseFloat(actualAmountPaid) : expectedAmount;
+            const difference = actualPaid - expectedAmount; 
+
+            if (difference !== 0) {
+                await prisma.user.update({
+                    where: { id: payRecord.studentId },
+                    data: { walletBalance: { increment: difference } }
+                });
+                updateData.excessAmount = difference > 0 ? difference : 0;
+                updateData.arrearsAmount = difference < 0 ? Math.abs(difference) : 0;
+                
+                updateData.remark = payRecord.remark 
+                    ? `${payRecord.remark}\n\n[SYSTEM]: Wallet adjusted by LKR ${difference.toLocaleString()}` 
+                    : `[SYSTEM]: Wallet adjusted by LKR ${difference.toLocaleString()}`;
+            }
         } else if (action === 'Free Card') {
             updateData.status = 1;
             updateData.amount = 0;
@@ -134,19 +165,17 @@ exports.paymentAction = async (req, res) => {
         }
 
         if (['Approve', 'Free Card', 'Discount'].includes(action)) {
-            const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
-            if (payRecord && payRecord.payment_type === 1) { 
+            if (payRecord.payment_type === 1) { 
                 let validDate = new Date();
                 validDate.setDate(validDate.getDate() + 30);
                 updateData.valid_until = validDate;
             }
-            
-            if (remark) {
-                updateData.remark = payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`;
-            }
-        } else if (remark && action !== 'Trash') {
-             const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
-             updateData.remark = payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`;
+        }
+
+        if (remark && action !== 'Trash') {
+            updateData.remark = updateData.remark 
+                ? `${updateData.remark}\n\n[ADMIN]: ${remark}` 
+                : (payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`);
         }
 
         const updatedPayment = await prisma.payment.update({
@@ -154,183 +183,145 @@ exports.paymentAction = async (req, res) => {
             data: updateData
         });
 
-        // ==============================================================
-        // 🔥 NEW: CREATE DELIVERY RECORD ON APPROVAL 🔥
-        // ==============================================================
-        if (['Approve', 'Free Card', 'Discount'].includes(action)) {
-            
-            // Check if delivery already exists for this payment (Prevent duplicates)
-            const existingDelivery = await prisma.delivery.findUnique({
-                where: { paymentId: parseInt(paymentId) }
-            });
-
+        // 🔥 FIX: Auto Delivery ONLY for normal Approve (Not Free Card/Discount)
+        if (action === 'Approve') {
+            const existingDelivery = await prisma.delivery.findUnique({ where: { paymentId: parseInt(paymentId) } });
             if (!existingDelivery && updatedPayment.subjects) {
                 try {
                     const subIds = JSON.parse(updatedPayment.subjects).map(id => parseInt(id));
-                    
-                    // Fetch full course details to get tute names/images
-                    const courses = await prisma.course.findMany({
-                        where: { id: { in: subIds } }
-                    });
-
+                    const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
                     if (courses.length > 0) {
                         const paymentTypeStr = updatedPayment.payment_type === 1 ? 'Monthly' : (updatedPayment.payment_type === 2 ? 'Installment' : 'Full');
-
                         await prisma.delivery.create({
                             data: {
-                                paymentId: updatedPayment.id,
-                                studentId: updatedPayment.studentId.toString(),
-                                businessId: updatedPayment.businessId,
-                                paymentType: paymentTypeStr,
-                                status: 'Pending',
-                                items: {
-                                    create: courses.map(c => ({
-                                        courseId: c.id,
-                                        tuteName: c.name || "Tute", 
-                                        tuteImage: null, // If you have a specific tuteImage field in courses table, map it here
-                                        quantity: 1
-                                    }))
-                                }
+                                paymentId: updatedPayment.id, studentId: updatedPayment.studentId.toString(), businessId: updatedPayment.businessId,
+                                paymentType: paymentTypeStr, status: isSelfPicked ? 'Delivered' : 'Pending',
+                                items: { create: courses.map(c => ({ courseId: c.id, tuteName: c.name || "Tute", quantity: 1 })) }
                             }
                         });
-                        console.log(`🚚 Delivery created for Payment ID: ${paymentId}`);
                     }
-                } catch(e) {
-                    console.error("Failed to create delivery record:", e);
-                }
+                } catch(e) {}
             }
         }
-        // ==============================================================
 
         res.status(200).json({ message: `Payment processed as ${action}` });
-    } catch (error) {
-        res.status(500).json({ error: "Action failed" });
+    } catch (error) { 
+        res.status(500).json({ error: "Action failed" }); 
     }
 };
 
-// 3. 🔥 FIX: Approve Installment & Prevent Duplicates 🔥
+// 3. Action for Installments
 exports.approveInstallment = async (req, res) => {
     try {
-        const { paymentId, nextDueDate, action } = req.body;
+        const { paymentId, actualAmountPaid, remark, isSelfPicked } = req.body;
         
-        const currentPay = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) } });
-        if (!currentPay) return res.status(404).json({ error: "Payment not found" });
+        const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
+        if (!payRecord) return res.status(404).json({ error: "Payment not found" });
 
-        // Approve current installment
+        let updateData = { status: 1 }; 
+
+        // 🔥 WALLET LOGIC INTEGRATION 
+        const expectedAmount = parseFloat(payRecord.amount);
+        const actualPaid = actualAmountPaid ? parseFloat(actualAmountPaid) : expectedAmount;
+        const difference = actualPaid - expectedAmount;
+
+        if (difference !== 0) {
+            await prisma.user.update({
+                where: { id: payRecord.studentId },
+                data: { walletBalance: { increment: difference } }
+            });
+            updateData.excessAmount = difference > 0 ? difference : 0;
+            updateData.arrearsAmount = difference < 0 ? Math.abs(difference) : 0;
+            
+            updateData.remark = payRecord.remark 
+                ? `${payRecord.remark}\n\n[SYSTEM]: Wallet adjusted by LKR ${difference.toLocaleString()}` 
+                : `[SYSTEM]: Wallet adjusted by LKR ${difference.toLocaleString()}`;
+        }
+
+        if (remark) {
+            updateData.remark = updateData.remark 
+                ? `${updateData.remark}\n\n[ADMIN]: ${remark}` 
+                : (payRecord.remark ? `${payRecord.remark}\n\n[ADMIN]: ${remark}` : `[ADMIN]: ${remark}`);
+        }
+
         const updatedPayment = await prisma.payment.update({
             where: { id: parseInt(paymentId) },
-            data: { status: 1 } 
+            data: updateData
         });
 
-        // ==============================================================
-        // 🔥 NEW: CREATE DELIVERY RECORD FOR INSTALLMENT APPROVAL 🔥
-        // ==============================================================
-        const existingDelivery = await prisma.delivery.findUnique({
-            where: { paymentId: parseInt(paymentId) }
-        });
-
+        const existingDelivery = await prisma.delivery.findUnique({ where: { paymentId: parseInt(paymentId) } });
         if (!existingDelivery && updatedPayment.subjects) {
             try {
                 const subIds = JSON.parse(updatedPayment.subjects).map(id => parseInt(id));
                 const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
-
                 if (courses.length > 0) {
                     await prisma.delivery.create({
                         data: {
-                            paymentId: updatedPayment.id,
-                            studentId: updatedPayment.studentId.toString(),
-                            businessId: updatedPayment.businessId,
-                            paymentType: 'Installment',
-                            status: 'Pending',
-                            items: {
-                                create: courses.map(c => ({
-                                    courseId: c.id,
-                                    tuteName: c.name || "Tute", 
-                                    tuteImage: null, 
-                                    quantity: 1
-                                }))
-                            }
+                            paymentId: updatedPayment.id, studentId: updatedPayment.studentId.toString(), businessId: updatedPayment.businessId,
+                            paymentType: 'Installment', status: isSelfPicked ? 'Delivered' : 'Pending',
+                            items: { create: courses.map(c => ({ courseId: c.id, tuteName: c.name || "Tute", quantity: 1 })) }
                         }
                     });
-                    console.log(`🚚 Delivery created for Installment Payment ID: ${paymentId}`);
                 }
-            } catch(e) {
-                console.error("Failed to create delivery record for installment:", e);
-            }
-        }
-        // ==============================================================
-
-        // ඊළඟ වාරිකය ගණනය කිරීම
-        let nextAmount = currentPay.amount; 
-        let hasNextStep = true;
-        let subjectCount = 1;
-
-        if (currentPay.subjects) {
-            try { subjectCount = JSON.parse(currentPay.subjects).length; } catch (e) {}
-        }
-
-        const installmentPlan = await prisma.installment.findFirst({
-            where: { batchId: currentPay.batchId, subjectCount: { lte: subjectCount } },
-            orderBy: { subjectCount: 'desc' }
-        });
-
-        const nextStepNum = (currentPay.installment_no || 1) + 1;
-
-        if (installmentPlan && installmentPlan.details) {
-            try {
-                const details = JSON.parse(installmentPlan.details);
-                const nextStepObj = details.find(d => parseInt(d.step) === nextStepNum);
-                
-                if (nextStepObj) nextAmount = parseFloat(nextStepObj.amount);
-                else hasNextStep = false;
             } catch(e) {}
         }
 
-        // 🔥 FIX: මේ ළමයාට මේ Batch එකේ මේ Installment එක කලින් හැදිලද බලනවා (Duplicate අවුල විසඳීමට)
-        const existingUpcoming = await prisma.payment.findFirst({
-            where: {
-                studentId: currentPay.studentId,
-                batchId: currentPay.batchId,
-                payment_type: 2,
-                installment_no: nextStepNum
-            }
-        });
+        if (payRecord.subjects) {
+            try {
+                const subIds = JSON.parse(payRecord.subjects);
+                const plan = await prisma.installment.findFirst({
+                    where: { batchId: payRecord.batchId, subjectCount: subIds.length }
+                });
 
-        // කලින් හැදිලා නැත්නම් විතරක් අලුත් එක හදනවා
-        if (nextDueDate && hasNextStep && !existingUpcoming) {
-            await prisma.payment.create({
-                data: {
-                    studentId: currentPay.studentId,
-                    businessId: currentPay.businessId,
-                    batchId: currentPay.batchId,
-                    groupId: currentPay.groupId,   
-                    subjects: currentPay.subjects, 
-                    amount: nextAmount,             
-                    payment_type: 2, 
-                    method: 'Upcoming', // මේක Upcoming තියෙනකම් Pending වලට එන්නේ නෑ
-                    status: 0, 
-                    due_date: new Date(nextDueDate),
-                    installment_no: nextStepNum
+                if (plan && plan.details) {
+                    const phases = JSON.parse(plan.details);
+                    const currentPhaseIndex = payRecord.installment_no - 1;
+
+                    if (currentPhaseIndex + 1 < phases.length) {
+                        const nextPhase = phases[currentPhaseIndex + 1];
+                        let nextDueDate = new Date();
+                        nextDueDate.setDate(nextDueDate.getDate() + 30); 
+
+                        await prisma.payment.create({
+                            data: {
+                                studentId: payRecord.studentId,
+                                businessId: payRecord.businessId,
+                                batchId: payRecord.batchId,
+                                groupId: payRecord.groupId,
+                                subjects: payRecord.subjects,
+                                payment_type: 2, 
+                                method: 'Upcoming', 
+                                status: 0,
+                                amount: parseFloat(nextPhase.price),
+                                installment_no: currentPhaseIndex + 2,
+                                due_date: nextDueDate
+                            }
+                        });
+                    }
                 }
-            });
+            } catch (e) {}
         }
 
-        res.status(200).json({ message: "Installment Approved & Next Scheduled!" });
-    } catch (error) {
-        console.error("Installment Action Error:", error);
-        res.status(500).json({ error: "Action failed" });
+        res.status(200).json({ message: "Installment approved successfully" });
+    } catch (error) { 
+        res.status(500).json({ error: "Failed to approve installment" }); 
     }
 };
 
-// 4. Grant Temporary Access
+// 4. Grant Post Pay (Temporary Access) - Auto generates 7 days
 exports.grantPostPay = async (req, res) => {
     try {
-        const { paymentId, days } = req.body;
+        const { paymentId } = req.body;
+        
+        let validDate = new Date();
+        validDate.setDate(validDate.getDate() + 7); // Exactly 7 days
+
         await prisma.payment.update({
             where: { id: parseInt(paymentId) },
-            data: { status: 4, post_pay_days: parseInt(days) }
+            data: { status: 4, post_pay_days: 7, valid_until: validDate } 
         });
-        res.status(200).json({ message: `Access granted for ${days} days` });
+        
+        res.status(200).json({ message: `Access granted for 7 days` });
     } catch (error) {
         res.status(500).json({ error: "Failed to grant access" });
     }

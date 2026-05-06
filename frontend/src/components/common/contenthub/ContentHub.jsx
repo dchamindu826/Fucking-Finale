@@ -153,13 +153,35 @@ export default function ContentHub() {
       } catch(e) { console.error(e); }
   };
 
+  // 🔥 FIX: Database එකේ JSON String එකක් විදිහට සේව් වෙලා තියෙන groupPrices parse කරලා Tute විස්තර ගන්නවා
   const extractUniqueSubjects = (batch) => {
       const subs = [];
       batch?.groups?.forEach(g => {
           g.courses?.forEach(c => {
               const existing = subs.find(s => s.name === c.name);
-              if(!existing) { subs.push({...c, groupPrices: [{ groupId: g.id, groupName: g.name, groupType: g.type, price: c.price, deliverTute: c.deliverTute, tuteName: c.tuteName }] }); } 
-              else { existing.groupPrices.push({ groupId: g.id, groupName: g.name, groupType: g.type, price: c.price, deliverTute: c.deliverTute, tuteName: c.tuteName }); }
+              
+              let gpData = {};
+              try {
+                  const parsed = typeof c.groupPrices === 'string' ? JSON.parse(c.groupPrices) : (c.groupPrices || []);
+                  gpData = parsed.find(p => parseInt(p.groupId) === parseInt(g.id)) || {};
+              } catch(e) {}
+
+              const priceObj = { 
+                  groupId: g.id, 
+                  groupName: g.name, 
+                  groupType: g.type, 
+                  price: c.price, 
+                  deliverTute: gpData.deliverTute === true || gpData.deliverTute === 'true', 
+                  tuteName: gpData.tuteName || '',
+                  tuteCover: gpData.tuteCover || null,
+                  lecturerImage: gpData.lecturerImage || null
+              };
+
+              if(!existing) { 
+                  subs.push({...c, groupPrices: [priceObj] }); 
+              } else { 
+                  existing.groupPrices.push(priceObj); 
+              }
           });
       });
       setUniqueSubjects(subs.sort((a,b) => a.itemOrder - b.itemOrder));
@@ -228,24 +250,17 @@ export default function ContentHub() {
 
   const getTypeInt = (tabStr) => { switch(tabStr) { case 'live': return 1; case 'recording': return 2; case 'document': return 3; case 'sPaper': return 4; case 'paper': return 5; default: return 1; } };
   
-  // 🔥 FIX: Bulletproof YouTube & Google Drive URL Extractor 🔥
- const getEmbedUrl = (url) => {
+  const getEmbedUrl = (url) => {
       if (!url) return '';
       try {
-          // Google Drive Handle kireema
           if (url.includes('drive.google.com') && url.includes('/view')) {
               return url.replace('/view', '/preview');
           }
-          
-          // YouTube Links Handle kireema 
           const ytRegex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|live\/|shorts\/)|youtu\.be\/)([^"&?\/\s]{11})/i;
           const match = url.match(ytRegex);
-          
           if (match && match[1] && match[1].length === 11) {
-              // 🔥 youtube.com wenuwata youtube-nocookie.com damma 🔥
               return `https://www.youtube-nocookie.com/embed/${match[1]}?rel=0&modestbranding=1`;
           }
-          
           return url; 
       } catch(e) {
           return url;

@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { Loader2, PhoneCall, CheckCircle2, AlertCircle, Award, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
 import { FaSave, FaCommentDots, FaSearch } from 'react-icons/fa';
 
-export default function BridgeStaffExecution({ filters, setChatModalLead }) {
+export default function BridgeStaffExecution({ filters, setChatModalLead, externalSearch }) {
     const [leads, setLeads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [drafts, setDrafts] = useState({});
@@ -22,6 +22,13 @@ export default function BridgeStaffExecution({ filters, setChatModalLead }) {
     const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER'].includes(rawRole.toUpperCase().replace(/ /g, '_'));
 
     useEffect(() => {
+        if (externalSearch) {
+            setSearchQuery(externalSearch);
+        }
+    }, [externalSearch]);
+
+    // 🔥 FIX: Component එක load වෙද්දි සහ Business/Batch මාරු වෙද්දි Data Fetch කරන්න මේක දාන්න
+    useEffect(() => {
         fetchBridgeCampaignLeads();
     }, [filters?.selectedBusiness, filters?.selectedBatch]);
 
@@ -33,11 +40,11 @@ export default function BridgeStaffExecution({ filters, setChatModalLead }) {
                 headers: { Authorization: `Bearer ${token}` }, 
                 params: {
                     tab: 'ASSIGNED',
-                    inquiryType: 'NORMAL',
-                    loggedUserId: currentUserId, 
+                    // 🔥 FIX: Corrected variable names here 🔥
+                    loggedUserId: currentUserId,
                     loggedUserRole: rawRole,
-                    businessId: isManager ? (filters?.selectedBusiness || '') : '',
-                    batchId: isManager ? (filters?.selectedBatch || '') : ''
+                    businessId: filters?.selectedBusiness || '', 
+                    batchId: filters?.selectedBatch || ''        
                 }
             });
             
@@ -52,7 +59,10 @@ export default function BridgeStaffExecution({ filters, setChatModalLead }) {
             });
             setDrafts(loadedDrafts);
             setSessionEnrolled({ total: 0, full: 0, monthly: 0, installment: 0 });
-        } catch (error) { toast.error("Failed to load bridge campaign leads"); }
+        } catch (error) { 
+            console.error(error); // Console එකේ error එක හරියටම බලාගන්න මේක දාන්න
+            toast.error("Failed to load bridge campaign leads"); 
+        }
         setLoading(false);
     };
 
@@ -111,8 +121,11 @@ export default function BridgeStaffExecution({ filters, setChatModalLead }) {
         l.phone.includes(searchQuery) || (l.name && l.name.toLowerCase().includes(searchQuery.toLowerCase()))
     ));
 
-    const totalPages = Math.ceil(phaseFilteredLeads.length / itemsPerPage);
-    const paginatedLeads = phaseFilteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    // 🔥 DATE SORTING LOGIC 🔥 - අලුත්ම ඒවා උඩට එන විදිහට Sort කිරීම
+    const sortedFilteredLeads = phaseFilteredLeads.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+
+    const totalPages = Math.ceil(sortedFilteredLeads.length / itemsPerPage);
+    const paginatedLeads = sortedFilteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
     const totalAssigned = leads.length + sessionEnrolled.total;
     const covered = leads.filter(l => l.callStatus !== 'pending').length + sessionEnrolled.total;
@@ -187,50 +200,77 @@ export default function BridgeStaffExecution({ filters, setChatModalLead }) {
                         const currentRemark = drafts[lead.id] !== undefined ? drafts[lead.id] : (lead.feedback || '');
                         const isPending = lead.callStatus === 'pending' || !lead.callStatus;
                         
+                        // 🔥 Date Header Logic 🔥
+                        const currentLeadDate = new Date(lead.updatedAt || lead.createdAt).toLocaleDateString('en-CA');
+                        const prevLeadDate = index > 0 ? new Date(paginatedLeads[index - 1].updatedAt || paginatedLeads[index - 1].createdAt).toLocaleDateString('en-CA') : null;
+                        const showDateHeader = currentLeadDate !== prevLeadDate;
+
+                        const getDateHeader = (dateStr) => {
+                            const date = new Date(dateStr);
+                            const today = new Date();
+                            const yesterday = new Date(today);
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            if (date.toDateString() === today.toDateString()) return "📅 Today";
+                            if (date.toDateString() === yesterday.toDateString()) return "📅 Yesterday";
+                            return `📅 ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`;
+                        };
+                        
                         return (
-                            <div key={lead.id} className={`bg-[#1e293b]/80 backdrop-blur-md p-4 rounded-2xl border transition-all ${isPending ? 'border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.05)]' : 'border-white/5 hover:border-white/10'}`}>
-                                <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center">
-                                    <div className="flex items-center gap-4 w-full xl:w-64 shrink-0">
-                                        <div className={`w-10 h-10 rounded-full flex justify-center items-center font-black text-sm shadow-inner ${isPending ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
-                                            {realIndex}
+                            <React.Fragment key={lead.id}>
+                                {showDateHeader && (
+                                    <div className="flex items-center gap-3 my-5 first:mt-1">
+                                        <div className="h-px flex-1 bg-white/10"></div>
+                                        <span className="text-[11px] font-bold text-amber-500 uppercase tracking-widest bg-black/40 px-4 py-1.5 rounded-full border border-amber-500/20 shadow-sm">
+                                            {getDateHeader(currentLeadDate)}
+                                        </span>
+                                        <div className="h-px flex-1 bg-white/10"></div>
+                                    </div>
+                                )}
+
+                                <div className={`bg-[#1e293b]/80 backdrop-blur-md p-4 rounded-2xl border transition-all ${isPending ? 'border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.05)]' : 'border-white/5 hover:border-white/10'}`}>
+                                    <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center">
+                                        <div className="flex items-center gap-4 w-full xl:w-64 shrink-0">
+                                            <div className={`w-10 h-10 rounded-full flex justify-center items-center font-black text-sm shadow-inner ${isPending ? 'bg-rose-500/20 text-rose-400' : 'bg-slate-800 text-slate-300'}`}>
+                                                {realIndex}
+                                            </div>
+                                            <div>
+                                                <h4 className="text-white font-black text-base">{lead.phone}</h4>
+                                                <p className="text-xs text-slate-400 font-medium truncate w-40" title={lead.name}>{lead.name || 'Unknown Student'}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="text-white font-black text-base">{lead.phone}</h4>
-                                            <p className="text-xs text-slate-400 font-medium truncate w-40" title={lead.name}>{lead.name || 'Unknown Student'}</p>
+                                        <div className="flex gap-2 flex-wrap xl:flex-nowrap w-full xl:w-auto shrink-0">
+                                            <select value={lead.attemptCount || 1} onChange={(e) => handleUpdateLocalLead(lead.id, 'attemptCount', parseInt(e.target.value))} className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-amber-500">
+                                                {[1,2,3,4,5].map(r => <option key={r} value={r}>Attempt {r}</option>)}
+                                            </select>
+                                            <select value={lead.callMethod || 'direct'} onChange={(e) => handleUpdateLocalLead(lead.id, 'callMethod', e.target.value)} className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-amber-500">
+                                                <option value="direct">Direct Call</option><option value="whatsapp">WhatsApp</option><option value="3cx">3CX Call</option>
+                                            </select>
+                                            <select onChange={(e) => handleUpdateLocalLead(lead.id, 'callStatus', e.target.value)} value={lead.callStatus || 'pending'} className={`text-xs font-black rounded-xl px-3 py-2.5 outline-none cursor-pointer ${isPending ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : lead.callStatus === 'answered' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : lead.callStatus === 'no_answer' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-400 border border-white/10'}`}>
+                                                <option value="pending">Pending</option><option value="answered">Answered</option><option value="no_answer">No Answer</option><option value="reject">Reject</option>
+                                            </select>
                                         </div>
-                                    </div>
-                                    <div className="flex gap-2 flex-wrap xl:flex-nowrap w-full xl:w-auto shrink-0">
-                                        <select value={lead.attemptCount || 1} onChange={(e) => handleUpdateLocalLead(lead.id, 'attemptCount', parseInt(e.target.value))} className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-amber-500">
-                                            {[1,2,3,4,5].map(r => <option key={r} value={r}>Attempt {r}</option>)}
-                                        </select>
-                                        <select value={lead.callMethod || 'direct'} onChange={(e) => handleUpdateLocalLead(lead.id, 'callMethod', e.target.value)} className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-amber-500">
-                                            <option value="direct">Direct Call</option><option value="whatsapp">WhatsApp</option><option value="3cx">3CX Call</option>
-                                        </select>
-                                        <select onChange={(e) => handleUpdateLocalLead(lead.id, 'callStatus', e.target.value)} value={lead.callStatus || 'pending'} className={`text-xs font-black rounded-xl px-3 py-2.5 outline-none cursor-pointer ${isPending ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : lead.callStatus === 'answered' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : lead.callStatus === 'no_answer' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-slate-800 text-slate-400 border border-white/10'}`}>
-                                            <option value="pending">Pending</option><option value="answered">Answered</option><option value="no_answer">No Answer</option><option value="reject">Reject</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex gap-2 w-full xl:w-auto shrink-0">
-                                        <select value={lead.paymentIntention || 'NOT_DECIDED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'paymentIntention', e.target.value)} className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-blue-500">
-                                            <option value="NOT_DECIDED">Plan: Not Decided</option><option value="FULL">Plan: Full Payment</option><option value="MONTHLY">Plan: Monthly</option><option value="INSTALLMENT">Plan: Installment</option>
-                                        </select>
-                                        <select value={lead.enrollmentStatus || 'NON_ENROLLED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'enrollmentStatus', e.target.value)} className="bg-[#0f172a] text-xs font-black text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-emerald-500">
-                                            <option value="NON_ENROLLED">Non-Enrolled</option><option value="ENROLLED" className="text-emerald-400">🔥 ENROLLED</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex gap-2 w-full">
-                                        <input type="text" value={currentRemark} onChange={(e) => { setDrafts(prev => ({ ...prev, [lead.id]: e.target.value })); localStorage.setItem(`draft_bridge_${lead.id}`, e.target.value); }} 
-                                            placeholder="Type your feedback..." className="flex-1 bg-[#0f172a] text-xs font-medium text-white px-4 py-2.5 rounded-xl border border-white/10 outline-none focus:border-amber-500 transition-all" />
-                                        <button onClick={() => setChatModalLead(lead)} title="Open Workspace" className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition-transform hover:scale-105 relative shrink-0">
-                                            <FaCommentDots size={14}/>
-                                            {lead.unreadCount > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-[#1e293b]"></span>}
-                                        </button>
-                                        <button onClick={() => handleSaveCallData(lead.id)} title="Save Updates" className="p-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl shadow-md transition-transform hover:scale-105 shrink-0 flex items-center gap-2 font-bold text-xs">
-                                            <FaSave size={14}/> <span className="hidden md:inline">SAVE</span>
-                                        </button>
+                                        <div className="flex gap-2 w-full xl:w-auto shrink-0">
+                                            <select value={lead.paymentIntention || 'NOT_DECIDED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'paymentIntention', e.target.value)} className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-blue-500">
+                                                <option value="NOT_DECIDED">Plan: Not Decided</option><option value="FULL">Plan: Full Payment</option><option value="MONTHLY">Plan: Monthly</option><option value="INSTALLMENT">Plan: Installment</option>
+                                            </select>
+                                            <select value={lead.enrollmentStatus || 'NON_ENROLLED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'enrollmentStatus', e.target.value)} className="bg-[#0f172a] text-xs font-black text-slate-300 border border-white/10 rounded-xl px-3 py-2.5 outline-none cursor-pointer focus:border-emerald-500">
+                                                <option value="NON_ENROLLED">Non-Enrolled</option><option value="ENROLLED" className="text-emerald-400">🔥 ENROLLED</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex gap-2 w-full">
+                                            <input type="text" value={currentRemark} onChange={(e) => { setDrafts(prev => ({ ...prev, [lead.id]: e.target.value })); localStorage.setItem(`draft_bridge_${lead.id}`, e.target.value); }} 
+                                                placeholder="Type your feedback..." className="flex-1 bg-[#0f172a] text-xs font-medium text-white px-4 py-2.5 rounded-xl border border-white/10 outline-none focus:border-amber-500 transition-all" />
+                                            <button onClick={() => setChatModalLead(lead)} title="Open Workspace" className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md transition-transform hover:scale-105 relative shrink-0">
+                                                <FaCommentDots size={14}/>
+                                                {lead.unreadCount > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-[#1e293b]"></span>}
+                                            </button>
+                                            <button onClick={() => handleSaveCallData(lead.id)} title="Save Updates" className="p-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl shadow-md transition-transform hover:scale-105 shrink-0 flex items-center gap-2 font-bold text-xs">
+                                                <FaSave size={14}/> <span className="hidden md:inline">SAVE</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </React.Fragment>
                         );
                     })
                 )}

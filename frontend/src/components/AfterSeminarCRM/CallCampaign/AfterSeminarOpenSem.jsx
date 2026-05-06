@@ -3,7 +3,6 @@ import axios from '../../../api/axios';
 import toast from 'react-hot-toast';
 import { FaSearch, FaKeyboard, FaSave, FaCommentDots, FaPlus, FaTimes, FaLock, FaCheckCircle, FaChartPie, FaTasks, FaPhoneVolume, FaPlay, FaPause, FaExclamationTriangle } from 'react-icons/fa';
 
-// ... (singlishToSinhala function remains the same) ...
 const singlishToSinhala = (text) => {
     if (!text) return text;
     let s = text;
@@ -13,12 +12,11 @@ const singlishToSinhala = (text) => {
     for (let v in vowels) s = s.replace(new RegExp(`(^|\\s)${v}`, 'g'), `$1${vowels[v].iso}`);
     for (let c in multiConsonants) { for (let v in vowels) { s = s.replace(new RegExp(c + v, 'g'), multiConsonants[c] + vowels[v].s); } s = s.replace(new RegExp(c, 'g'), multiConsonants[c] + '්'); }
     for (let c in singleConsonants) { for (let v in vowels) { s = s.replace(new RegExp(c + v, 'g'), singleConsonants[c] + vowels[v].s); } s = s.replace(new RegExp(c, 'g'), singleConsonants[c] + '්'); }
-    s = s.replace(/ර්ර/g, '්ර'); s = s.replace(/්්/g, '්'); 
+    s = s.replace(/ර්‍ර/g, '්‍ර'); s = s.replace(/්්/g, '්'); 
     return s;
 };
 
-export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts, setDrafts, handleUpdateLocalLead, handleSaveCallData, handleTempUnlock, setChatModalLead, isManager }) {
-    // ... (State initialization remains the same) ...
+export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts, setDrafts, handleUpdateLocalLead, handleSaveCallData, handleTempUnlock, setChatModalLead, isManager, externalSearch }) {
     const [activePhaseFilter, setActivePhaseFilter] = useState(1); 
     const [activeCoordinationRound, setActiveCoordinationRound] = useState(1);
     const [searchQuery, setSearchQuery] = useState('');
@@ -39,8 +37,10 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
     });
 
     useEffect(() => {
-        localStorage.setItem('openSem_custom_rounds', JSON.stringify(customRounds));
-    }, [customRounds]);
+        if (externalSearch) {
+            setSearchQuery(externalSearch);
+        }
+    }, [externalSearch]);
 
     const openSemLeads = leads.filter(l => l.inquiryType === 'OPEN_SEMINAR' || l.inquiryType === 'NORMAL');
 
@@ -79,12 +79,15 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
         return { assigned, covered, pending, answered, responseRate };
     }, [openSemLeads]);
 
-    const filteredLeads = openSemLeads.filter(l => {
+    let filteredLeads = openSemLeads.filter(l => {
         const matchesPhase = activePhaseFilter === 'ALL' || l.phase === activePhaseFilter;
         const matchesRound = (l.coordinationRound || 1) === activeCoordinationRound;
         const matchesSearch = l.phone.includes(searchQuery) || (l.name && l.name.toLowerCase().includes(searchQuery.toLowerCase()));
         return matchesPhase && matchesRound && matchesSearch;
     });
+
+    // 🔥 DATE SORTING LOGIC 🔥
+    filteredLeads.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
     const totalPages = Math.ceil(filteredLeads.length / itemsPerPage);
     const paginatedLeads = filteredLeads.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -110,7 +113,6 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
         toast.success(`Round ${roundNum} is now ${nextStatus.toUpperCase()}`);
     };
 
-    // ... (addCustomRound, removeCustomRound, toggleAddSelect, handleAddNumbersSubmit remain the same) ...
      const addCustomRound = async () => {
         const name = window.prompt("Enter new custom campaign name:");
         if (name && name.trim()) {
@@ -268,7 +270,6 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
 
             {/* TOP STATS BOXES */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {/* ... (Stats boxes remain unchanged) ... */}
                 <div className="bg-[#141a23] p-4 rounded-xl border border-slate-800 shadow-sm">
                     <h3 className="text-indigo-400 font-semibold text-xs uppercase tracking-widest mb-3">Full Payment</h3>
                     <div className="flex justify-between items-end">
@@ -297,7 +298,6 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
 
             {/* FILTERS */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-[#141a23] p-2 rounded-xl border border-slate-800">
-                {/* ... (Filters remain unchanged) ... */}
                  <div className="flex bg-[#0b0e14] p-1 rounded-lg w-full md:w-auto">
                     {[1, 2, 3, 'ALL'].map(ph => (
                         <button key={ph} onClick={() => {setActivePhaseFilter(ph); setCurrentPage(1);}} className={`px-5 py-2 rounded-md text-xs font-semibold uppercase tracking-wider transition-all ${activePhaseFilter === ph ? (ph === 3 ? 'bg-red-500 text-white' : 'bg-slate-700 text-white') : 'text-slate-400 hover:text-white'}`}>
@@ -335,91 +335,117 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
                             const realIndex = (currentPage - 1) * itemsPerPage + index + 1;
                             const currentRemark = drafts[lead.id] !== undefined ? drafts[lead.id] : (lead.feedback || '');
                             
-                            // 🔥 DELAY INDICATOR LOGIC 🔥
                             const isDelayed = lead.isLocked || lead.needs5DayCall; 
+                            const invalidPending = lead.isLocked && lead.callStatus === 'pending';
+
+                            // 🔥 Date Header Logic 🔥
+                            const currentLeadDate = new Date(lead.updatedAt).toLocaleDateString('en-CA');
+                            const prevLeadDate = index > 0 ? new Date(paginatedLeads[index - 1].updatedAt).toLocaleDateString('en-CA') : null;
+                            const showDateHeader = currentLeadDate !== prevLeadDate;
+
+                            const getDateHeader = (dateStr) => {
+                                const date = new Date(dateStr);
+                                const today = new Date();
+                                const yesterday = new Date(today);
+                                yesterday.setDate(yesterday.getDate() - 1);
+                                if (date.toDateString() === today.toDateString()) return "📅 Today";
+                                if (date.toDateString() === yesterday.toDateString()) return "📅 Yesterday";
+                                return `📅 ${date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}`;
+                            };
 
                             return (
-                                <div key={lead.id} className={`bg-[#0f151c] border p-3.5 rounded-xl flex flex-col xl:flex-row items-center gap-4 transition-colors relative
-                                    ${isDelayed ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-700/50 hover:border-slate-600'}
-                                `}>
-                                    
-                                    {/* 🔥 RED MARKER BADGE 🔥 */}
-                                    {isDelayed && (
-                                        <div className="absolute -top-2.5 -right-2.5 bg-red-600 text-white text-[9px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1 animate-pulse z-10 border border-[#0f151c]">
-                                            <FaExclamationTriangle size={10} /> Delayed Call
+                                <React.Fragment key={lead.id}>
+                                    {showDateHeader && (
+                                        <div className="flex items-center gap-3 my-5 first:mt-1">
+                                            <div className="h-px flex-1 bg-slate-800"></div>
+                                            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-widest bg-[#0b0e14] px-4 py-1.5 rounded-full border border-emerald-500/20 shadow-sm">
+                                                {getDateHeader(currentLeadDate)}
+                                            </span>
+                                            <div className="h-px flex-1 bg-slate-800"></div>
                                         </div>
                                     )}
 
-                                    <div className="flex items-center gap-3 w-full xl:w-48 shrink-0">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${isDelayed ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-300'}`}>
-                                            {realIndex}
-                                        </div>
-                                        <div>
-                                            <h4 className={`font-semibold text-sm ${isDelayed ? 'text-red-400' : 'text-white'}`}>{lead.phone}</h4>
-                                            <p className="text-[10px] text-slate-400 truncate w-32" title={lead.name}>{lead.name || 'No Name Provided'}</p>
-                                            <div className="mt-0.5"><span className={`${isDelayed ? 'bg-red-900/30 text-red-400' : 'bg-slate-800 text-slate-300'} px-1.5 py-0.5 rounded text-[9px] font-semibold transition-colors`}>P{lead.phase} | R{lead.coordinationRound || 1}</span></div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex-1 w-full flex flex-col gap-2">
-                                        <div className="flex gap-2">
-                                            <div className="flex-1 bg-[#1a2332] rounded-lg border border-slate-700/50 flex items-center px-2.5">
-                                                <span className="text-[10px] text-slate-400 mr-2 font-medium">Group:</span>
-                                                <select value={lead.paymentIntention || 'NOT_DECIDED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'paymentIntention', e.target.value)} className="bg-transparent text-xs font-medium text-white outline-none w-full py-1.5 cursor-pointer">
-                                                    <option className="bg-[#1a2332] text-white" value="NOT_DECIDED">Not Decided</option>
-                                                    <option className="bg-[#1a2332] text-white" value="FULL">Full Payment</option>
-                                                    <option className="bg-[#1a2332] text-white" value="MONTHLY">Monthly</option>
-                                                    <option className="bg-[#1a2332] text-white" value="INSTALLMENT">Installment</option>
-                                                </select>
-                                            </div>
-                                            <div className="flex-1 bg-[#1a2332] rounded-lg border border-slate-700/50 flex items-center px-2.5">
-                                                <span className="text-[10px] text-slate-400 mr-2 font-medium">Status:</span>
-                                                <select value={lead.enrollmentStatus || 'NON_ENROLLED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'enrollmentStatus', e.target.value)} className="bg-transparent text-xs font-medium text-white outline-none w-full py-1.5 cursor-pointer">
-                                                    <option className="bg-[#1a2332] text-white" value="NON_ENROLLED">Non-Enrolled</option>
-                                                    <option className="bg-[#1a2332] text-white" value="ENROLLED">Enrolled</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <textarea value={currentRemark} onChange={(e) => handleRemarkChangeLocal(lead.id, e.target.value)} placeholder="Type your remark here..." rows="1" className="w-full bg-[#1a2332] rounded-lg border border-slate-700/50 text-xs text-slate-300 p-2.5 outline-none resize-none focus:border-slate-500 transition-colors custom-scrollbar" />
-                                    </div>
-
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <select value={lead.callMethod || 'direct'} onChange={(e) => handleUpdateLocalLead(lead.id, 'callMethod', e.target.value)} className="bg-[#1a2332] text-[11px] font-medium text-slate-300 border border-slate-700/50 rounded-lg px-2 py-2 outline-none cursor-pointer">
-                                            <option className="bg-[#1a2332] text-white" value="direct">Direct Call</option>
-                                            <option className="bg-[#1a2332] text-white" value="whatsapp">WhatsApp</option>
-                                            <option className="bg-[#1a2332] text-white" value="3cx">3CX Call</option>
-                                        </select>
-
-                                        <select value={lead.callAttempt || 1} onChange={(e) => handleUpdateLocalLead(lead.id, 'callAttempt', parseInt(e.target.value))} className="bg-[#1a2332] text-[11px] font-medium text-slate-300 border border-slate-700/50 rounded-lg px-2 py-2 outline-none cursor-pointer">
-                                            {[1,2,3,4,5,6,7,8,9,10].map(r => <option className="bg-[#1a2332] text-white" key={r} value={r}>Attempt {r}</option>)}
-                                        </select>
-
-                                        <select onChange={(e) => handleUpdateLocalLead(lead.id, 'callStatus', e.target.value)} value={lead.callStatus || 'pending'} className={`text-[11px] font-semibold rounded-lg px-2 py-2 outline-none cursor-pointer ${lead.callStatus === 'answered' ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30' : lead.callStatus === 'no_answer' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30' : lead.callStatus === 'reject' ? 'bg-red-900/30 text-red-400 border border-red-500/30' : 'bg-[#1a2332] text-slate-300 border border-slate-700/50'}`}>
-                                            <option className="bg-[#1a2332] text-white" value="pending">Pending</option>
-                                            <option className="bg-[#1a2332] text-white" value="answered">Answered</option>
-                                            <option className="bg-[#1a2332] text-white" value="no_answer">No Answer</option>
-                                            <option className="bg-[#1a2332] text-white" value="reject">Reject</option>
-                                        </select>
-
-                                        <button onClick={() => handleSaveCallData(lead.id)} title="Save" className="bg-emerald-600 hover:bg-emerald-500 text-white p-2 rounded-lg transition-colors"><FaSave size={14}/></button>
+                                    <div className={`bg-[#0f151c] border p-3.5 rounded-xl flex flex-col xl:flex-row items-center gap-4 transition-colors relative
+                                        ${isDelayed ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]' : 'border-slate-700/50 hover:border-slate-600'}
+                                    `}>
                                         
-                                        <button 
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if(typeof setChatModalLead === 'function') {
-                                                    setChatModalLead(lead);
-                                                } else {
-                                                    toast.error("Parent component connection missing! Check setChatModalLead.");
-                                                }
-                                            }} 
-                                            title="Chat" 
-                                            className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors relative"
-                                        >
-                                            <FaCommentDots size={14}/>
-                                            {lead.unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#0f151c]"></span>}
-                                        </button>
+                                        {isDelayed && (
+                                            <div className="absolute -top-2.5 -right-2.5 bg-red-600 text-white text-[9px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1 animate-pulse z-10 border border-[#0f151c]">
+                                                <FaExclamationTriangle size={10} /> Delayed Call
+                                            </div>
+                                        )}
+
+                                        <div className="flex items-center gap-3 w-full xl:w-48 shrink-0">
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${isDelayed ? 'bg-red-500/20 text-red-400' : 'bg-slate-800 text-slate-300'}`}>
+                                                {realIndex}
+                                            </div>
+                                            <div>
+                                                <h4 className={`font-semibold text-sm ${isDelayed ? 'text-red-400' : 'text-white'}`}>{lead.phone}</h4>
+                                                <p className="text-[10px] text-slate-400 truncate w-32" title={lead.name}>{lead.name || 'No Name Provided'}</p>
+                                                <div className="mt-0.5"><span className={`${isDelayed ? 'bg-red-900/30 text-red-400' : 'bg-slate-800 text-slate-300'} px-1.5 py-0.5 rounded text-[9px] font-semibold transition-colors`}>P{lead.phase} | R{lead.coordinationRound || 1}</span></div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-1 w-full flex flex-col gap-2">
+                                            <div className="flex gap-2">
+                                                <div className="flex-1 bg-[#1a2332] rounded-lg border border-slate-700/50 flex items-center px-2.5">
+                                                    <span className="text-[10px] text-slate-400 mr-2 font-medium">Group:</span>
+                                                    <select value={lead.paymentIntention || 'NOT_DECIDED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'paymentIntention', e.target.value)} className="bg-transparent text-xs font-medium text-white outline-none w-full py-1.5 cursor-pointer">
+                                                        <option className="bg-[#1a2332] text-white" value="NOT_DECIDED">Not Decided</option>
+                                                        <option className="bg-[#1a2332] text-white" value="FULL">Full Payment</option>
+                                                        <option className="bg-[#1a2332] text-white" value="MONTHLY">Monthly</option>
+                                                        <option className="bg-[#1a2332] text-white" value="INSTALLMENT">Installment</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex-1 bg-[#1a2332] rounded-lg border border-slate-700/50 flex items-center px-2.5">
+                                                    <span className="text-[10px] text-slate-400 mr-2 font-medium">Status:</span>
+                                                    <select value={lead.enrollmentStatus || 'NON_ENROLLED'} onChange={(e) => handleUpdateLocalLead(lead.id, 'enrollmentStatus', e.target.value)} className="bg-transparent text-xs font-medium text-white outline-none w-full py-1.5 cursor-pointer">
+                                                        <option className="bg-[#1a2332] text-white" value="NON_ENROLLED">Non-Enrolled</option>
+                                                        <option className="bg-[#1a2332] text-white" value="ENROLLED">Enrolled</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <textarea value={currentRemark} onChange={(e) => handleRemarkChangeLocal(lead.id, e.target.value)} placeholder="Type your remark here..." rows="1" className="w-full bg-[#1a2332] rounded-lg border border-slate-700/50 text-xs text-slate-300 p-2.5 outline-none resize-none focus:border-slate-500 transition-colors custom-scrollbar" />
+                                        </div>
+
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            <select value={lead.callMethod || 'direct'} onChange={(e) => handleUpdateLocalLead(lead.id, 'callMethod', e.target.value)} className="bg-[#1a2332] text-[11px] font-medium text-slate-300 border border-slate-700/50 rounded-lg px-2 py-2 outline-none cursor-pointer">
+                                                <option className="bg-[#1a2332] text-white" value="direct">Direct Call</option>
+                                                <option className="bg-[#1a2332] text-white" value="whatsapp">WhatsApp</option>
+                                                <option className="bg-[#1a2332] text-white" value="3cx">3CX Call</option>
+                                            </select>
+
+                                            <select value={lead.callAttempt || 1} onChange={(e) => handleUpdateLocalLead(lead.id, 'callAttempt', parseInt(e.target.value))} className="bg-[#1a2332] text-[11px] font-medium text-slate-300 border border-slate-700/50 rounded-lg px-2 py-2 outline-none cursor-pointer">
+                                                {[1,2,3,4,5,6,7,8,9,10].map(r => <option className="bg-[#1a2332] text-white" key={r} value={r}>Attempt {r}</option>)}
+                                            </select>
+
+                                            <select onChange={(e) => handleUpdateLocalLead(lead.id, 'callStatus', e.target.value)} value={lead.callStatus || 'pending'} className={`text-[11px] font-semibold rounded-lg px-2 py-2 outline-none cursor-pointer ${lead.callStatus === 'answered' ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-500/30' : lead.callStatus === 'no_answer' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-500/30' : lead.callStatus === 'reject' ? 'bg-red-900/30 text-red-400 border border-red-500/30' : 'bg-[#1a2332] text-slate-300 border border-slate-700/50'}`}>
+                                                <option className="bg-[#1a2332] text-white" value="pending">Pending</option>
+                                                <option className="bg-[#1a2332] text-white" value="answered">Answered</option>
+                                                <option className="bg-[#1a2332] text-white" value="no_answer">No Answer</option>
+                                                <option className="bg-[#1a2332] text-white" value="reject">Reject</option>
+                                            </select>
+
+                                            <button disabled={invalidPending} onClick={() => handleSaveCallData(lead.id)} title={invalidPending ? "Change status before saving!" : "Save"} className={`p-2 rounded-lg transition-colors ${invalidPending ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}`}><FaSave size={14}/></button>
+                                            
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if(typeof setChatModalLead === 'function') {
+                                                        setChatModalLead(lead);
+                                                    } else {
+                                                        toast.error("Parent component connection missing! Check setChatModalLead.");
+                                                    }
+                                                }} 
+                                                title="Chat" 
+                                                className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-lg transition-colors relative"
+                                            >
+                                                <FaCommentDots size={14}/>
+                                                {lead.unreadCount > 0 && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-[#0f151c]"></span>}
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
+                                </React.Fragment>
                             );
                         })
                     )}
@@ -434,7 +460,6 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
             </div>
 
             {/* MY PROGRESS MODAL */}
-            {/* ... (My Progress Modal remains the same) ... */}
              {showMyProgress && (
                 <div className="absolute inset-0 z-[60] bg-[#0f172a]/95 backdrop-blur-sm flex justify-center items-center p-4">
                     <div className="bg-[#1a2430] border border-slate-700 rounded-3xl p-6 w-full max-w-md shadow-2xl flex flex-col">
@@ -481,7 +506,6 @@ export default function AfterSeminarOpenSem({ leads, allBatches, filters, drafts
             )}
 
             {/* ADD NUMBERS MODAL */}
-            {/* ... (Add Numbers Modal remains the same) ... */}
             {showAddNumbersModal && (
                 <div className="absolute inset-0 z-50 bg-[#0f172a]/95 backdrop-blur-sm flex justify-center items-center p-4">
                     <div className="bg-[#1a2430] border border-slate-700 rounded-3xl p-6 w-full max-w-2xl shadow-2xl flex flex-col max-h-[90vh]">

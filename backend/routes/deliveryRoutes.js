@@ -3,6 +3,15 @@ const router = express.Router();
 const deliveryController = require('../controllers/deliveryController');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, 'storage/documents/'),
+    filename: (req, file, cb) => cb(null, 'TUTE_' + Date.now() + path.extname(file.originalname))
+});
+const upload = multer({ storage });
+
 
 // Admin POS and Delivery Actions
 router.get('/pending', deliveryController.getPendingDeliveries);
@@ -12,6 +21,16 @@ router.post('/hold', deliveryController.holdDelivery);
 // Tute Stock Actions
 router.get('/stock', deliveryController.getTuteStocks);
 router.post('/stock/add', deliveryController.addTuteStock);
+
+// Tute Stock Actions
+router.get('/stock/global', deliveryController.getGlobalStock); // 🔥 අලුත්
+router.get('/stock/history/global', deliveryController.getGlobalStockHistory); // 🔥 අලුත්
+router.get('/stock/batch/:batchId', deliveryController.getBatchStock); 
+router.post('/stock/add', deliveryController.addTuteStock);
+router.post('/stock/custom', upload.single('tuteCover'), deliveryController.addCustomTute);
+router.put('/stock/edit', deliveryController.editTuteStock);
+router.delete('/stock/delete/:id', deliveryController.deleteTuteStock);
+router.get('/stock/history/:courseIds', deliveryController.getStockHistory);
 
 router.get('/stats', async (req, res) => {
     try {

@@ -23,13 +23,21 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
       ? "flex items-center gap-4 px-4 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-bold transition-all shadow-xl backdrop-blur-md text-sm"
       : "flex items-center gap-4 px-4 py-3.5 hover:bg-white/5 rounded-2xl font-medium text-white/60 hover:text-white transition-all border border-transparent text-sm";
 
+  // 🔥 Role definitions and Restrictions 🔥
   const isSystemAdmin = roleName === 'SYSTEM_ADMIN' || roleName === 'System Admin' || roleName === 'Director';
   const isDeliveryDept = loggedInUser?.department === 'Delivery';
-  const isManager = (roleName === 'MANAGER' || roleName === 'Manager' || roleName === 'ASS MANAGER') && !isDeliveryDept;
   
-  // 🔥 Aluth Caller Role Eka 🔥
+  // 🔥 NEW: Finance Department logic
+  const isFinanceDept = loggedInUser?.department === 'Finance';
+
+  // 🔥 FIX: Exclude Finance & Delivery from general manager rules
+  const isManager = (roleName === 'MANAGER' || roleName === 'Manager' || roleName === 'ASS MANAGER') && !isDeliveryDept && !isFinanceDept;
+  
   const isCaller = roleName === 'CALLER' || roleName === 'Caller';
-  const isStaff = !isSystemAdmin && !isManager && !isDeliveryDept && !isCaller && roleName !== 'STUDENT' && roleName !== 'user';
+  
+  // 🔥 FIX: Exclude Finance & Delivery from general staff rules too
+  const isStaff = !isSystemAdmin && !isManager && !isDeliveryDept && !isFinanceDept && !isCaller && roleName !== 'STUDENT' && roleName !== 'user';
+  
   const isStudent = roleName === 'STUDENT' || roleName === 'user';
 
   return (
@@ -59,6 +67,15 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
           </>
         )}
 
+        {/* 🔥 NEW: Finance Department Only View 🔥 */}
+        {isFinanceDept && !isSystemAdmin && (
+          <>
+            <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-2 pl-2 tracking-widest">Finance Department</div>
+            <NavLink to="/finance/dashboard" className={getNavLinkClass}><LayoutDashboard size={18} /> Finance Overview</NavLink>
+            <NavLink to="/admin/payments" className={getNavLinkClass}><Wallet size={18} /> Manage Payments</NavLink>
+          </>
+        )}
+
         {isDeliveryDept && !isSystemAdmin && (
           <>
            <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-2 pl-2 tracking-widest">Delivery Dashboard</div>
@@ -80,12 +97,11 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
           </>
         )}
 
-        {/* 🔥 CALLERS, ADMIN, MANAGER, STAFF Okkotama CRM eka penenawa 🔥 */}
+        {/* Workspace Links - Hidden from Finance & Delivery */}
         {(isSystemAdmin || isManager || isStaff || isCaller) && (
           <>
           <div className="text-[10px] uppercase font-black text-slate-500 mb-1 mt-4 pl-2 tracking-widest">Workspace</div>
             
-            {/* 🔥 TIMETABLE LINK EKA 🔥 */}
             <NavLink to="/workspace/timetable" className={getNavLinkClass}>
               <CalendarDays size={18} /> Class Timetable
             </NavLink>
@@ -103,7 +119,6 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
               <HeadphonesIcon size={18} /> After Seminar CRM
             </NavLink>
             
-            {/* Caller ta Student Data center eka penne NA */}
             {!isSystemAdmin && !isManager && !isCaller && (
                 <NavLink to="/admin/student-center" className={getNavLinkClass}><Database size={18} /> Student Data Center</NavLink>
             )}
@@ -115,7 +130,6 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
             <div className="text-[10px] uppercase font-black text-slate-500 mt-3 mb-1 pl-2 tracking-widest">Student Portal</div>
             <NavLink to="/student/dashboard" className={getNavLinkClass}><LayoutDashboard size={18} /> My Dashboard</NavLink>
             
-            {/* 🔥 NEW: Student Delivery Link 🔥 */}
             <NavLink to="/student/delivery" className={getNavLinkClass}><Truck size={18} /> My Deliveries</NavLink>
           </>
         )}

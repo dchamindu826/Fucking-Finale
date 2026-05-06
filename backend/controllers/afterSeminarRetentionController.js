@@ -13,9 +13,10 @@ exports.getRetentionDashboardStats = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         // 1. දැනට ඉන්න ළමයින්ගේ ගණන් ගැනීම (Top Cards 4 සඳහා)
@@ -80,9 +81,10 @@ exports.getRetentionLeads = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         // Tab එක අනුව Filter කිරීම
@@ -202,9 +204,10 @@ exports.getRetentionCampaignData = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-                { phone: { endsWith: `_BIZ_${businessId}` } },
-                { phone: { contains: `_BIZ_${businessId}_` } }
-            ];
+    { phone: { endsWith: `BIZ_${businessId}` } },
+    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+];
         }
 
         // 2. Fetch Leads

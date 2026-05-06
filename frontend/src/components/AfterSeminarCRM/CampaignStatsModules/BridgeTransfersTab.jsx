@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from '../../../api/axios';
 import toast from 'react-hot-toast';
 import { Users, Loader2, ArrowRight } from 'lucide-react';
-import { FaCheckCircle, FaExclamationCircle, FaUserTie, FaSearch } from 'react-icons/fa';
+import { FaCheckCircle, FaExclamationCircle, FaUserTie, FaSearch, FaFileExcel } from 'react-icons/fa';
 
 export default function BridgeTransfersTab({ filters }) {
     const [pendingLeads, setPendingLeads] = useState([]);
@@ -109,6 +109,32 @@ export default function BridgeTransfersTab({ filters }) {
         setPushing(false);
     };
 
+    const handleExportSelected = () => {
+        if (selectedLeads.length === 0) return toast.error("No leads selected to export.");
+
+        const leadsToExport = filteredLeads.filter(l => selectedLeads.includes(l.id));
+        
+        let csvContent = "data:text/csv;charset=utf-8,";
+        csvContent += "Student Name,Phone Number,Status\n"; // Header row
+
+        leadsToExport.forEach(row => {
+            const name = row.name ? row.name.replace(/,/g, '') : 'Unknown'; // කොමා තිබ්බොත් අයින් කරනවා
+            const phone = row.phone || '';
+            const status = row.status || 'NEW';
+            csvContent += `${name},${phone},${status}\n`;
+        });
+
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `Bridge_Leads_BIZ_${filters.selectedBusiness}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        toast.success("Successfully exported selected leads!");
+    };
+
     if (!filters.selectedBusiness) {
         return <div className="text-center py-20 text-slate-500 bg-white/[0.02] backdrop-blur-md rounded-2xl border border-white/5 h-full flex items-center justify-center font-sans tracking-wide">Please select a Business to view Bridge Analytics.</div>;
     }
@@ -212,9 +238,21 @@ export default function BridgeTransfersTab({ filters }) {
                 </div>
 
                 <div className="p-4 bg-slate-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <span className="text-sm font-bold text-slate-300">
-                        {selectedLeads.length} Leads Selected
-                    </span>
+                    <div className="flex items-center gap-4">
+                        <span className="text-sm font-bold text-slate-300">
+                            {selectedLeads.length} Leads Selected
+                        </span>
+                        {/* 🔥 EXPORT BUTTON (Select කරාම විතරක් පෙන්නනවා) */}
+                        {selectedLeads.length > 0 && (
+                            <button 
+                                onClick={handleExportSelected} 
+                                className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 font-bold text-xs rounded-lg transition-all"
+                            >
+                                <FaFileExcel size={14} /> Export CSV
+                            </button>
+                        )}
+                    </div>
+                    
                     <div className="flex items-center gap-3 w-full sm:w-auto">
                         <select value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)}
                             className="bg-[#0f172a] text-xs font-bold text-slate-300 border border-slate-600 rounded-xl px-4 py-3 outline-none focus:border-blue-500 flex-1 sm:w-48 shadow-inner"

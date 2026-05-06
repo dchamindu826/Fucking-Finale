@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../api/axios'; 
-import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquare, FaEnvelopeOpenText, FaEnvelope, FaUserMinus, FaLock, FaBullhorn, FaCommentDots, FaPaperPlane } from 'react-icons/fa';
+import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquare, FaEnvelopeOpenText, FaEnvelope, FaUserMinus, FaLock, FaBullhorn, FaCommentDots, FaPaperPlane, FaUserCheck, FaHeadset, FaClock } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
-export default function AfterSeminarContactSidebar({ activeMode, selectedLead, setSelectedLead, filters }) {
+export default function AfterSeminarContactSidebar({ activeMode, selectedLead, setSelectedLead, filters, onRedirectToCampaign }) {
   const rawRole = JSON.parse(localStorage.getItem('user'))?.role || '';
   const userRole = rawRole.toUpperCase().replace(' ', '_');
   const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
@@ -34,6 +34,14 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       NEW_INQ: { total: 0, unread: 0 }
   });
 
+  // 🔥 ඔටෝ රිෆ්‍රෙෂ් වෙන්න State එකක් (කාඩ් වල පාට වෙලාවත් එක්කම මාරු වෙන්න)
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+      const timer = setInterval(() => setCurrentTime(new Date()), 60000); // හැම විනාඩියකට සැරයක්ම වෙලාව අප්ඩේට් කරනවා
+      return () => clearInterval(timer);
+  }, []);
+
   const fetchLeads = async (showLoading = true) => {
     if (showLoading) setLoading(true);
     try {
@@ -41,7 +49,7 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
         const response = await axios.get(`/after-seminar-crm/leads`, {
             headers: { Authorization: `Bearer ${token}` },
             params: { 
-                tab: activeTab === 'IMPORTED' ? 'NEW' : activeTab, 
+                tab: (activeTab === 'IMPORTED' || activeTab === 'NEW_INQ') ? 'NEW' : activeTab, 
                 paymentGroup: groupFilter,
                 status: statusFilter, 
                 staffId: staffFilter,
@@ -49,7 +57,6 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
                 loggedUserRole: rawRole,
                 businessId: filters?.selectedBusiness || '', 
                 batchId: filters?.selectedBatch || ''
-                // 🔥 FIX: මෙතන තිබ්බ 'inquiryType: props.inquiryType' කියන පේළිය අයින් කරා! ඒකයි අවුල දුන්නේ. 🔥
             }
         });
 
@@ -117,13 +124,15 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
 
   const handleSelectAll = () => { if (checkedLeads.length === leads.length) setCheckedLeads([]); else setCheckedLeads(leads.map(l => l.id)); };
 
-  const handleBulkAction = async (action, assignStaffId = null) => {
-    if (checkedLeads.length === 0) return;
+  const handleBulkAction = async (action, assignStaffId = null, specificLeads = null) => {
+    const leadsToProcess = specificLeads || checkedLeads;
+    if (leadsToProcess.length === 0) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/after-seminar-crm/leads/bulk-action', { action, leadIds: checkedLeads, staffId: assignStaffId }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post('/after-seminar-crm/leads/bulk-action', { action, leadIds: leadsToProcess, staffId: assignStaffId }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success("Action applied successfully!");
-      setCheckedLeads([]); fetchLeads(true);
+      if (!specificLeads) setCheckedLeads([]); 
+      fetchLeads(true);
     } catch (e) { toast.error("Action failed"); }
   };
 
@@ -183,16 +192,12 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
 
   const getAssignedStats = () => {
       if (activeTab === 'ASSIGNED' && staffFilter) {
-          return {
-              total: leads.length,
-              unread: leads.filter(l => l.unreadCount > 0).length
-          };
+          return { total: leads.length, unread: leads.filter(l => l.unreadCount > 0).length };
       }
       return { total: tabCounts.ASSIGNED, unread: unreadCounts.ASSIGNED };
   };
 
   const assignedStats = getAssignedStats();
-  
   const totalNewCount = subTabStats.OPEN_SEMINAR.total + subTabStats.NEW_INQ.total;
   const totalNewUnread = subTabStats.OPEN_SEMINAR.unread + subTabStats.NEW_INQ.unread;
 
@@ -212,17 +217,16 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
             <button onClick={() => setCheckedLeads([])} className="text-white/60 hover:text-white"><FaTimes/></button>
           </div>
           <div className="flex items-center gap-2">
-             <button onClick={handleSelectAll} title="Select All" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"><FaCheckSquare/></button>
-             <button onClick={() => handleBulkAction('MARK_READ')} title="Mark Read" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"><FaEnvelopeOpenText/></button>
-             <button onClick={() => handleBulkAction('MARK_UNREAD')} title="Mark Unread" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"><FaEnvelope/></button>
-             
+             <button onClick={handleSelectAll} title="Select All" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all"><FaCheckSquare/></button>
+             <button onClick={() => handleBulkAction('MARK_READ')} title="Mark Read" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all"><FaEnvelopeOpenText/></button>
+             <button onClick={() => handleBulkAction('MARK_UNREAD')} title="Mark Unread" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all"><FaEnvelope/></button>
+             <button onClick={() => handleBulkAction('ASSIGN', currentUserId)} title="Assign To Me" className="p-2 bg-emerald-500/30 hover:bg-emerald-500 rounded-lg text-emerald-200 hover:text-white transition-all"><FaUserCheck/></button>
              {checkedLeads.length === 1 && (
                  <button onClick={handleSendTestFollowUp} title="Send Test Follow-Up Message" className="p-2 bg-blue-600/50 hover:bg-blue-600 rounded-lg text-blue-200 hover:text-white transition-all"><FaPaperPlane/></button>
              )}
-
-             {isManager && <button onClick={() => handleBulkAction('UNASSIGN')} title="Unassign Leads" className="p-2 bg-red-500/20 hover:bg-red-500 rounded-lg text-red-300 hover:text-white"><FaUserMinus/></button>}
+             {isManager && <button onClick={() => handleBulkAction('UNASSIGN')} title="Unassign Leads" className="p-2 bg-red-500/20 hover:bg-red-500 rounded-lg text-red-300 hover:text-white transition-all"><FaUserMinus/></button>}
              {isManager && (
-                <select onChange={(e) => handleBulkAction('ASSIGN', e.target.value)} className="flex-1 bg-white/10 border-none text-white text-xs font-bold rounded-lg p-2 outline-none">
+                <select onChange={(e) => { if (e.target.value) handleBulkAction('ASSIGN', e.target.value) }} className="flex-1 bg-white/10 border-none text-white text-xs font-bold rounded-lg p-2 outline-none">
                   <option value="">Assign To...</option>
                   {coordinators.map(c => <option key={c.id} value={c.id} className="text-black">{c.firstName} ({c.role === 'CALLER' ? 'Team' : 'Staff'})</option>)}
                 </select>
@@ -309,8 +313,33 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 bg-[#1a2430]">
         {loading && leads.length === 0 ? ( <div className="flex justify-center mt-10"><div className="animate-spin h-8 w-8 border-4 border-emerald-600 border-t-transparent rounded-full"></div></div> ) 
         : filteredLeads.length === 0 ? ( <div className="text-center text-slate-600 text-sm mt-10 font-medium">No contacts found.</div> ) : (
-          filteredLeads.map(lead => (
-            <div key={lead.id} className={`p-3 rounded-2xl mb-2 transition-all flex gap-3 items-center border ${selectedLead?.id === lead.id ? 'bg-[#0f172a] border-emerald-600/50 shadow-md' : 'bg-[#121a24] border-transparent hover:border-white/10'}`}>
+          filteredLeads.map(lead => {
+              
+            // 🔥 24-Hour Active Window Logic 🔥
+            const leadTime = new Date(lead.updatedAt || lead.createdAt);
+            const hoursPassed = (currentTime - leadTime) / (1000 * 60 * 60);
+
+            let overlayClass = 'bg-[#121a24] border-transparent hover:border-white/10'; // Default
+            let timeIcon = null;
+
+            if (hoursPassed >= 24) {
+                overlayClass = 'bg-red-900/20 border-red-500/30 hover:border-red-500/50'; // 24 පැය පැනලා (Expired)
+                timeIcon = <span className="text-[9px] text-red-400 font-bold flex items-center gap-1"><FaClock/> Expired</span>;
+            } else if (hoursPassed >= 20) {
+                overlayClass = 'bg-yellow-900/20 border-yellow-500/30 hover:border-yellow-500/50'; // පැය 4කට අඩුවෙන් තියෙන්නේ
+                timeIcon = <span className="text-[9px] text-yellow-400 font-bold flex items-center gap-1"><FaClock/> Expiring Soon</span>;
+            } else {
+                overlayClass = 'bg-emerald-900/20 border-emerald-500/30 hover:border-emerald-500/50'; // තාම ඇක්ටිව් (Green)
+                timeIcon = <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1"><FaCheckSquare/> Active Window</span>;
+            }
+
+            // තෝරලා තියෙන කාඩ් එකේ පාට
+            if (selectedLead?.id === lead.id) {
+                overlayClass = 'bg-[#0f172a] border-blue-500 shadow-md shadow-blue-500/20';
+            }
+
+            return (
+            <div key={lead.id} className={`p-3 rounded-2xl mb-2 transition-all flex gap-3 items-center border ${overlayClass}`}>
               <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                  <input type="checkbox" checked={checkedLeads.includes(lead.id)} onChange={(e) => { if (e.target.checked) setCheckedLeads([...checkedLeads, lead.id]); else setCheckedLeads(checkedLeads.filter(id => id !== lead.id)); }} className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" />
               </div>
@@ -318,30 +347,61 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
               <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => handleLeadClick(lead)}>
                 <FaUserCircle className="text-3xl text-slate-500 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-0.5">
-                    <h4 className="font-bold text-[16px] text-slate-200">{lead.phone}</h4>
-                    <div className="text-right">
-                       <span className="text-[10px] text-emerald-500 font-bold block">{new Date(lead.updatedAt).toLocaleDateString('en-GB')}</span>
-                       <span className="text-[9px] text-slate-500 block">{new Date(lead.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                  <div className="flex justify-between items-start mb-1">
+                    
+                    {/* 🔥 FIX: Spacing adu karala okkoma eka lnga thibba 🔥 */}
+                    <div className="flex flex-col gap-0.5">
+                        <h4 className="font-bold text-[15px] text-slate-200 leading-none">{lead.phone}</h4>
+                        
+                        {lead.assignedUser ? (
+                            <span className="text-[10px] text-blue-400 font-semibold mt-0.5">👤 {lead.assignedUser.firstName} {lead.assignedUser.lastName}</span>
+                        ) : (
+                            (!lead.assignedTo && (
+                                <button onClick={(e) => { e.stopPropagation(); handleBulkAction('ASSIGN', currentUserId, [lead.id]); }} className="text-[9px] w-max bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-md flex items-center gap-1 transition-all mt-1">
+                                   <FaUserCheck size={10}/> Assign to me
+                                </button>
+                            ))
+                        )}
+                    </div>
+                    
+                    <div className="flex flex-col items-end shrink-0 ml-2 gap-1.5">
+                        <div className="text-right">
+                            <span className="text-[10px] text-slate-400 font-bold block mb-0.5">{new Date(lead.updatedAt).toLocaleDateString('en-GB')}</span>
+                            <span className="text-[9px] text-slate-500 block">{new Date(lead.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                        
+                        {(String(lead.assignedTo) === String(currentUserId) || isManager) && (
+                            <button 
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    if (onRedirectToCampaign) onRedirectToCampaign(lead);
+                                    else toast.error("Campaign router is missing!");
+                                }} 
+                                title="Open in Call Campaign"
+                                className="w-7 h-7 rounded-full bg-indigo-600/20 hover:bg-indigo-500 text-indigo-400 hover:text-white flex items-center justify-center transition-all shadow-md border border-indigo-500/30"
+                            >
+                                <FaHeadset size={12} />
+                            </button>
+                        )}
                     </div>
                   </div>
                   
                   {lead.inquiryType === 'NEW_INQ' && lead.isLocked && (
-                     <div className="text-[9px] text-red-400 font-black mb-1 flex items-center gap-1 bg-red-500/10 w-max px-2 py-0.5 rounded"><FaLock/> 24H LOCKED</div>
+                     <div className="text-[9px] text-red-400 font-black mt-1 mb-1 flex items-center gap-1 bg-red-500/10 w-max px-2 py-0.5 rounded"><FaLock/> 24H LOCKED</div>
                   )}
 
-                  {lead.assignedUser && (
-                     <div className="text-[10px] text-blue-400 font-semibold mb-1">👤 {lead.assignedUser.firstName} {lead.assignedUser.lastName}</div>
-                  )}
-
-                  <div className="flex justify-between items-center mt-1">
-                    <p className="text-[11px] font-medium text-slate-500 truncate w-[70%]">{lead.lastMessage || 'No messages'}</p>
-                    {lead.unreadCount > 0 && <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 shadow-lg">{lead.unreadCount} NEW</span>}
+                  <div className="flex justify-between items-end mt-1">
+                    <p className="text-[11px] font-medium text-slate-500 truncate w-[60%]">{lead.lastMessage || 'No messages'}</p>
+                    <div className="flex flex-col items-end gap-1">
+                        {lead.unreadCount > 0 && <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-lg">{lead.unreadCount} NEW</span>}
+                        {/* 🔥 24 Hour Indicator Text 🔥 */}
+                        {timeIcon}
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          ))
+          )})
         )}
       </div>
 
@@ -377,7 +437,7 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
          </div>
       )}
 
-      {/* 🔥 IMPORT MODAL WITH TARGET SELECTION 🔥 */}
+      {/* IMPORT MODAL */}
       {showImportModal && isManager && (
          <div className="absolute inset-0 z-50 bg-[#0f172a]/90 backdrop-blur-sm flex items-center justify-center p-4">
              <div className="bg-[#1a2430] border border-slate-700 rounded-2xl p-5 w-full shadow-2xl">

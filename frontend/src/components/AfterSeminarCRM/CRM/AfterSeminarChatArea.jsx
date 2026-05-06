@@ -67,14 +67,24 @@ export default function AfterSeminarChatArea({ selectedLead }) {
     } catch (error) { console.error(error); }
   };
 
-  const fetchMetaTemplates = async () => {
+   const fetchMetaTemplates = async () => {
     try {
       const token = localStorage.getItem('token');
+      
+      // 🔥 FIX: Lead එකේ අංකයෙන් අදාල Business ID එක වෙන් කරගන්නවා
+      const bizMatch = selectedLead?.phone ? selectedLead.phone.match(/_BIZ_(\d+)/) : null;
+      const extractedBizId = bizMatch ? bizMatch[1] : '';
+
       const res = await axios.get('/coordinator-crm/meta-templates', {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          params: { 
+              businessId: extractedBizId // 🔥 මේක අනිවාර්යෙන් යවන්න ඕනේ
+          }
       });
       setMetaTemplates(res.data || []);
-    } catch(e) {}
+    } catch(e) {
+        console.error("Template load error", e);
+    }
   };
 
   const handleQRFile = (e) => {
