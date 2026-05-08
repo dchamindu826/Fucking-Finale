@@ -17,7 +17,9 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
   const [activeStream, setActiveStream] = useState('All');
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedSubjects, setSelectedSubjects] = useState([]);
+  
   const [enrolledSubjects, setEnrolledSubjects] = useState([]); 
+  const [walletBalance, setWalletBalance] = useState(0); 
   
   const [showInstallmentPrompt, setShowInstallmentPrompt] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -40,7 +42,14 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
 
   useEffect(() => {
       axios.get('/student/my-enrolled-subjects')
-           .then(res => setEnrolledSubjects(res.data))
+           .then(res => {
+               if (Array.isArray(res.data)) {
+                   setEnrolledSubjects(res.data);
+               } else {
+                   setEnrolledSubjects(res.data.enrolledSubjects || []);
+                   setWalletBalance(res.data.walletBalance || 0);
+               }
+           })
            .catch(e => console.error("Error fetching enrolled subjects"));
   }, []);
 
@@ -117,6 +126,20 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
 
   const getOriginalTotal = () => getFilteredCourses().filter(c => selectedSubjects.includes(c.id)).reduce((sum, course) => sum + Number(course.price || 0), 0);
 
+  const getBasePayable = () => {
+      return finalPaymentType === 'installment' && availableInstallmentPlan 
+          ? Number(JSON.parse(availableInstallmentPlan.details)[0]?.amount || 0) 
+          : calculateTotal();
+  };
+
+  // 🔥 FIX: ළමයා සබ්ජෙක්ට් තෝරලා නැත්නම් 0යි පෙන්නන්නේ, due එක පෙන්නන්නේ නෑ
+  const getFinalPayable = () => {
+      if (selectedSubjects.length === 0) return 0; 
+      const base = getBasePayable();
+      const total = base - walletBalance; 
+      return total > 0 ? total : 0;
+  };
+
   const checkInstallmentEligibility = () => {
       if (paymentPlan !== 'full' || !selectedBatch.installment_plans_parsed) return null;
       const plans = selectedBatch.installment_plans_parsed;
@@ -166,22 +189,16 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
     
     try {
       setIsSubmitting(true);
-      const amountToPay = finalPaymentType === 'installment' ? JSON.parse(availableInstallmentPlan.details)[0].amount : calculateTotal();
+      const amountToPay = getFinalPayable().toFixed(2);
       const orderId = `ORD-${Date.now()}`;
 
       if (paymentMethod === 'payhere') {
-          console.log("🛠️ [DEBUG] Starting PayHere Checkout...");
-          console.log("🛠️ [DEBUG] VITE_PAYHERE_ENV:", import.meta.env.VITE_PAYHERE_ENV);
-          console.log("🛠️ [DEBUG] VITE_PAYHERE_MERCHANT_ID:", import.meta.env.VITE_PAYHERE_MERCHANT_ID);
-
           if (typeof window.payhere === 'undefined') {
               toast.error("PayHere integration is missing! Please refresh the page.");
-              throw new Error("window.payhere is undefined. Did you add the script in index.html?");
+              throw new Error("window.payhere is undefined.");
           }
 
           const hashRes = await axios.post('/student/payhere-hash', { amount: amountToPay, orderId: orderId, currency: "LKR" });
-          console.log("🛠️ [DEBUG] Hash Received:", hashRes.data.hash);
-
           const isSandbox = import.meta.env.VITE_PAYHERE_ENV === 'sandbox';
 
           const payment = {
@@ -192,7 +209,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
               notify_url: `${backendBaseUrl}/api/student/payhere-notify`, 
               order_id: orderId,
               items: "Course Enrollment",
-              amount: parseFloat(amountToPay).toFixed(2), 
+              amount: amountToPay, 
               currency: "LKR",
               hash: hashRes.data.hash || "",
               first_name: "Student", 
@@ -203,23 +220,18 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
               city: "Colombo",
               country: "Sri Lanka"
           };
-          
-          console.log("🛠️ [DEBUG] PayHere Payment Object:", payment);
 
           window.payhere.onCompleted = async function onCompleted(orderId) {
-              console.log("✅ [DEBUG] PayHere Success:", orderId);
               toast.success("Payment successful! Processing enrollment...");
               await saveEnrollmentToBackend("payhere", orderId);
           };
 
           window.payhere.onDismissed = function onDismissed() {
-              console.log("⚠️ [DEBUG] PayHere Dismissed");
               toast.error("Payment dismissed.");
               setIsSubmitting(false);
           };
 
           window.payhere.onError = function onError(error) {
-              console.error("❌ [DEBUG] PayHere Error:", error);
               toast.error("Payment Error: " + error);
               setIsSubmitting(false);
           };
@@ -230,34 +242,51 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
           await saveEnrollmentToBackend("slip", null);
       }
     } catch (error) {
-      console.error("❌ [DEBUG] Submit Error:", error);
-      toast.error(error.message || "Error processing request. Check console.");
+      toast.error(error.message || "Error processing request.");
       setIsSubmitting(false);
     }
   };
 
   const saveEnrollmentToBackend = async (method, payhereOrderId) => {
-    const amountToPay = finalPaymentType === 'installment' ? JSON.parse(availableInstallmentPlan.details)[0]?.amount : calculateTotal();
+    const amountToPay = getFinalPayable().toFixed(2);
+
+    let finalRemark = remark;
+    if (walletBalance !== 0) {
+        const walletNote = walletBalance > 0 
+            ? `Wallet Excess (-LKR ${walletBalance.toFixed(2)}) applied.` 
+            : `Wallet Due (+LKR ${Math.abs(walletBalance).toFixed(2)}) applied.`;
+        finalRemark = finalRemark ? `${finalRemark}\n\n[SYSTEM]: ${walletNote}` : `[SYSTEM]: ${walletNote}`;
+    }
+
+    // 🔥 FIX: Backend එක බලාපොරොත්තු වෙන හරියටම වචනේ (monthly/full/installment) යවනවා
+    let pMethodChosen = 'monthly';
+    if (paymentPlan === 'full') {
+        pMethodChosen = finalPaymentType === 'installment' ? 'installment' : 'full';
+    }
 
     const formData = new FormData();
     formData.append('businessId', selectedBusiness.id);
     formData.append('batchId', selectedBatch.id);
     formData.append('groupId', selectedGroup.id);
     formData.append('subjects', JSON.stringify(selectedSubjects));
-    formData.append('paymentMethodChosen', finalPaymentType); 
+    formData.append('paymentMethodChosen', pMethodChosen); // 🔥 මේක තමයි හැදුවේ
     formData.append('method', method);
     formData.append('amount', amountToPay); 
-    if (remark) formData.append('remark', remark);
+    if (finalRemark) formData.append('remark', finalRemark);
     if (payhereOrderId) formData.append('orderId', payhereOrderId);
     if (method === 'slip') slipFiles.forEach(file => formData.append('slipImages', file));
 
     try {
+        setIsSubmitting(true);
         const response = await axios.post('/student/enroll-with-slip', formData);
         if(response.status === 200) {
             toast.success(method === 'slip' ? "Enrollment successful! Awaiting verification." : "Enrollment Confirmed!");
             setShowPaymentModal(false);
             setSlipFiles([]); setRemark(''); setSelectionLevel(0); setSelectedSubjects([]);
-            axios.get('/student/my-enrolled-subjects').then(res => setEnrolledSubjects(res.data)).catch(e=>{});
+            axios.get('/student/my-enrolled-subjects').then(res => {
+                if (Array.isArray(res.data)) setEnrolledSubjects(res.data);
+                else { setEnrolledSubjects(res.data.enrolledSubjects); setWalletBalance(res.data.walletBalance); }
+            }).catch(e=>{});
             setActiveTab('history'); 
         }
     } catch (error) { toast.error("Failed to save enrollment."); } 
@@ -273,13 +302,13 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
     }
   };
 
-  // 🔥 FILTER LOGIC FIX 🔥
   const actualStreams = selectedBusiness ? parseStreams(selectedBusiness.streams).filter(s => s !== 'All') : [];
   const showStreamFilter = actualStreams.length >= 2;
   const availableStreams = [...actualStreams, 'All'];
 
   return (
-    <div className="w-full h-full relative text-white pb-[100px] lg:pb-0 overflow-x-hidden"> 
+    // 🔥 FIX: Added classes to hide visual scrollbar but keep scroll functionality
+    <div className="w-full h-full relative text-white pb-[100px] lg:pb-0 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"> 
         <div className="w-full mx-auto pb-6 md:pt-4">
             {selectionLevel > 0 && (
                 <div className="mb-6 relative z-20">
@@ -372,7 +401,6 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                               </div>
                           </div>
 
-                          {/* 🔥 CONDITIONALLY RENDER STREAM FILTER 🔥 */}
                           {showStreamFilter && (
                               <div className="mb-6">
                                   <h4 className="text-xs font-bold text-white/50 mb-3 uppercase tracking-wider">Select Stream</h4>
@@ -432,7 +460,6 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                                         selectedSubjects.includes(course.id) ? 'bg-red-600/10 border-red-500 cursor-pointer shadow-lg' : 'bg-black/40 border-white/10 hover:border-white/30 cursor-pointer'
                                       }`}>
                                       
-                                      {/* Left: Checkbox & Subject Name */}
                                       <div className="flex items-center gap-4 flex-1 min-w-0 w-full md:w-auto">
                                           <div className="relative flex items-center justify-center shrink-0">
                                               <input type="checkbox" disabled={isAlreadyPaid} className="shrink-0 w-5 h-5 rounded border-2 border-white/30 bg-black/50 text-red-600 focus:ring-red-600 cursor-pointer appearance-none checked:bg-red-600 checked:border-transparent disabled:opacity-50"
@@ -450,7 +477,6 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                                           </div>
                                       </div>
 
-                                      {/* Middle: Lecturer Info */}
                                       <div className="flex items-center gap-3 flex-1 min-w-0 w-full md:w-auto md:border-l md:border-white/10 md:pl-4 pl-8 md:pl-0">
                                           {courseImage ? (
                                               <img src={getImageUrl(courseImage)} alt="Lecturer" className="w-10 h-10 md:w-12 md:h-12 rounded-full object-cover border-2 border-white/10 shrink-0" />
@@ -465,19 +491,18 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                                           </div>
                                       </div>
 
-                                      {/* Right: Price */}
                                       <div className="flex flex-col items-start md:items-end flex-1 shrink-0 w-full md:w-auto border-t md:border-none border-white/10 pt-3 md:pt-0">
                                           {getActiveDiscount() && selectedSubjects.includes(course.id) && !course.isDiscountExcluded && !isAlreadyPaid ? (
                                               <>
-                                                  <span className="text-slate-500 line-through text-[9px] font-medium mb-0.5">LKR {course.price}</span>
-                                                  <span className="text-yellow-400 font-black text-lg flex items-center gap-1"><Tag size={14}/> LKR {getActiveDiscount().newPricePerCourse}</span>
+                                                  <span className="text-slate-500 line-through text-[9px] font-medium mb-0.5">LKR {Number(course.price).toFixed(2)}</span>
+                                                  <span className="text-yellow-400 font-black text-lg flex items-center gap-1"><Tag size={14}/> LKR {Number(getActiveDiscount().newPricePerCourse).toFixed(2)}</span>
                                               </>
                                           ) : (
                                               <>
                                                   {course.isDiscountExcluded && selectedSubjects.includes(course.id) && !isAlreadyPaid && (
                                                       <span className="text-orange-500 text-[8px] uppercase tracking-widest font-bold mb-0.5">Fixed Price</span>
                                                   )}
-                                                  <span className="text-red-400 font-black text-lg">LKR {course.price}</span>
+                                                  <span className="text-red-400 font-black text-lg">LKR {Number(course.price).toFixed(2)}</span>
                                               </>
                                           )}
                                       </div>
@@ -511,8 +536,14 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                             <div className="flex flex-row lg:flex-col items-center lg:items-stretch justify-between gap-4">
                                 <div>
                                     <span className="block text-[9px] text-white/50 uppercase font-bold tracking-widest mb-0.5 lg:text-center">Total Payable</span>
-                                    <span className="block text-xl lg:text-2xl text-white font-black lg:text-center lg:mb-3">LKR {calculateTotal().toFixed(2)}</span>
-                                    {getActiveDiscount() && <p className="text-yellow-400 font-bold text-[9px] flex items-center lg:justify-center gap-1"><Tag size={10}/> Saved LKR {getOriginalTotal() - calculateTotal()}</p>}
+                                    
+                                    <span className="block text-xl lg:text-2xl text-white font-black lg:text-center lg:mb-1">LKR {getFinalPayable().toFixed(2)}</span>
+                                    
+                                    {/* 🔥 FIX: Only show Wallet balance if subjects are selected */}
+                                    {selectedSubjects.length > 0 && walletBalance > 0 && <p className="text-emerald-400 font-bold text-[9px] flex items-center lg:justify-center gap-1 mt-1">Wallet Excess Applied: -LKR {walletBalance.toFixed(2)}</p>}
+                                    {selectedSubjects.length > 0 && walletBalance < 0 && <p className="text-red-400 font-bold text-[9px] flex items-center lg:justify-center gap-1 mt-1">Previous Dues Added: +LKR {Math.abs(walletBalance).toFixed(2)}</p>}
+                                    
+                                    {getActiveDiscount() && <p className="text-yellow-400 font-bold text-[9px] flex items-center lg:justify-center gap-1 mt-1"><Tag size={10}/> Saved LKR {(getOriginalTotal() - calculateTotal()).toFixed(2)}</p>}
                                 </div>
                                 <button onClick={handleProceedToPay} className="bg-gradient-to-r from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 text-white font-black py-3 lg:py-3.5 px-6 lg:px-0 rounded-xl flex justify-center items-center transition-colors text-xs uppercase tracking-widest border border-red-500/50 whitespace-nowrap">
                                     Proceed <ChevronRight className="ml-1" size={16}/>
@@ -525,9 +556,8 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
             </div>
         </div>
 
-        {/* 🔥 FIX: Modals Centered Correctly 🔥 */}
         {showInstallmentPrompt && (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-hidden">
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 <div className="bg-slate-900 border border-white/10 rounded-[2rem] p-6 max-w-sm w-full relative shadow-2xl">
                     <button onClick={() => setShowInstallmentPrompt(false)} className="absolute top-4 right-4 text-white/50 hover:text-white bg-white/10 p-2 rounded-xl"><X size={18}/></button>
                     <h2 className="text-xl font-extrabold text-white mb-2">Payment Options</h2>
@@ -538,7 +568,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                                 className="w-full bg-white/5 hover:bg-red-600/20 border border-white/10 hover:border-red-500/50 text-left p-4 rounded-2xl transition-colors group">
                             <span className="block text-[10px] text-white/40 mb-1 uppercase tracking-widest font-bold group-hover:text-red-400">Option 1</span>
                             <span className="block text-sm text-white font-extrabold mb-1">Pay Full Amount</span>
-                            <span className="block text-xl text-red-500 font-black">LKR {calculateTotal().toFixed(2)}</span>
+                            <span className="block text-xl text-red-500 font-black">LKR {Math.max(0, calculateTotal() - walletBalance).toFixed(2)}</span>
                         </button>
 
                         <button onClick={() => { setFinalPaymentType('installment'); setShowInstallmentPrompt(false); setShowPaymentModal(true); }} 
@@ -553,12 +583,12 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                                 {availableInstallmentPlan && JSON.parse(availableInstallmentPlan.details).map((step, idx) => (
                                     <div key={idx} className="flex justify-between text-xs font-medium text-white/70">
                                         <span>Part {step.step}:</span>
-                                        <span className="text-white font-bold bg-white/5 px-2 rounded border border-white/10">LKR {step.amount}</span>
+                                        <span className="text-white font-bold bg-white/5 px-2 rounded border border-white/10">LKR {Number(step.amount).toFixed(2)}</span>
                                     </div>
                                 ))}
                             </div>
                             <div className="bg-red-600 text-white font-extrabold py-3 rounded-xl text-xs text-center shadow-lg">
-                                Select & Pay LKR {availableInstallmentPlan ? JSON.parse(availableInstallmentPlan.details)[0]?.amount : 0} Today
+                                Select & Pay LKR {Math.max(0, (availableInstallmentPlan ? Number(JSON.parse(availableInstallmentPlan.details)[0]?.amount) : 0) - walletBalance).toFixed(2)} Today
                             </div>
                         </button>
                     </div>
@@ -567,8 +597,8 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
         )}
 
         {showPaymentModal && (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-hidden">
-                <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-6 w-full max-w-md relative overflow-y-auto max-h-[90vh] custom-scrollbar shadow-2xl flex flex-col">
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="bg-slate-900 border border-white/10 rounded-[2.5rem] p-6 w-full max-w-md relative overflow-y-auto max-h-[90vh] shadow-2xl flex flex-col [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <div className="flex justify-between items-center mb-6">
                         <div>
                             <h2 className="text-xl font-extrabold text-white mb-1">Submit Payment</h2>
@@ -579,7 +609,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                     
                     <div className="bg-black/40 border border-white/10 rounded-2xl p-4 text-center mb-6 shadow-inner shrink-0">
                         <span className="block text-[10px] text-white/50 uppercase font-bold tracking-widest mb-1">Amount to Pay Now</span>
-                        <span className="block text-3xl text-red-500 font-black">LKR {finalPaymentType === 'installment' && availableInstallmentPlan ? JSON.parse(availableInstallmentPlan.details)[0]?.amount : calculateTotal().toFixed(2)}</span>
+                        <span className="block text-3xl text-red-500 font-black">LKR {getFinalPayable().toFixed(2)}</span>
                     </div>
 
                     <div className="flex gap-2 bg-black/30 p-1 rounded-2xl border border-white/10 mb-6 shrink-0">
@@ -587,7 +617,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                         <button onClick={() => setPaymentMethod('payhere')} className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-colors ${paymentMethod === 'payhere' ? 'bg-white/20 text-white border border-white/10 shadow' : 'text-white/40 hover:text-white/80'}`}>Online / Card</button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 mb-4">
+                    <div className="flex-1 overflow-y-auto pr-1 mb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                         {paymentMethod === 'slip' ? (
                             <>
                                 <div className="border-2 border-dashed border-white/20 bg-white/5 rounded-[1.5rem] p-6 text-center hover:border-red-500/50 hover:bg-red-500/5 transition-colors cursor-pointer mb-4 group relative" onClick={openSlipInstructions}>
@@ -645,8 +675,8 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
 
         {/* 🔥 SLIP INSTRUCTIONS POPUP 🔥 */}
         {showSlipInstructions && (
-            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-200 overflow-hidden">
-                <div className="bg-slate-900 border border-white/10 p-5 md:p-8 rounded-3xl max-w-2xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh] custom-scrollbar">
+            <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-200 overflow-hidden [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="bg-slate-900 border border-white/10 p-5 md:p-8 rounded-3xl max-w-2xl w-full shadow-2xl relative overflow-y-auto max-h-[90vh] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                     <h3 className="text-lg md:text-2xl font-extrabold text-white mb-4 md:mb-6 border-b border-white/10 pb-3 md:pb-4">ස්ලිප් පත් උඩුගත කිරීමේ උපදෙස් (Slip Upload Instructions)</h3>
                     
                     <div className="space-y-4 md:space-y-6">
@@ -655,7 +685,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                             <ul className="text-xs md:text-sm text-slate-300 list-disc pl-4 md:pl-5 space-y-1 md:space-y-2 leading-relaxed mb-4">
                                 <li>ස්ලිප් පතෙහි <strong className="text-white">මුලු 4ම (4 corners)</strong> පැහැදිලිව පෙනෙන සේ ඡායාරූපය ගන්න.</li>
                                 <li>ඡායාරූපය <strong className="text-white">බොඳ නොවී ඉතා පැහැදිලිව</strong> තිබිය යුතුය.</li>
-                                <li><strong className="text-white">Reference Number, දිනය සහ වේලාව</strong> හොඳින් කියවිය හැකි විය යුතුය.</li>
+                                <li><strong className="text-white">Reference Number, දිනය සහ වේලාව</strong> හොඳින් කියවිය හැකි විය্বা.</li>
                             </ul>
                             <div className="flex gap-2 md:gap-4">
                                 <div className="flex-1 bg-white/5 border border-green-500/50 rounded-xl p-2 md:p-3 text-center flex flex-col justify-between">

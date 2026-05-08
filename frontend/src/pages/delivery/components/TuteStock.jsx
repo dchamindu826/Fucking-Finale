@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Plus, X, Loader2, ArrowLeft, Building2, Layers, BookOpen, Image as ImageIcon, PackagePlus, FileText, ChevronRight, Search, AlertTriangle, Edit3, Trash2, History, AlertCircle, Calendar, ChevronLeft } from 'lucide-react';
+import { Box, Plus, X, Loader2, ArrowLeft, Building2, Layers, BookOpen, FileText, ChevronRight, AlertTriangle, Edit3, Trash2, History, AlertCircle, Calendar, ChevronLeft } from 'lucide-react';
 import axios from '../../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -13,28 +13,19 @@ export default function TuteStock() {
     const [batches, setBatches] = useState([]);
     const [batchStock, setBatchStock] = useState([]);
     
-    // Global Dashboard States
     const [globalStock, setGlobalStock] = useState([]);
 
     const [selectedBiz, setSelectedBiz] = useState(null);
     const [selectedBatch, setSelectedBatch] = useState(null);
 
-    // Filters & Search
-    const [batchSearch, setBatchSearch] = useState("");
-    const [subjectFilter, setSubjectFilter] = useState('ALL'); // 'ALL' | 1 (Monthly) | 2 (Full)
-
-    // Action Inputs
+    const [subjectFilter, setSubjectFilter] = useState('ALL'); 
     const [stockInputs, setStockInputs] = useState({}); 
 
-    // Modals
-    const [showCustomModal, setShowCustomModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     
-    const [customData, setCustomData] = useState({ tuteName: '', courseId: '', file: null });
     const [editData, setEditData] = useState({ id: null, qty: '', reason: '' });
 
-    // History Modal States
     const [stockHistory, setStockHistory] = useState([]);
     const [historyPage, setHistoryPage] = useState(1);
     const [historyTotalPages, setHistoryTotalPages] = useState(1);
@@ -61,7 +52,6 @@ export default function TuteStock() {
     const getImageUrl = (imageName) => (!imageName || imageName === 'default.png' || imageName === 'null') ? '/logo.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/icons/${imageName}`;
     const getTuteImageUrl = (imageName) => (!imageName || imageName === 'default-tute.png') ? null : `${axios.defaults.baseURL.replace('/api', '')}/storage/documents/${imageName}`;
 
-    // --- Navigation & Fetching ---
     const handleSelectBusiness = async (biz) => {
         setSelectedBiz(biz);
         setViewLevel('batches');
@@ -107,7 +97,6 @@ export default function TuteStock() {
         } catch (e) { toast.error("Failed to load history"); }
     };
 
-    // --- Actions ---
     const handleAddStock = async (stockId) => {
         const qty = parseInt(stockInputs[stockId]);
         if (!qty || isNaN(qty) || qty <= 0) return toast.error("Enter a valid quantity!");
@@ -150,34 +139,9 @@ export default function TuteStock() {
         } catch (error) { toast.error("Failed to delete item"); }
     };
 
-    const handleCustomTuteSubmit = async (e) => {
-        e.preventDefault();
-        if (!customData.tuteName) return toast.error("Tute Name is required!");
-        if (!customData.courseId) return toast.error("Please select a Subject!");
-
-        setActionLoading(true);
-        const formData = new FormData();
-        formData.append('batchId', selectedBatch.id);
-        formData.append('tuteName', customData.tuteName);
-        formData.append('courseId', customData.courseId);
-        if (customData.file) formData.append('tuteCover', customData.file);
-
-        try {
-            await axios.post('/admin/delivery/stock/custom', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-            toast.success("Extra Tute Created!");
-            setShowCustomModal(false);
-            setCustomData({ tuteName: '', courseId: '', file: null });
-            await fetchBatchStock(selectedBatch.id);
-            fetchInitialData();
-        } catch (error) { toast.error("Failed to create extra tute"); } 
-        finally { setActionLoading(false); }
-    };
-
-    // --- Derived Data & Deduplication ---
     const globalLowStock = globalStock.filter(s => s.availableQuantity <= 10 && s.availableQuantity > 0);
     const globalOutStock = globalStock.filter(s => s.availableQuantity === 0);
 
-    // Deduplicate Courses for Left Panel (Primary Subjects)
     const uniqueCoursesMap = new Map();
     batchStock.forEach(stock => {
         if (stock.course && !uniqueCoursesMap.has(stock.course.id)) {
@@ -192,30 +156,23 @@ export default function TuteStock() {
     const primarySubjects = Array.from(uniqueCoursesMap.values()).filter(course => {
         if (subjectFilter === 'ALL') return true;
         return course.group?.type === parseInt(subjectFilter);
-    }).filter(course => 
-        course.name.toLowerCase().includes(batchSearch.toLowerCase())
-    );
+    });
 
-    // Right Panel Inventory
-    const filteredBatchStock = batchStock.filter(s => 
-        s.tuteName.toLowerCase().includes(batchSearch.toLowerCase()) || 
-        (s.course?.name && s.course.name.toLowerCase().includes(batchSearch.toLowerCase()))
-    );
+    const filteredBatchStock = batchStock;
 
     if (loading && viewLevel === 'businesses') return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-500" size={40}/></div>;
 
     return (
         <div className="w-full text-slate-200 animate-in fade-in duration-500 font-sans h-[85vh] flex flex-col">
             
-            {/* Header & Navigation */}
             <div className="mb-6 bg-slate-800/40 p-5 rounded-3xl border border-white/10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-lg shrink-0">
                 <div className="flex items-center gap-3 text-lg font-bold">
                     {viewLevel !== 'businesses' && (
-                        <button onClick={() => { setViewLevel(viewLevel === 'stock' ? 'batches' : 'businesses'); setBatchSearch(""); setSubjectFilter('ALL'); }} className="bg-white/5 hover:bg-white/10 text-white p-2.5 rounded-xl transition-colors">
+                        <button onClick={() => { setViewLevel(viewLevel === 'stock' ? 'batches' : 'businesses'); setSubjectFilter('ALL'); }} className="bg-white/5 hover:bg-white/10 text-white p-2.5 rounded-xl transition-colors">
                             <ArrowLeft size={20}/>
                         </button>
                     )}
-                    <button onClick={() => { setViewLevel('businesses'); setBatchSearch(""); }} className={`${viewLevel === 'businesses' ? 'text-white' : 'text-slate-400 hover:text-white'} flex items-center gap-2`}><Building2 size={20}/> Businesses</button>
+                    <button onClick={() => { setViewLevel('businesses'); }} className={`${viewLevel === 'businesses' ? 'text-white' : 'text-slate-400 hover:text-white'} flex items-center gap-2`}><Building2 size={20}/> Businesses</button>
                     {selectedBiz && viewLevel !== 'businesses' && (
                         <><ChevronRight className="text-slate-600" size={16}/><span className={`${viewLevel === 'batches' ? 'text-white' : 'text-slate-400'} flex items-center gap-2`}><Layers size={18}/> {selectedBiz.name}</span></>
                     )}
@@ -224,29 +181,23 @@ export default function TuteStock() {
                     )}
                 </div>
 
-                {/* Global History Button */}
                 {viewLevel === 'businesses' && (
                     <button onClick={() => loadHistory(1, true)} className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl transition-colors font-bold text-sm flex items-center gap-2 shadow-lg"><History size={18}/> Global History</button>
                 )}
             </div>
 
-            {/* LEVEL 1: GLOBAL DASHBOARD & BUSINESSES */}
             {viewLevel === 'businesses' && (
                 <div className="flex flex-col gap-6 overflow-y-auto pb-10 custom-scrollbar min-h-0">
-                    
-                    {/* Global Stats Banner */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
                         <div className="bg-slate-800/50 border border-blue-500/20 p-5 rounded-2xl flex items-center justify-between">
                             <div><p className="text-slate-400 text-sm font-bold">Total Unique Tutes</p><h4 className="text-3xl font-black text-white">{globalStock.length}</h4></div>
                             <div className="bg-blue-500/20 p-4 rounded-2xl"><Box className="text-blue-400" size={28}/></div>
                         </div>
                         
-                        {/* Blinking Warning Box */}
                         <div className="bg-orange-500/10 border border-orange-500/30 p-5 rounded-2xl flex items-center justify-between relative group cursor-pointer">
                             <div><p className="text-orange-400/80 text-sm font-bold">Low Stock Alert (≤ 10)</p><h4 className="text-3xl font-black text-orange-400">{globalLowStock.length}</h4></div>
                             <div className={`${globalLowStock.length > 0 ? 'animate-pulse' : ''} bg-orange-500/20 p-4 rounded-2xl`}><AlertTriangle className="text-orange-400" size={28}/></div>
                             
-                            {/* Hover Dropdown */}
                             {globalLowStock.length > 0 && (
                                 <div className="absolute top-full right-0 mt-2 w-80 bg-slate-800 border border-orange-500/30 rounded-2xl shadow-2xl p-4 hidden group-hover:block z-50">
                                     <h5 className="text-xs font-bold text-orange-400 uppercase tracking-widest mb-3 border-b border-white/10 pb-2">Low Stock Items</h5>
@@ -285,7 +236,6 @@ export default function TuteStock() {
                 </div>
             )}
 
-            {/* LEVEL 2: BATCHES */}
             {viewLevel === 'batches' && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pb-10 custom-scrollbar">
                     {loading ? <div className="col-span-full flex justify-center py-10"><Loader2 className="animate-spin text-blue-500" size={40}/></div> : 
@@ -302,22 +252,14 @@ export default function TuteStock() {
                 </div>
             )}
 
-            {/* LEVEL 3: STOCK MANAGEMENT */}
             {viewLevel === 'stock' && (
                 <div className="flex flex-col lg:flex-row gap-6 flex-1 min-h-0">
                     
-                    {/* LEFT: Primary Subjects List */}
                     <div className="flex-1 bg-slate-800/30 border border-white/10 rounded-3xl p-6 flex flex-col min-h-0 shadow-lg">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 shrink-0">
                             <h3 className="text-xl font-bold text-white flex items-center gap-2"><BookOpen className="text-blue-400"/> Primary Subjects</h3>
-                            
-                            <div className="relative w-full sm:w-64">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                                <input type="text" placeholder="Search Subject..." value={batchSearch} onChange={e => setBatchSearch(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-9 pr-4 text-sm text-white focus:border-blue-500 outline-none shadow-inner"/>
-                            </div>
                         </div>
 
-                        {/* Subject Group Filters */}
                         <div className="flex gap-2 mb-6 shrink-0 p-1.5 bg-black/30 rounded-xl w-max border border-white/5">
                             {[{ id: 'ALL', label: 'All Subjects' }, { id: 1, label: 'Monthly' }, { id: 2, label: 'Full Payment' }].map(tab => (
                                 <button key={tab.id} onClick={() => setSubjectFilter(tab.id)} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${subjectFilter === tab.id ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>
@@ -365,19 +307,14 @@ export default function TuteStock() {
                         </div>
                     </div>
 
-                    {/* RIGHT: Full Inventory Panel */}
                     <div className="w-full lg:w-[400px] xl:w-[450px] bg-slate-800/50 border border-emerald-500/20 rounded-3xl p-6 flex flex-col shrink-0 min-h-0 relative overflow-hidden shadow-xl">
                         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-blue-500"></div>
                         
                         <div className="flex justify-between items-center mb-5">
                             <h3 className="text-xl font-bold text-emerald-400 flex items-center gap-2"><Box size={22}/> Full Inventory</h3>
-                            <div className="flex gap-2">
-                                <button onClick={() => loadHistory(1, false)} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white p-2 rounded-xl transition-colors" title="Batch History"><History size={18}/></button>
-                                <button onClick={() => setShowCustomModal(true)} className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-widest flex items-center gap-2"><PackagePlus size={14}/> Extra</button>
-                            </div>
+                            <button onClick={() => loadHistory(1, false)} className="bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white px-4 py-2 rounded-xl transition-colors font-bold text-xs uppercase tracking-widest flex items-center gap-2"><History size={16}/> History</button>
                         </div>
 
-                        {/* Top Summary Info */}
                         <div className="flex gap-3 mb-5 shrink-0">
                             <div className="flex-1 bg-black/40 border border-white/5 rounded-2xl p-4 flex flex-col items-center justify-center shadow-inner">
                                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Total Subjects</span>
@@ -398,7 +335,6 @@ export default function TuteStock() {
                                         <div className="flex items-center gap-4 overflow-hidden">
                                             {tuteImg ? <img src={tuteImg} alt="Cover" className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0 shadow-sm" /> : <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"><FileText size={18} className="text-slate-400"/></div>}
                                             <div className="overflow-hidden">
-                                                {/* ONLY showing course name as requested, removed Tute Name from Inventory view */}
                                                 <p className="text-sm font-bold text-white truncate" title={stock.course?.name}>{stock.course?.name || "Extra Custom Item"}</p>
                                             </div>
                                         </div>
@@ -420,30 +356,6 @@ export default function TuteStock() {
                 </div>
             )}
 
-            {/* MODALS */}
-            
-            {/* Custom Tute Modal */}
-            {showCustomModal && createPortal(
-                <div className="fixed inset-0 z-[9999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-[#15192b] border border-purple-500/20 rounded-3xl p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95">
-                        <div className="flex justify-between items-center mb-6"><h3 className="text-xl font-black text-white flex items-center gap-2"><PackagePlus size={22} className="text-purple-400"/> Add Extra Tute</h3><button onClick={() => setShowCustomModal(false)} className="text-slate-400 hover:text-red-400 bg-white/5 p-2 rounded-xl"><X size={18}/></button></div>
-                        <form onSubmit={handleCustomTuteSubmit} className="space-y-5">
-                            <div><label className="text-xs font-bold text-slate-400 uppercase mb-1.5 block">Tute / Paper Name *</label><input type="text" required value={customData.tuteName} onChange={e => setCustomData({...customData, tuteName: e.target.value})} placeholder="e.g. Model Paper 01" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 shadow-inner" /></div>
-                            <div>
-                                <label className="text-xs font-bold text-slate-400 uppercase mb-1.5 block">Link to Subject *</label>
-                                <select required value={customData.courseId} onChange={e => setCustomData({...customData, courseId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white outline-none focus:border-purple-500 shadow-inner">
-                                    <option value="">-- Select Subject --</option>
-                                    {primarySubjects.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
-                            </div>
-                            <div><label className="text-xs font-bold text-slate-400 uppercase mb-1.5 block">Cover Image (Optional)</label><input type="file" accept="image/*" onChange={e => setCustomData({...customData, file: e.target.files[0]})} className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-white/10 file:text-white" /></div>
-                            <button type="submit" disabled={actionLoading} className="w-full bg-purple-600 hover:bg-purple-500 text-white rounded-xl py-3 font-black transition-all shadow-lg mt-4 disabled:opacity-50">Create Item</button>
-                        </form>
-                    </div>
-                </div>, document.body
-            )}
-
-            {/* Edit Stock Modal (WITH REASON) */}
             {showEditModal && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
                     <div className="bg-[#15192b] border border-blue-500/20 rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95">
@@ -457,12 +369,11 @@ export default function TuteStock() {
                 </div>, document.body
             )}
 
-            {/* FULLY UPGRADED HISTORY MODAL */}
             {showHistoryModal && createPortal(
                 <div className="fixed inset-0 z-[9999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in">
                     <div className="bg-[#15192b] border border-white/10 rounded-3xl p-8 w-full max-w-6xl max-h-[90vh] flex flex-col shadow-2xl animate-in zoom-in-95">
                         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 shrink-0 gap-4 border-b border-white/10 pb-6">
-                            <h3 className="text-2xl font-black text-white flex items-center gap-3"><History size={26} className="text-blue-400"/> {isGlobalHistory ? 'Global Stock History Report' : 'Batch Stock History'}</h3>
+                            <h3 className="text-2xl font-black text-white flex items-center gap-3"><History size={26} className="text-blue-400"/> {isGlobalHistory ? 'Global Stock History' : 'Batch Stock History'}</h3>
                             
                             <div className="flex flex-wrap items-center gap-3">
                                 <div className="flex items-center bg-black/40 rounded-xl border border-white/10 p-1">
@@ -513,7 +424,6 @@ export default function TuteStock() {
                             </table>}
                         </div>
 
-                        {/* Pagination */}
                         {historyTotalPages > 1 && (
                             <div className="flex justify-between items-center mt-6 pt-4 border-t border-white/10 shrink-0">
                                 <span className="text-sm text-slate-400">Page <strong className="text-white">{historyPage}</strong> of <strong className="text-white">{historyTotalPages}</strong></span>

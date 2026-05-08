@@ -31,27 +31,7 @@ router.post('/stock/custom', upload.single('tuteCover'), deliveryController.addC
 router.put('/stock/edit', deliveryController.editTuteStock);
 router.delete('/stock/delete/:id', deliveryController.deleteTuteStock);
 router.get('/stock/history/:courseIds', deliveryController.getStockHistory);
-
-router.get('/stats', async (req, res) => {
-    try {
-        const pending = await prisma.delivery.count({ where: { status: 'Pending' } });
-        const onHold = await prisma.delivery.count({ where: { status: 'Hold' } });
-        const deliveredToday = await prisma.delivery.count({ 
-            where: { 
-                status: 'Received',
-                resolvedAt: { gte: new Date(new Date().setHours(0,0,0,0)) } 
-            } 
-        });
-        const lowStock = await prisma.tuteStock.count({
-            where: { availableQuantity: { lte: 10 } } // Stock එක 10ට අඩු ඒවා
-        });
-
-        res.status(200).json({ pending, onHold, deliveredToday, lowStock });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch stats" });
-    }
-});
-
+router.get('/stats', deliveryController.getDeliveryStats);
 
 // Delivery History (Delivered & Returned Tab එකට)
 router.get('/history', async (req, res) => {
@@ -80,4 +60,9 @@ router.get('/history', async (req, res) => {
         res.status(500).json([]);
     }
 });
+
+router.get('/dispatch', deliveryController.getDispatchDeliveries);
+router.get('/history-advanced', deliveryController.getAdvancedHistory);
+router.put('/manual-confirm/:deliveryId', deliveryController.manualConfirmDelivery);
+
 module.exports = router;

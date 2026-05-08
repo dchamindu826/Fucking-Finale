@@ -4,8 +4,10 @@ import { Truck, Search } from 'lucide-react';
 
 import Overview from './components/Overview';
 import PendingHolds from './components/PendingHolds';
-import DeliveredReturned from './components/DeliveredReturned';
+// 🔥 මෙතන පරණ නම වෙනුවට අලුත් නම දැම්මා
+import DispatchDelivered from './components/DispatchDelivered'; 
 import TuteStock from './components/TuteStock';
+import DeliveryHistory from './components/DeliveryHistory';
 
 export default function DeliveryDashboard() {
     const location = useLocation();
@@ -26,34 +28,36 @@ export default function DeliveryDashboard() {
                     <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide capitalize">
                         {activeTab === 'overview' && 'Overview'}
                         {activeTab === 'pending' && 'Pending & Holds'}
-                        {activeTab === 'delivered' && 'Delivered & Returned'}
+                        {activeTab === 'delivered' && 'Dispatch & Delivered'} {/* 🔥 Header එකත් වෙනස් කළා */}
                         {activeTab === 'stock' && 'Tute Stock'}
+                        {activeTab === 'history' && 'Delivery History'}
                     </h2>
                     <p className="text-slate-400 font-medium text-sm mt-1">Manage student deliveries, tracking, and tute inventory.</p>
                 </div>
             </div>
 
-            {/* Search Bar (Hidden in Overview) */}
-            {activeTab !== 'overview' && (
-                <div className="bg-[#1e2336]/60 p-5 rounded-2xl border border-white/5 mb-6 shadow-lg backdrop-blur-xl">
-                    <div className="relative w-full">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-                        <input 
-                            type="text" 
-                            placeholder="Search orders, students, batches or tracking IDs..." 
-                            value={searchQuery} 
-                            onChange={e => setSearchQuery(e.target.value)} 
-                            className="w-full bg-black/40 border border-white/5 rounded-xl pl-11 pr-4 py-3.5 text-white outline-none focus:border-blue-500/50 transition-colors text-sm font-medium" 
-                        />
-                    </div>
-                </div>
-            )}
+            {/* Search Bar (Hidden in Overview & Stock) */}
+{(activeTab === 'pending' || activeTab === 'delivered') && (
+    <div className="bg-[#1e2336]/60 p-5 rounded-2xl border border-white/5 mb-6 shadow-lg backdrop-blur-xl">
+        <div className="relative w-full">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+            <input 
+                type="text" 
+                placeholder="Search orders, students, batches or tracking IDs..." 
+                value={searchQuery} 
+                onChange={e => setSearchQuery(e.target.value)} 
+                className="w-full bg-black/40 border border-white/5 rounded-xl pl-11 pr-4 py-3.5 text-white outline-none focus:border-blue-500/50 transition-colors text-sm font-medium" 
+            />
+        </div>
+    </div>
+)}
 
             {/* Render the active module based on URL parameter */}
             <div className="mt-4">
                 {activeTab === 'overview' && <Overview />}
                 {activeTab === 'pending' && <PendingHolds searchQuery={searchQuery} />}
-                {activeTab === 'delivered' && <DeliveredReturned searchQuery={searchQuery} />}
+                {activeTab === 'history' && <DeliveryHistory />}
+                {activeTab === 'delivered' && <DispatchDelivered searchQuery={searchQuery} />} 
                 {activeTab === 'stock' && <TuteStock searchQuery={searchQuery} />}
             </div>
 

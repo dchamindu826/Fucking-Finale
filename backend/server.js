@@ -17,8 +17,22 @@ admin.initializeApp({
 });
 
 // ================= MIDDLEWARES =================
-app.use(cors()); 
-app.use(express.json()); 
+const corsOptions = {
+    origin: [
+        'http://72.62.249.211:5175', 
+        'http://localhost:5175', 
+        'https://imacampus.online'
+    ], 
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'], 
+    credentials: true
+};
+
+// 🔥 අර වද දුන්න app.options පේළිය සම්පූර්ණයෙන්ම අයින් කරා.
+// මේකෙන් විතරක්ම Preflight සහ සාමාන්‍ය Requests සේරම Handle වෙනවා!
+app.use(cors(corsOptions));
+
+app.use(express.json());
 
 const coordinatorCrmRoutes = require('./routes/coordinatorCrmRoutes');
 const afterSeminarCrmRoutes = require('./routes/afterSeminarCrmRoutes');

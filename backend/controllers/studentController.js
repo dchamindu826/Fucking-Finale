@@ -144,9 +144,18 @@ exports.getMyEnrolledSubjects = async (req, res) => {
             }
         });
 
-        res.status(200).json(enrolled);
+        // ලමයාගේ Wallet Balance එක ගන්නවා
+        const user = await prisma.user.findUnique({
+            where: { id: parseInt(studentId) },
+            select: { walletBalance: true }
+        });
+
+        res.status(200).json({
+            enrolledSubjects: enrolled,
+            walletBalance: user?.walletBalance || 0
+        });
     } catch (error) {
-        res.status(500).json([]);
+        res.status(500).json({ enrolledSubjects: [], walletBalance: 0 });
     }
 };
 
@@ -261,8 +270,9 @@ exports.enrollStudent = async (req, res) => {
                 method: method === 'slip' ? 'Slip' : 'PayHere',
                 status: method === 'slip' ? 0 : 1, 
                 slip_image: slipFileNames,
-                amount: amount ? parseFloat(amount) : 0,
-                remark: remark || null // 🔥 අලුත් Remark Field එක
+                // 🔥 FIX: 57999.9999 වගේ save වෙන එක නවත්තන්න parseFloat කරලා .toFixed(2) දාලා තියෙන්නේ
+                amount: amount ? parseFloat(parseFloat(amount).toFixed(2)) : 0,
+                remark: remark || null 
             }
         });
 

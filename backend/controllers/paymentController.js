@@ -15,6 +15,13 @@ exports.getPayments = async (req, res) => {
             orderBy: { created_at: 'desc' }
         });
 
+        const paymentIds = rawPayments.map(p => p.id);
+        const deliveries = await prisma.delivery.findMany({
+            where: { paymentId: { in: paymentIds } }
+        });
+        const deliveryMap = {};
+        deliveries.forEach(d => deliveryMap[d.paymentId] = true);
+
         const allCourses = await prisma.course.findMany({ select: { id: true, name: true, price: true, code: true } });
         const courseMap = {};
         allCourses.forEach(c => courseMap[c.id] = c);
@@ -23,6 +30,13 @@ exports.getPayments = async (req, res) => {
         const today = new Date();
 
         const formattedPayments = await Promise.all(rawPayments.map(async (p) => {
+            
+            // 🔥 DEBUG කෑල්ල: Screenshot එකේ ඉන්න STU-1 ගේ පේමන්ට් වල Type එක Terminal එකේ Print කරමු
+            if (p.student && p.student.id === 1) { 
+                console.log(`\n👉 [DEBUG] Payment ID: ${p.id} | Amount: ${p.amount}`);
+                console.log(`👉 [DEBUG] DB එකේ තියෙන Payment Type එක: ${p.payment_type}`);
+            }
+
             let currentStatus = 'Pending';
             
             if (p.status === 5) currentStatus = 'Trash'; 
@@ -30,7 +44,7 @@ exports.getPayments = async (req, res) => {
                 currentStatus = 'Non Paid';
                 await prisma.payment.update({ where: { id: p.id }, data: { status: 3 } });
             } 
-            // 🔥 FIX: Post Pay 7 Days Expire Check (Auto revert to Pending)
+            // 🔥 Post Pay 7 Days Expire Check (Auto revert to Pending & Revoke Access)
             else if (p.status === 4 && p.valid_until && new Date(p.valid_until) < today) {
                 currentStatus = 'Pending';
                 await prisma.payment.update({ where: { id: p.id }, data: { status: 0, valid_until: null, post_pay_days: 0 } });
@@ -70,6 +84,7 @@ exports.getPayments = async (req, res) => {
                 id: p.id,
                 studentId: p.studentId,
                 studentName: p.student ? `${p.student.firstName} ${p.student.lastName}` : 'Unknown',
+                phone: p.student?.phone || p.student?.whatsapp || 'N/A',
                 studentNo: p.student?.id ? `STU-${p.student.id}` : 'STU-000',
                 businessId: p.businessId, batchId: p.batchId, groupId: p.groupId,
                 business: p.business?.name || 'N/A', batch: p.batch?.name || 'N/A',
@@ -88,7 +103,8 @@ exports.getPayments = async (req, res) => {
                 daysLeft: p.post_pay_days || 0,
                 validUntil: p.valid_until,
                 excessAmount: p.excessAmount || 0,
-                arrearsAmount: p.arrearsAmount || 0
+                arrearsAmount: p.arrearsAmount || 0,
+                hasDelivery: deliveryMap[p.id] || false
             };
         }));
 
@@ -107,7 +123,7 @@ exports.paymentAction = async (req, res) => {
         const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
         if (!payRecord) return res.status(404).json({ error: "Payment not found" });
 
-        // 🔥 FIX: Send to Delivery Hub manually for Free Cards / Discounts
+        // 🔥 Send to Delivery Hub manually for Free Cards / Discounts
         if (action === 'SendToDelivery') {
             const existingDelivery = await prisma.delivery.findUnique({ where: { paymentId: parseInt(paymentId) } });
             if (!existingDelivery && payRecord.subjects) {
@@ -136,6 +152,7 @@ exports.paymentAction = async (req, res) => {
             updateData.status = 2;
         } else if (action === 'Approve') {
             updateData.status = 1;
+            updateData.post_pay_days = 0; // Clear post pay if it was granted
             
             // 🔥 WALLET LOGIC INTEGRATION
             const expectedAmount = parseFloat(payRecord.amount);
@@ -183,7 +200,7 @@ exports.paymentAction = async (req, res) => {
             data: updateData
         });
 
-        // 🔥 FIX: Auto Delivery ONLY for normal Approve (Not Free Card/Discount)
+        // 🔥 Auto Delivery ONLY for normal Approve (Not Free Card/Discount)
         if (action === 'Approve') {
             const existingDelivery = await prisma.delivery.findUnique({ where: { paymentId: parseInt(paymentId) } });
             if (!existingDelivery && updatedPayment.subjects) {
@@ -218,7 +235,7 @@ exports.approveInstallment = async (req, res) => {
         const payRecord = await prisma.payment.findUnique({ where: { id: parseInt(paymentId) }});
         if (!payRecord) return res.status(404).json({ error: "Payment not found" });
 
-        let updateData = { status: 1 }; 
+        let updateData = { status: 1, post_pay_days: 0 }; 
 
         // 🔥 WALLET LOGIC INTEGRATION 
         const expectedAmount = parseFloat(payRecord.amount);

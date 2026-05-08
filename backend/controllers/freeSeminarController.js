@@ -440,17 +440,24 @@ const downloadMetaMedia = async (mediaId, metaApiKey) => {
 };
 
 // ==========================================
-// 6. RECEIVE MESSAGE WEBHOOK (UNIFIED FIX)
+// 6. RECEIVE MESSAGE WEBHOOK (UNIFIED FIX WITH LOGS)
 // ==========================================
 exports.receiveMessage = async (req, res) => {
+    // 🔥 මෙන්න මේ ලොග් එක තමයි අපි අලුතෙන් දැම්මේ, මේකෙන් හරියටම පෙනෙයි Webhook එකට එන දේවල්
+    console.log("\n🚀 ================= WEBHOOK HIT! =================");
+    console.log("📥 Payload:", JSON.stringify(req.body).substring(0, 300)); 
+    
     try {
         let body = req.body;
 
         if (body.object === "whatsapp_business_account") {
 
-            // 1. DELIVERY STATUS TRACKER (Failed Messages අල්ලගන්න)
+            // 1. DELIVERY STATUS TRACKER 
             if (body.entry?.[0]?.changes?.[0]?.value?.statuses?.[0]) {
-                return res.status(200).send("EVENT_RECEIVED");
+                const hasMessage = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+                if (!hasMessage) {
+                    return res.status(200).send("EVENT_RECEIVED");
+                }
             }
 
             // 2. INCOMING MESSAGES TRACKER
@@ -467,13 +474,15 @@ exports.receiveMessage = async (req, res) => {
                 let metadata = body.entry[0].changes[0].value.metadata;
                 let receivingWaNumId = metadata ? metadata.phone_number_id : null;
 
-                // 🔥 Fix: Aluthma settings eka ganna orderBy desc damma
                 const settings = await prisma.crmSettings.findFirst({ 
                     where: { waNumId: receivingWaNumId },
                     orderBy: { id: 'desc' } 
                 });
 
-                if (!settings) return res.status(200).send("EVENT_RECEIVED");
+                if (!settings) {
+                    console.error(`🚨 CRITICAL: No CRM Settings found for incoming waNumId: ${receivingWaNumId}. Phone: ${phone}`);
+                    return res.status(200).send("EVENT_RECEIVED");
+                }
                 
                 let messageText = "Media Message";
                 let interactiveId = null;
@@ -502,7 +511,7 @@ exports.receiveMessage = async (req, res) => {
                 const isRestartCommand = ['hi', 'hello', 'hey', 'menu', 'start'].includes(msgLower);
 
                 // ========================================================
-                // 🟢 AFTER SEMINAR LOGIC (Auto Reply ඇතුලත් කර ඇත)
+                // 🟢 AFTER SEMINAR LOGIC
                 // ========================================================
                 if (settings.campaignType === 'AFTER_SEMINAR') {
                     
@@ -545,22 +554,29 @@ exports.receiveMessage = async (req, res) => {
                             create: createDataAfterSeminar
                         });
                     } catch (upsertError) {
+                        console.error("🚨 Prisma Upsert Error (AFTER_SEMINAR):", upsertError.message); 
                         if (upsertError.code === 'P2002') {
                             await new Promise(resolve => setTimeout(resolve, 50)); 
-                            existingLead = await prisma.lead.update({
-                                where: { phone: dbPhone },
-                                data: { name: name, lastMessage: messageText, unreadCount: { increment: 1 }, status: 'OPEN', updatedAt: new Date(), inquiryType: detInquiryType, ...resetData }
-                            });
+                            try {
+                                existingLead = await prisma.lead.update({
+                                    where: { phone: dbPhone },
+                                    data: { name: name, lastMessage: messageText, unreadCount: { increment: 1 }, status: 'OPEN', updatedAt: new Date(), inquiryType: detInquiryType, ...resetData }
+                                });
+                            } catch (updateErr) {
+                                console.error("🚨 Prisma Update Error (AFTER_SEMINAR):", updateErr.message); 
+                            }
                         }
                     }
 
-                    await prisma.chatMessage.create({ 
-                        data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
-                    });
+                    if(existingLead) {
+                        await prisma.chatMessage.create({ 
+                            data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
+                        });
+                    }
 
-                    // 🔥 AFTER SEMINAR AUTO REPLY SENDER 🔥
+                    // Auto Reply Sender
                     const botAllowed = (settings?.botMode === 'ON' || settings?.botMode === 'AUTO_REPLY_ONLY');
-                    if (botAllowed && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
+                    if (botAllowed && existingLead && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
                         const autoReplies = await prisma.autoReply.findMany({ 
                             where: { campaignType: 'AFTER_SEMINAR', businessId: settings.businessId }, 
                             orderBy: { stepOrder: 'asc' } 
@@ -600,7 +616,7 @@ exports.receiveMessage = async (req, res) => {
                 // ========================================================
                 // 🔵 FREE SEMINAR LOGIC
                 // ========================================================
-                if (settings.campaignType === 'FREE_SEMINAR') {
+                else if (settings.campaignType === 'FREE_SEMINAR') {
                     
                     let existingLead = await prisma.lead.findUnique({ where: { phone: dbPhone } });
                     const timeSinceLastMsg = existingLead && existingLead.updatedAt ? new Date() - new Date(existingLead.updatedAt) : 10000;
@@ -623,16 +639,23 @@ exports.receiveMessage = async (req, res) => {
                             create: createDataFreeSeminar
                         });
                     } catch(e) {
-                         existingLead = await prisma.lead.update({ where: { phone: dbPhone }, data: { name: name, lastMessage: messageText, unreadCount: { increment: 1 }, status: 'OPEN', updatedAt: new Date(), ...resetData } });
+                        console.error("🚨 Prisma Upsert Error (FREE_SEMINAR):", e.message); 
+                        try {
+                            existingLead = await prisma.lead.update({ where: { phone: dbPhone }, data: { name: name, lastMessage: messageText, unreadCount: { increment: 1 }, status: 'OPEN', updatedAt: new Date(), ...resetData } });
+                        } catch (updateErr) {
+                            console.error("🚨 Prisma Update Error (FREE_SEMINAR):", updateErr.message); 
+                        }
                     }
 
-                    await prisma.chatMessage.create({ 
-                        data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
-                    });
+                    if(existingLead) {
+                        await prisma.chatMessage.create({ 
+                            data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
+                        });
+                    }
 
-                    // 🔥 FREE SEMINAR AUTO REPLY SENDER 🔥
+                    // Auto Reply Sender
                     const botAllowed = (settings?.botMode === 'ON' || settings?.botMode === 'AUTO_REPLY_ONLY');
-                    if (botAllowed && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
+                    if (botAllowed && existingLead && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
                         const autoReplies = await prisma.autoReply.findMany({ where: { campaignType: 'FREE_SEMINAR', businessId: settings.businessId }, orderBy: { stepOrder: 'asc' } });
                         
                         if (autoReplies.length > 0) {
@@ -665,12 +688,16 @@ exports.receiveMessage = async (req, res) => {
                     }
                     return res.status(200).send("EVENT_RECEIVED");
                 }
+                else {
+                    console.warn(`🚨 WARNING: Unhandled Campaign Type -> ${settings.campaignType}. Lead was NOT saved. Phone: ${phone}`);
+                    return res.status(200).send("EVENT_RECEIVED");
+                }
             }
-        } // End of whatsapp_business_account
+        } 
         
         res.status(200).send("EVENT_RECEIVED");
     } catch (error) { 
-        console.error("Webhook Error:", error);
+        console.error("🚨 Webhook Error CRITICAL:", error);
         res.status(500).send("ERROR"); 
     }
 };

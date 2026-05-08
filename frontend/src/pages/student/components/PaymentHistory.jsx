@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import axios from '../../../api/axios';
-import { Loader2, CheckCircle, Clock, Wallet, CalendarDays, RefreshCw, AlertTriangle, UploadCloud, X, Camera, MonitorPlay, Paperclip, Info } from 'lucide-react';
+import { Loader2, CheckCircle, Clock, Wallet, CalendarDays, AlertTriangle, UploadCloud, X, Camera, MonitorPlay, Paperclip, Info } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import correctCdmImg from '../../../assets/correct-cdm.jpg';
@@ -31,11 +31,9 @@ export default function PaymentHistory() {
             const historyList = [];
 
             all.forEach(p => {
-                // 🔥 FIX: Check if payment is already paid but waiting for admin approval
                 const isVerifying = p.status === -1 || (p.status === 0 && p.method === 'Slip');
                 
                 if (p.status === 1 || p.status === 2 || p.status === 4 || isVerifying) {
-                    // Attach a clean display status for the UI
                     p.displayStatus = (p.status === 1 || p.status === 4) ? 'Approved' 
                                     : p.status === 2 ? 'Rejected' 
                                     : 'Verifying';
@@ -75,7 +73,6 @@ export default function PaymentHistory() {
 
     const openSlipInstructions = () => setShowSlipInstructions(true);
 
-    // 🔥 FIX: Instantly close modal and open file picker synchronously
     const confirmSlipInstructions = () => {
         const fileInput = document.getElementById('slip-upload-due');
         if (fileInput) fileInput.click();
@@ -101,7 +98,7 @@ export default function PaymentHistory() {
             setPayModal(null);
             setSlipFiles([]);
             setRemark('');
-            await fetchPayments(); // Refresh list instantly
+            await fetchPayments();
         } catch (error) {
             toast.error("Failed to upload slip. Try again.");
         } finally {
@@ -184,8 +181,8 @@ export default function PaymentHistory() {
                                 <p className="text-white/50 font-bold">No history found.</p>
                             </div>
                         ) : payments.completed.map((p, idx) => (
-                            <div key={idx} className="bg-white/5 hover:bg-white/10 transition-colors border border-white/10 p-5 rounded-2xl group">
-                                <div className="flex justify-between items-start gap-4">
+                            <div key={idx} className="bg-white/5 hover:bg-white/10 transition-colors border border-white/10 p-5 rounded-2xl group flex flex-col justify-between">
+                                <div className="flex justify-between items-start gap-4 mb-2">
                                     <div>
                                         <h4 className="text-sm font-bold text-white mb-1 group-hover:text-red-400 transition-colors">{p.courseName}</h4>
                                         {p.isInstallment && p.installmentNo && (
@@ -206,6 +203,22 @@ export default function PaymentHistory() {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* 🔥 NEW: Wallet adjustments indicator 🔥 */}
+                                {(p.excessAmount > 0 || p.arrearsAmount > 0) && (
+                                    <div className="mt-2 pt-2 border-t border-white/5 text-right flex flex-col gap-1">
+                                        {p.excessAmount > 0 && (
+                                            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded w-max ml-auto border border-emerald-500/20">
+                                                Overpaid: +LKR {p.excessAmount} to Wallet
+                                            </span>
+                                        )}
+                                        {p.arrearsAmount > 0 && (
+                                            <span className="text-[10px] font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded w-max ml-auto border border-red-500/20">
+                                                Short Amount: -LKR {p.arrearsAmount} in Wallet
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>

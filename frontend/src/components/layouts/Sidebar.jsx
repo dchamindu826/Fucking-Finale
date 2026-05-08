@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, MonitorPlay, LogOut, HeadphonesIcon, Wallet, MessageCircle, Database, Truck, Image as ImageIcon, Package, Clock, 
-  CheckCircle, Archive, UserPlus, HardDrive, CalendarDays, CheckSquare } from 'lucide-react';
+  CheckCircle, Archive, UserPlus, HardDrive, CalendarDays, CheckSquare, History } from 'lucide-react'; // 🔥 FIX: History import කරා
 
 export default function Sidebar({ userRole, loggedInUser, handleLogout, currentBg, setBgImage }) {
   const location = useLocation();
@@ -82,6 +82,10 @@ export default function Sidebar({ userRole, loggedInUser, handleLogout, currentB
            <NavLink to="/delivery/dashboard?tab=overview" className={() => getTabLinkClass('overview')}><Package size={18} /> Overview</NavLink>
            <NavLink to="/delivery/dashboard?tab=pending" className={() => getTabLinkClass('pending')}><Clock size={18} /> Pending & Holds</NavLink>
            <NavLink to="/delivery/dashboard?tab=delivered" className={() => getTabLinkClass('delivered')}><CheckCircle size={18} /> Delivered</NavLink>
+           
+           {/* 🔥 FIX: Delivery History Tab එක මෙතනට ඇඩ් කළා 🔥 */}
+           <NavLink to="/delivery/dashboard?tab=history" className={() => getTabLinkClass('history')}><History size={18} /> History</NavLink>
+           
            <NavLink to="/delivery/dashboard?tab=stock" className={() => getTabLinkClass('stock')}><Archive size={18} /> Tute Stock</NavLink>
           </>
         )}

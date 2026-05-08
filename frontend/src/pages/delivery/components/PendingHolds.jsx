@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, Printer, Eye, ScanBarcode, AlertTriangle, ArrowLeft, Loader2, Check, Edit2, Save, X, BookOpen } from 'lucide-react';
+import { MapPin, Printer, Eye, ScanBarcode, AlertTriangle, ArrowLeft, Loader2, Check, Edit2, Save, X, BookOpen, Clock } from 'lucide-react';
 import axios from '../../../api/axios';
 import toast from 'react-hot-toast';
 
@@ -12,13 +12,20 @@ export default function PendingHolds({ searchQuery }) {
     const [allDeliveries, setAllDeliveries] = useState([]); 
     const [deliveries, setDeliveries] = useState([]);
     const [activePayTab, setActivePayTab] = useState('All');
+    
+    const [viewType, setViewType] = useState('Pending'); 
 
-    // Business Logo 
     const getBizLogoUrl = (imageName) => (!imageName || imageName === 'default.png' || imageName === 'null') ? '/logo.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/icons/${imageName}`;
 
     useEffect(() => {
         fetchAllInitialData();
     }, []);
+
+    useEffect(() => {
+        if (selectedBiz) {
+            fetchDeliveriesForBiz(selectedBiz);
+        }
+    }, [viewType, allDeliveries]);
 
     const fetchAllInitialData = async () => {
         setLoading(true);
@@ -38,7 +45,7 @@ export default function PendingHolds({ searchQuery }) {
 
     const fetchDeliveriesForBiz = (bizId) => {
         setSelectedBiz(bizId);
-        const bizDeliveries = allDeliveries.filter(d => d.businessId === bizId && d.status !== 'Delivered');
+        const bizDeliveries = allDeliveries.filter(d => d.businessId === bizId && d.status === viewType);
         setDeliveries(bizDeliveries);
         setActivePayTab('All'); 
     };
@@ -62,20 +69,38 @@ export default function PendingHolds({ searchQuery }) {
 
     return (
         <div className="animate-fade-in font-sans">
+            
+            {!selectedBiz && (
+                <div className="flex gap-4 mb-8 bg-[#1e2336]/60 p-2 rounded-2xl border border-white/5 w-max shadow-inner">
+                    <button
+                        onClick={() => { setViewType('Pending'); setSelectedBiz(null); }}
+                        className={`px-8 py-3 rounded-xl font-black text-sm tracking-widest uppercase transition-all flex items-center gap-2 ${viewType === 'Pending' ? 'bg-blue-600 text-white shadow-lg scale-105' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        <Clock size={18}/> Pending Orders
+                    </button>
+                    <button
+                        onClick={() => { setViewType('Hold'); setSelectedBiz(null); }}
+                        className={`px-8 py-3 rounded-xl font-black text-sm tracking-widest uppercase transition-all flex items-center gap-2 ${viewType === 'Hold' ? 'bg-orange-600 text-white shadow-lg scale-105' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        <AlertTriangle size={18}/> On Hold Orders
+                    </button>
+                </div>
+            )}
+
             {!selectedBiz ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                     {businesses.map(biz => {
-                        const bizPendingCount = allDeliveries.filter(d => d.businessId === biz.id && d.status === 'Pending').length;
+                        const bizStatusCount = allDeliveries.filter(d => d.businessId === biz.id && d.status === viewType).length;
 
                         return (
                             <div 
                                 key={biz.id} 
                                 onClick={() => fetchDeliveriesForBiz(biz.id)}
-                                className="relative bg-[#1e2336]/80 border border-white/10 hover:border-blue-500/50 p-8 rounded-3xl cursor-pointer transition-all shadow-xl flex flex-col items-center justify-center text-center group"
+                                className={`relative bg-[#1e2336]/80 border p-8 rounded-3xl cursor-pointer transition-all shadow-xl flex flex-col items-center justify-center text-center group ${viewType === 'Hold' ? 'border-orange-500/20 hover:border-orange-500/50' : 'border-white/10 hover:border-blue-500/50'}`}
                             >
-                                {bizPendingCount > 0 && (
-                                    <span className="absolute -top-3 -right-3 animate-pulse bg-red-600 border-4 border-[#1e2336] text-white text-base font-black w-10 h-10 flex items-center justify-center rounded-full shadow-lg z-10">
-                                        {bizPendingCount}
+                                {bizStatusCount > 0 && (
+                                    <span className={`absolute -top-3 -right-3 animate-pulse border-4 border-[#1e2336] text-white text-base font-black w-10 h-10 flex items-center justify-center rounded-full shadow-lg z-10 ${viewType === 'Hold' ? 'bg-orange-600' : 'bg-red-600'}`}>
+                                        {bizStatusCount}
                                     </span>
                                 )}
 
@@ -88,7 +113,9 @@ export default function PendingHolds({ searchQuery }) {
                                     />
                                 </div>
                                 <h3 className="text-xl font-black text-white">{biz.name}</h3>
-                                <p className="text-sm font-bold text-slate-400 mt-3 bg-black/40 px-4 py-1.5 rounded-full border border-white/5">Click to view {bizPendingCount} pending</p>
+                                <p className={`text-sm font-bold mt-3 px-4 py-1.5 rounded-full border shadow-inner ${viewType === 'Hold' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-black/40 text-slate-400 border-white/5'}`}>
+                                    Click to view {bizStatusCount} {viewType.toLowerCase()}
+                                </p>
                             </div>
                         );
                     })}
@@ -118,7 +145,7 @@ export default function PendingHolds({ searchQuery }) {
 
                     {filteredDeliveries.length === 0 ? (
                         <div className="text-center py-24 bg-[#1e2336]/40 rounded-3xl border border-white/5 shadow-inner">
-                            <p className="text-slate-400 font-bold text-xl">No pending deliveries for this category.</p>
+                            <p className="text-slate-400 font-bold text-xl">No {viewType.toLowerCase()} deliveries for this category.</p>
                         </div>
                     ) : (
                         <div className="space-y-5">
@@ -154,8 +181,7 @@ function OrderCard({ order, onRefresh }) {
         return localStorage.getItem(`draft_hold_remark_${order.id}`) || '';
     });
 
-    // 🔥 URL Fixes: Tute covers in /courses, Lecturers in /icons 🔥
-    const getTuteImgUrl = (imageName) => (!imageName || imageName === 'default-tute.png' || imageName === 'null') ? '/default-tute.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/courses/${imageName}`;
+    const getTuteImgUrl = (imageName) => (!imageName || imageName === 'default-tute.png' || imageName === 'null') ? '/default-tute.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/icons/${imageName}`;
     const getLecImgUrl = (imageName) => (!imageName || imageName === 'default.png' || imageName === 'null') ? '/default.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/icons/${imageName}`;
 
     const handleRemarkChange = (e) => {
@@ -165,57 +191,67 @@ function OrderCard({ order, onRefresh }) {
     };
 
     const handleLabelAction = (isPrint = true) => {
-        const baseUrl = window.location.origin; 
-        const bgImageUrl = `${baseUrl}/sticker-bg.png`; 
-        const windowPrint = window.open('', '', 'width=850,height=500');
-        
-        windowPrint.document.write(`
-            <html>
-                <head>
-                    <title>${isPrint ? 'Print' : 'Preview'} Label - ${order.id}</title>
-                    <style>
-                        @page { size: 4in 2in; margin: 0; }
-                        body { 
-                            font-family: 'Arial', sans-serif; 
-                            margin: 0; padding: 0;
-                            width: 4in; height: 2in; 
-                            -webkit-print-color-adjust: exact !important; 
-                        }
-                        .label-container {
-                            width: 100%; height: 100%;
-                            background-image: url('${bgImageUrl}');
-                            background-size: 100% 100%;
-                            background-repeat: no-repeat;
-                            position: relative;
-                        }
-                        .details-block {
-                            position: absolute;
-                            top: 9mm; /* Align Center */
-                            left: 8mm; /* Align Left Margin */
-                            width: 80mm;
-                            display: flex;
-                            flex-direction: column;
-                            gap: 4px; /* Proper Spacing */
-                        }
-                        .text-item { 
-                            font-size: 9pt; /* Normal Size */
-                            font-weight: 750; /* Normal Bold (Not 900) */
-                            text-transform: uppercase; 
-                            line-height: 1.4;
-                            color: black;
-                        }
-                        .ref-id {
-                            position: absolute;
-                            bottom: 3mm;
-                            right: 5mm;
-                            font-size: 8pt;
-                            font-weight: bold;
-                            color: black;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="label-container">
+    const baseUrl = window.location.origin; 
+    const bgImageUrl = `${baseUrl}/sticker-bg.png`; 
+    const windowPrint = window.open('', '', 'width=850,height=500');
+    
+    windowPrint.document.write(`
+        <html>
+            <head>
+                <title>${isPrint ? 'Print' : 'Preview'} Label - ${order.id}</title>
+                <style>
+                    @page { size: 2in 4in; margin: 0; }
+                    body { 
+                        font-family: 'Arial', sans-serif; 
+                        margin: 0; padding: 0;
+                        width: 2in; height: 4in; 
+                        -webkit-print-color-adjust: exact !important; 
+                    }
+                    .label-container {
+                        width: 2in; 
+                        height: 4in;
+                        background-image: url('${bgImageUrl}');
+                        background-size: 100% 100%;
+                        background-repeat: no-repeat;
+                        position: relative;
+                        overflow: hidden;
+                    }
+                    .content-wrapper {
+                        position: absolute;
+                        width: 4in;
+                        height: 2in;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%) rotate(-90deg);
+                    }
+                    .details-block {
+                        position: absolute;
+                        top: 5mm; 
+                        left: 8mm; 
+                        width: 80mm;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 4px; 
+                    }
+                    .text-item { 
+                        font-size: 9pt; 
+                        font-weight: bold; 
+                        line-height: 1.4;
+                        color: black;
+                    }
+                    .ref-id {
+                        position: absolute;
+                        bottom: 3mm;
+                        right: 5mm;
+                        font-size: 8pt;
+                        font-weight: bold;
+                        color: black;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="label-container">
+                    <div class="content-wrapper">
                         <div class="details-block">
                             <div class="text-item">${tempName}</div>
                             <div class="text-item">${tempAddress}</div>
@@ -223,20 +259,21 @@ function OrderCard({ order, onRefresh }) {
                         </div>
                         <div class="ref-id">REF: ${order.id}</div>
                     </div>
-                </body>
-            </html>
-        `);
-        windowPrint.document.close();
-        windowPrint.focus();
-        
-        if (isPrint) {
-            setTimeout(() => { 
-                windowPrint.print(); 
-                windowPrint.close(); 
-                if(barcodeInputRef.current) barcodeInputRef.current.focus();
-            }, 500);
-        }
-    };
+                </div>
+            </body>
+        </html>
+    `);
+    windowPrint.document.close();
+    windowPrint.focus();
+    
+    if (isPrint) {
+        setTimeout(() => { 
+            windowPrint.print(); 
+            windowPrint.close(); 
+            if(barcodeInputRef.current) barcodeInputRef.current.focus();
+        }, 500);
+    }
+};
 
     const handlePack = async (e) => {
         if (e && e.key !== 'Enter') return;
@@ -281,28 +318,34 @@ function OrderCard({ order, onRefresh }) {
     };
 
     return (
-        <div className="bg-[#1e2336]/90 border border-white/10 p-6 rounded-3xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all shadow-xl hover:border-blue-500/30">
+        <div className={`bg-[#1e2336]/90 border p-6 rounded-3xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all shadow-xl ${order.status === 'Hold' ? 'border-orange-500/40 hover:border-orange-500/60' : 'border-white/10 hover:border-blue-500/30'}`}>
             <div className="flex-1 w-full">
                 
                 {/* 1. Student Info Section */}
                 <div className="flex gap-5 items-start border-b border-white/10 pb-5 mb-5">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 border-emerald-500/30 bg-emerald-500/10 text-emerald-400 mt-1 shadow-inner">
-                        <MapPin size={28} strokeWidth={2}/>
+                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border-2 mt-1 shadow-inner ${order.status === 'Hold' ? 'border-orange-500/30 bg-orange-500/10 text-orange-400' : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'}`}>
+                        {order.status === 'Hold' ? <AlertTriangle size={28} strokeWidth={2}/> : <MapPin size={28} strokeWidth={2}/>}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 w-full">
                         {!isEditingInfo ? (
-                            <div className="relative group">
+                            <div className="relative group w-full">
                                 <h4 className="font-black text-2xl text-white flex flex-wrap items-center gap-3">
                                     {tempName} 
                                     <span className="text-xs font-black text-slate-300 bg-black/50 px-3 py-1 rounded-md border border-white/10 tracking-widest uppercase shadow-sm">{order.paymentType}</span>
                                     <span className="text-xs font-black text-blue-300 bg-blue-500/20 px-3 py-1 rounded-md border border-blue-500/30 uppercase tracking-widest shadow-sm">BATCH: {order.batchName}</span>
-                                    
-                                    {order.status === 'Delivered' && (
-                                         <span className="text-xs font-black bg-indigo-500/20 text-indigo-300 px-3 py-1 rounded-md border border-indigo-500/30 uppercase shadow-sm">Self-Picked</span>
-                                    )}
                                 </h4>
                                 <p className="text-base text-slate-300 mt-2 leading-relaxed w-11/12 font-medium bg-black/20 p-2 rounded-lg border border-white/5 inline-block">{tempAddress} • <span className="text-emerald-400 font-bold">{tempPhone}</span></p>
                                 
+                                {order.status === 'Hold' && (
+                                    <div className="mt-4 bg-orange-500/10 border border-orange-500/20 p-3.5 rounded-xl shadow-inner inline-block w-full">
+                                        <h5 className="text-orange-400 font-bold text-sm flex items-center gap-2"><AlertTriangle size={18}/> Delivery On Hold</h5>
+                                        <div className="mt-2 ml-6 text-xs text-orange-200 font-medium">
+                                            <p><span className="text-orange-400/80 font-bold">Reason:</span> {order.holdReason}</p>
+                                            {order.holdRemark && <p className="mt-1"><span className="text-orange-400/80 font-bold">Remark:</span> {order.holdRemark}</p>}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <button onClick={() => setIsEditingInfo(true)} title="Edit Details for Sticker" className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 bg-blue-600 text-white p-2.5 rounded-xl hover:bg-blue-500 transition-all shadow-lg">
                                     <Edit2 size={18}/>
                                 </button>
@@ -324,18 +367,33 @@ function OrderCard({ order, onRefresh }) {
                     </div>
                 </div>
 
-                {/* 2. Enrolled Subjects / Tutes Section */}
+                {/* 2. Enrolled Subjects Section (With BIG Hover Details) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {order.items?.map((item, i) => (
                         <div key={i} className="flex items-center justify-between bg-black/40 border border-white/5 p-3.5 rounded-2xl shadow-inner">
                             <div className="flex items-center gap-4 min-w-0">
-                                {/* 🔥 Tute Image with correct fallback 🔥 */}
-                                <img 
-                                    src={getTuteImgUrl(item.tuteCover)} 
-                                    onError={(e) => { e.target.onerror = null; e.target.src = '/default-tute.png'; }} 
-                                    className="w-12 h-16 object-cover rounded-lg border border-slate-700 shrink-0 shadow-md bg-slate-800" 
-                                    alt="Tute"
-                                />
+                                
+                                {/* 🔥 FIX: Hover Image සයිස් එක ගොඩක් ලොකු කරා (w-80 / max-w-none / z-[9999]) 🔥 */}
+                                <div className="relative group/tute cursor-pointer shrink-0">
+                                    <img 
+                                        src={getTuteImgUrl(item.tuteCover)} 
+                                        onError={(e) => { e.target.onerror = null; e.target.src = '/default-tute.png'; }} 
+                                        className="w-12 h-16 object-cover rounded-lg border border-slate-700 shadow-md bg-slate-800" 
+                                        alt="Tute"
+                                    />
+                                    {/* Hover Tooltip - Now much larger! */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover/tute:block z-[9999] pointer-events-none animate-in fade-in zoom-in duration-200">
+                                        <div className="p-2 bg-[#1e2336] rounded-3xl border-2 border-blue-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,1)]">
+                                            <img 
+                                                src={getTuteImgUrl(item.tuteCover)} 
+                                                onError={(e) => { e.target.onerror = null; e.target.src = '/default-tute.png'; }} 
+                                                className="w-35 max-w-none h-auto object-contain rounded-xl"
+                                                alt="Preview"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="flex-1 min-w-0">
                                     <h5 className="text-[14px] font-black text-white truncate tracking-wide flex items-center gap-2 mb-1">
                                         <BookOpen size={14} className="text-blue-400 shrink-0"/>{item.tuteName}
@@ -345,7 +403,6 @@ function OrderCard({ order, onRefresh }) {
                                 </div>
                             </div>
 
-                            {/* 🔥 Lecturer Image Moved to Right side & made bigger 🔥 */}
                             <div className="shrink-0 pl-3 border-l border-white/10 ml-3">
                                 <img 
                                     src={getLecImgUrl(item.lecturerImage)} 
@@ -391,9 +448,11 @@ function OrderCard({ order, onRefresh }) {
                 </button>
 
                 {/* Hold Button */}
-                <button onClick={() => setIsHolding(true)} className="w-full bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 font-black py-4 rounded-2xl transition-all text-sm uppercase tracking-widest border-2 border-orange-500/30 shadow-md flex justify-center items-center gap-2">
-                    <AlertTriangle size={18}/> Hold Order
-                </button>
+                {order.status !== 'Hold' && (
+                    <button onClick={() => setIsHolding(true)} className="w-full bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 font-black py-4 rounded-2xl transition-all text-sm uppercase tracking-widest border-2 border-orange-500/30 shadow-md flex justify-center items-center gap-2">
+                        <AlertTriangle size={18}/> Hold Order
+                    </button>
+                )}
             </div>
 
             {/* Hold Modal */}
