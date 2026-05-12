@@ -16,12 +16,15 @@ const formatDateLabel = (dateString) => {
     return msgDate.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-export default function AfterSeminarChatArea({ selectedLead }) {
+export default function AfterSeminarChatArea({ selectedLead, businessId }) {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [chatTheme, setChatTheme] = useState('dark'); 
   const scrollRef = useRef(null);
+  
+  // 🔥 අලුතින් දාපු Ref එක (User උඩට Scroll කරලාද ඉන්නේ කියලා බලන්න)
+  const isUserScrolledUp = useRef(false);
 
   const [replyingTo, setReplyingTo] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -55,7 +58,20 @@ export default function AfterSeminarChatArea({ selectedLead }) {
       }
   }, [selectedLead]);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, localReactions]);
+  // 🔥 FIX: User උඩට Scroll කරලා නැත්නම් විතරක් පල්ලෙහාට Scroll වෙන්න හදලා තියෙන්නේ
+  useEffect(() => { 
+      if (scrollRef.current && !isUserScrolledUp.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight; 
+      }
+  }, [messages, localReactions]);
+
+  // 🔥 FIX: Scroll කරනකොට අල්ලගන්න Function එක
+  const handleScroll = () => {
+      if (!scrollRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      // User පල්ලෙහාම ඉඳන් 100px කට වඩා උඩට ගිහින් නම්, ඒ කියන්නේ පරණ මැසේජ් කියවනවා
+      isUserScrolledUp.current = scrollHeight - (scrollTop + clientHeight) > 100;
+  };
 
   const fetchMessages = async (showLoading = true) => {
     try {
@@ -69,21 +85,17 @@ export default function AfterSeminarChatArea({ selectedLead }) {
 
    const fetchMetaTemplates = async () => {
     try {
-      const token = localStorage.getItem('token');
-      
-      // 🔥 FIX: Lead එකේ අංකයෙන් අදාල Business ID එක වෙන් කරගන්නවා
-      const bizMatch = selectedLead?.phone ? selectedLead.phone.match(/_BIZ_(\d+)/) : null;
-      const extractedBizId = bizMatch ? bizMatch[1] : '';
+        const token = localStorage.getItem('token');
+        if (!businessId) return;
 
-      const res = await axios.get('/coordinator-crm/meta-templates', {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { 
-              businessId: extractedBizId // 🔥 මේක අනිවාර්යෙන් යවන්න ඕනේ
-          }
-      });
-      setMetaTemplates(res.data || []);
+        const res = await axios.get('/after-seminar-crm/meta-templates', {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { businessId: businessId }
+        });
+        
+        setMetaTemplates(res.data || []);
     } catch(e) {
-        console.error("Template load error", e);
+        console.error("Template load error:", e);
     }
   };
 
@@ -114,9 +126,24 @@ export default function AfterSeminarChatArea({ selectedLead }) {
   };
 
   const startRecording = async () => {
+      // 🔥 අලුතින් දාපු Safety Check එක: බ්‍රව්සර් එකෙන් Mic එක Block කරලා නම්
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.error("MediaDevices API is completely blocked by the browser.");
+          toast.error("Microphone is blocked! Please use HTTPS or 'localhost' to record audio.", { duration: 4000 });
+          return;
+      }
+
       try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const recorder = new MediaRecorder(stream);
+          
+          let options = {};
+          if (MediaRecorder.isTypeSupported('audio/webm')) {
+              options = { mimeType: 'audio/webm' };
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+              options = { mimeType: 'audio/mp4' }; 
+          }
+
+          const recorder = new MediaRecorder(stream, options);
           audioChunks.current = [];
 
           recorder.ondataavailable = (e) => {
@@ -124,19 +151,17 @@ export default function AfterSeminarChatArea({ selectedLead }) {
           };
 
           recorder.onstop = () => {
-    // Browser එකේ native mime type එක ගන්නවා (ex: audio/webm)
-    const currentMimeType = mediaRecorder.mimeType || 'audio/webm';
-    const audioBlob = new Blob(audioChunks.current, { type: currentMimeType });
-    
-    // .webm extension එකත් එක්කම යවමු
-    const audioFile = new File([audioBlob], `Voice_Note_${Date.now()}.webm`, { 
-        type: currentMimeType,
-        lastModified: Date.now()
-    });
-    
-    setSelectedFile(audioFile); 
-};
-
+            const currentMimeType = recorder.mimeType || 'audio/mp4';
+            const ext = currentMimeType.includes('mp4') ? 'mp4' : 'webm';
+            const audioBlob = new Blob(audioChunks.current, { type: currentMimeType });
+            
+            const audioFile = new File([audioBlob], `Voice_Note_${Date.now()}.${ext}`, { 
+                type: currentMimeType,
+                lastModified: Date.now()
+            });
+            
+            setSelectedFile(audioFile); 
+          };
 
           recorder.start();
           setMediaRecorder(recorder);
@@ -148,7 +173,8 @@ export default function AfterSeminarChatArea({ selectedLead }) {
           }, 1000);
 
       } catch (err) {
-          toast.error("Microphone access denied or not available.");
+          console.error("Mic error:", err);
+          toast.error("Microphone access denied! Please allow mic permissions in your browser.");
       }
   };
 
@@ -159,6 +185,45 @@ export default function AfterSeminarChatArea({ selectedLead }) {
       }
       clearInterval(timerRef.current);
       setIsRecording(false);
+  };
+
+  // 🔥 FIX: Template එකක් යවන්න වෙනමම හදපු Function එක (Text විදිහට නොයවා Template Type එකෙන් යවන්න)
+  const handleSendTemplate = async (tpl) => {
+      setIsSending(true);
+      try {
+          const formData = new FormData();
+          formData.append('leadId', selectedLead.id);
+          formData.append('senderName', user.firstName || 'Staff');
+          formData.append('message', `[Template Output] ${tpl.name}`); // Local UI එකේ පේන්න විතරයි
+          formData.append('localUIMessage', `[Template Output] ${tpl.name}`);
+          
+          // මේ Flags ටිකෙන් Backend එක අඳුරගන්නවා මේක Template එකක් කියලා
+          formData.append('isTemplate', 'true');
+          formData.append('templateName', tpl.name);
+          formData.append('templateLanguage', tpl.language || 'en');
+
+          const token = localStorage.getItem('token');
+          const res = await axios.post('/after-seminar-crm/messages', formData, { 
+              headers: { 
+                  'Content-Type': 'multipart/form-data',
+                  'Authorization': `Bearer ${token}` 
+              } 
+          });
+          
+          setMessages([...messages, res.data]);
+          setShowMetaTemplates(false);
+          toast.success("Meta Template Sent!");
+
+          // අලුත් එකක් යැව්වම අනිවාර්යෙන් පල්ලෙහාට Scroll වෙන්න ඕනේ
+          isUserScrolledUp.current = false;
+          setTimeout(() => {
+             if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }, 100);
+
+      } catch (error) {
+          toast.error("Failed to send template.");
+      }
+      setIsSending(false);
   };
 
   const handleSend = async (e, forcedText = null, forcedFileBase64 = null) => {
@@ -220,6 +285,13 @@ export default function AfterSeminarChatArea({ selectedLead }) {
       }
       
       setNewMessage(''); setReplyingTo(null); setSelectedFile(null); setSuggestedQRs([]); setRecordingDuration(0);
+      
+      // අලුත් මැසේජ් එකක් යැව්වම අනිවාර්යෙන් පල්ලෙහාට යන්න ඕනේ
+      isUserScrolledUp.current = false;
+      setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
+
     } catch (error) { toast.error("Failed to send message."); }
     setIsSending(false);
   };
@@ -288,12 +360,10 @@ export default function AfterSeminarChatArea({ selectedLead }) {
       return <a href={url} target="_blank" rel="noreferrer" className="flex items-center gap-2 p-3 bg-black/10 rounded-lg mb-2 text-xs font-bold hover:underline"><FaFilePdf className="text-red-500 text-lg"/> View Document</a>;
   };
   
-  // 🔥 FIX: Render message text properly without empty bubbles 🔥
   const renderMessageText = (msg) => {
       const text = msg?.message;
       if (!text) return null;
 
-      // Hide auto-generated media labels ONLY IF the media URL actually exists
       if (msg.mediaUrl && ["IMAGE Message", "AUDIO Message", "VIDEO Message", "DOCUMENT Message"].includes(text)) {
           return null; 
       }
@@ -356,8 +426,8 @@ export default function AfterSeminarChatArea({ selectedLead }) {
         </div>
       </div>
 
-      {/* Messages Area */}
-      <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar relative ${isDark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} ref={scrollRef}>
+      {/* Messages Area - Added onScroll handler */}
+      <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar relative ${isDark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} ref={scrollRef} onScroll={handleScroll}>
         <div className="relative z-10 flex flex-col">
           {Object.keys(groupedMessages).map(dateLabel => (
              <React.Fragment key={dateLabel}>
@@ -413,7 +483,6 @@ export default function AfterSeminarChatArea({ selectedLead }) {
 
                                         {renderMedia(msg)}
                                         
-                                        {/* 🔥 FIX: Passed the full msg object instead of msg.message 🔥 */}
                                         {!isSticker && renderMessageText(msg)}
 
                                         {!isSticker && (
@@ -561,7 +630,9 @@ export default function AfterSeminarChatArea({ selectedLead }) {
                             <div key={i} className="bg-[#0f172a] p-4 rounded-2xl border border-slate-700">
                                 <h4 className="text-emerald-400 font-bold text-sm mb-2">{tpl.name}</h4>
                                 <p className="text-slate-300 text-sm mb-4">{tpl.text}</p>
-                                <button onClick={() => { handleSend(null, tpl.text); setShowMetaTemplates(false); }} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2">
+                                
+                                {/* 🔥 FIX: දැන් Template එක යවන්නේ අලුත් handleSendTemplate function එකෙන් */}
+                                <button onClick={() => handleSendTemplate(tpl)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2">
                                     <FaPaperPlane/> Send Template
                                 </button>
                             </div>

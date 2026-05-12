@@ -1,8 +1,41 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { MapPin, Printer, Eye, ScanBarcode, AlertTriangle, ArrowLeft, Loader2, Check, Edit2, Save, X, BookOpen, Clock } from 'lucide-react';
 import axios from '../../../api/axios';
 import toast from 'react-hot-toast';
+
+// 🔥 SMART IMAGE COMPONENT FOR PENDING ITEMS
+const DeliveryItemImage = ({ coverName }) => {
+    const [imgSrc, setImgSrc] = useState(null);
+    const [errorStage, setErrorStage] = useState(0);
+
+    useEffect(() => {
+        if (!coverName || coverName === 'default-tute.png' || coverName === 'null') {
+            setImgSrc(null);
+        } else {
+            const baseUrl = axios.defaults.baseURL.replace('/api', '');
+            setImgSrc(`${baseUrl}/storage/documents/${coverName}`);
+        }
+    }, [coverName]);
+
+    const handleError = () => {
+        if (errorStage === 0 && imgSrc) {
+            setImgSrc(imgSrc.replace('/storage/documents/', '/storage/images/'));
+            setErrorStage(1);
+        } else if (errorStage === 1 && imgSrc) {
+            setImgSrc(imgSrc.replace('/storage/images/', '/storage/icons/'));
+            setErrorStage(2);
+        } else {
+            setImgSrc(null);
+        }
+    };
+
+    if (!imgSrc) {
+        return <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap text-center px-1">No Cover</span>;
+    }
+
+    return <img src={imgSrc} onError={handleError} alt="Cover" className="w-full h-full object-cover" />;
+};
 
 export default function PendingHolds({ searchQuery }) {
     const [loading, setLoading] = useState(true);
@@ -50,19 +83,54 @@ export default function PendingHolds({ searchQuery }) {
         setActivePayTab('All'); 
     };
 
-    const filteredDeliveries = deliveries.filter(order => {
-        const matchesTab = activePayTab === 'All' || order.paymentType === activePayTab;
-        const matchesSearch = order.studentName?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                              order.id?.toString().includes(searchQuery.toLowerCase()) ||
+    // 🔥 NEW: Process deliveries to identify Multiple/Mix Orders and Sort by Name
+    const processedDeliveries = useMemo(() => {
+        const counts = {};
+        deliveries.forEach(d => {
+            const key = d.phone ? d.phone.trim() : d.studentName?.trim();
+            if(key) counts[key] = (counts[key] || 0) + 1;
+        });
+
+        // ළමයාගේ නමෙන් අකාරාදී පිළිවෙලට හදනවා (එකම ළමයාගේ ඒවා ළඟින් පෙන්නන්න)
+        const sorted = [...deliveries].sort((a, b) => {
+            const nameA = a.studentName || '';
+            const nameB = b.studentName || '';
+            return nameA.localeCompare(nameB);
+        });
+
+        return sorted.map(d => {
+            const key = d.phone ? d.phone.trim() : d.studentName?.trim();
+            return {
+                ...d,
+                isMix: counts[key] > 1 // Orders 2කට වඩා තියේනම් ඒක Mix එකක්
+            };
+        });
+    }, [deliveries]);
+
+    const filteredDeliveries = processedDeliveries.filter(order => {
+        let matchesTab = false;
+        
+        if (activePayTab === 'All') {
+            matchesTab = true;
+        } else if (order.isMix) {
+            // 🔥 Mix Orders අනිත් Tabs වලින් හංගනවා, "All" එකේ විතරක් පේන්න
+            matchesTab = false; 
+        } else {
+            matchesTab = order.paymentType === activePayTab;
+        }
+
+        const searchLower = searchQuery.toLowerCase();
+        const matchesSearch = order.studentName?.toLowerCase().includes(searchLower) || 
+                              order.id?.toString().includes(searchLower) ||
                               order.phone?.includes(searchQuery);
         return matchesTab && matchesSearch;
     });
 
     const tabCounts = {
-        All: deliveries.length,
-        Full: deliveries.filter(d => d.paymentType === 'Full').length,
-        Monthly: deliveries.filter(d => d.paymentType === 'Monthly').length,
-        Installment: deliveries.filter(d => d.paymentType === 'Installment').length,
+        All: processedDeliveries.length,
+        Monthly: processedDeliveries.filter(d => !d.isMix && d.paymentType === 'Monthly').length,
+        Full: processedDeliveries.filter(d => !d.isMix && d.paymentType === 'Full').length,
+        Installment: processedDeliveries.filter(d => !d.isMix && d.paymentType === 'Installment').length,
     };
 
     if (loading && !selectedBiz) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-blue-500" size={40}/></div>;
@@ -128,7 +196,8 @@ export default function PendingHolds({ searchQuery }) {
                         </button>
 
                         <div className="flex flex-wrap gap-3 bg-black/40 p-2 rounded-2xl border border-white/5 w-full md:w-auto shadow-inner">
-                            {['All', 'Full', 'Monthly', 'Installment'].map(tab => (
+                            {/* 🔥 Reordered Tabs */}
+                            {['All', 'Monthly', 'Full', 'Installment'].map(tab => (
                                 <button 
                                     key={tab} 
                                     onClick={() => setActivePayTab(tab)}
@@ -181,7 +250,6 @@ function OrderCard({ order, onRefresh }) {
         return localStorage.getItem(`draft_hold_remark_${order.id}`) || '';
     });
 
-    const getTuteImgUrl = (imageName) => (!imageName || imageName === 'default-tute.png' || imageName === 'null') ? '/default-tute.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/icons/${imageName}`;
     const getLecImgUrl = (imageName) => (!imageName || imageName === 'default.png' || imageName === 'null') ? '/default.png' : `${axios.defaults.baseURL.replace('/api', '')}/storage/icons/${imageName}`;
 
     const handleRemarkChange = (e) => {
@@ -191,89 +259,89 @@ function OrderCard({ order, onRefresh }) {
     };
 
     const handleLabelAction = (isPrint = true) => {
-    const baseUrl = window.location.origin; 
-    const bgImageUrl = `${baseUrl}/sticker-bg.png`; 
-    const windowPrint = window.open('', '', 'width=850,height=500');
-    
-    windowPrint.document.write(`
-        <html>
-            <head>
-                <title>${isPrint ? 'Print' : 'Preview'} Label - ${order.id}</title>
-                <style>
-                    @page { size: 2in 4in; margin: 0; }
-                    body { 
-                        font-family: 'Arial', sans-serif; 
-                        margin: 0; padding: 0;
-                        width: 2in; height: 4in; 
-                        -webkit-print-color-adjust: exact !important; 
-                    }
-                    .label-container {
-                        width: 2in; 
-                        height: 4in;
-                        background-image: url('${bgImageUrl}');
-                        background-size: 100% 100%;
-                        background-repeat: no-repeat;
-                        position: relative;
-                        overflow: hidden;
-                    }
-                    .content-wrapper {
-                        position: absolute;
-                        width: 4in;
-                        height: 2in;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%) rotate(-90deg);
-                    }
-                    .details-block {
-                        position: absolute;
-                        top: 5mm; 
-                        left: 8mm; 
-                        width: 80mm;
-                        display: flex;
-                        flex-direction: column;
-                        gap: 4px; 
-                    }
-                    .text-item { 
-                        font-size: 9pt; 
-                        font-weight: bold; 
-                        line-height: 1.4;
-                        color: black;
-                    }
-                    .ref-id {
-                        position: absolute;
-                        bottom: 3mm;
-                        right: 5mm;
-                        font-size: 8pt;
-                        font-weight: bold;
-                        color: black;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="label-container">
-                    <div class="content-wrapper">
-                        <div class="details-block">
-                            <div class="text-item">${tempName}</div>
-                            <div class="text-item">${tempAddress}</div>
-                            <div class="text-item">${tempPhone}</div>
+        const baseUrl = window.location.origin; 
+        const bgImageUrl = `${baseUrl}/sticker-bg.png`; 
+        const windowPrint = window.open('', '', 'width=850,height=500');
+        
+        windowPrint.document.write(`
+            <html>
+                <head>
+                    <title>${isPrint ? 'Print' : 'Preview'} Label - ${order.id}</title>
+                    <style>
+                        @page { size: 2in 4in; margin: 0; }
+                        body { 
+                            font-family: 'Arial', sans-serif; 
+                            margin: 0; padding: 0;
+                            width: 2in; height: 4in; 
+                            -webkit-print-color-adjust: exact !important; 
+                        }
+                        .label-container {
+                            width: 2in; 
+                            height: 4in;
+                            background-image: url('${bgImageUrl}');
+                            background-size: 100% 100%;
+                            background-repeat: no-repeat;
+                            position: relative;
+                            overflow: hidden;
+                        }
+                        .content-wrapper {
+                            position: absolute;
+                            width: 4in;
+                            height: 2in;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%) rotate(-90deg);
+                        }
+                        .details-block {
+                            position: absolute;
+                            top: 5mm; 
+                            left: 8mm; 
+                            width: 80mm;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 4px; 
+                        }
+                        .text-item { 
+                            font-size: 9pt; 
+                            font-weight: bold; 
+                            line-height: 1.4;
+                            color: black;
+                        }
+                        .ref-id {
+                            position: absolute;
+                            bottom: 3mm;
+                            right: 5mm;
+                            font-size: 8pt;
+                            font-weight: bold;
+                            color: black;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="label-container">
+                        <div class="content-wrapper">
+                            <div class="details-block">
+                                <div class="text-item">${tempName}</div>
+                                <div class="text-item">${tempAddress}</div>
+                                <div class="text-item">${tempPhone}</div>
+                            </div>
+                            <div class="ref-id">REF: ${order.id}</div>
                         </div>
-                        <div class="ref-id">REF: ${order.id}</div>
                     </div>
-                </div>
-            </body>
-        </html>
-    `);
-    windowPrint.document.close();
-    windowPrint.focus();
-    
-    if (isPrint) {
-        setTimeout(() => { 
-            windowPrint.print(); 
-            windowPrint.close(); 
-            if(barcodeInputRef.current) barcodeInputRef.current.focus();
-        }, 500);
-    }
-};
+                </body>
+            </html>
+        `);
+        windowPrint.document.close();
+        windowPrint.focus();
+        
+        if (isPrint) {
+            setTimeout(() => { 
+                windowPrint.print(); 
+                windowPrint.close(); 
+                if(barcodeInputRef.current) barcodeInputRef.current.focus();
+            }, 500);
+        }
+    };
 
     const handlePack = async (e) => {
         if (e && e.key !== 'Enter') return;
@@ -317,8 +385,29 @@ function OrderCard({ order, onRefresh }) {
         setIsEditingInfo(false);
     };
 
+    // 🔥 SMART OVERLAYS AND BADGE COLORS 
+    let cardStyle = 'bg-[#1e2336]/90 border-white/10 hover:border-blue-500/30'; 
+    let typeBadgeStyle = 'bg-black/50 text-slate-300 border-white/10';
+
+    if (order.status === 'Hold') {
+        cardStyle = 'bg-orange-950/20 border-orange-500/40 hover:border-orange-500/60';
+        typeBadgeStyle = 'bg-orange-500/20 text-orange-300 border-orange-500/30';
+    } else if (order.isMix) {
+        cardStyle = 'bg-rose-950/30 border-rose-500/40 hover:border-rose-500/60 shadow-[inset_0_0_20px_rgba(225,29,72,0.05)]';
+        typeBadgeStyle = 'bg-rose-500/20 text-rose-300 border-rose-500/40 shadow-[0_0_10px_rgba(225,29,72,0.2)]';
+    } else if (order.paymentType === 'Monthly') {
+        cardStyle = 'bg-blue-950/30 border-blue-500/30 hover:border-blue-500/50';
+        typeBadgeStyle = 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+    } else if (order.paymentType === 'Full') {
+        cardStyle = 'bg-emerald-950/30 border-emerald-500/30 hover:border-emerald-500/50';
+        typeBadgeStyle = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+    } else if (order.paymentType === 'Installment') {
+        cardStyle = 'bg-purple-950/30 border-purple-500/30 hover:border-purple-500/50';
+        typeBadgeStyle = 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+    }
+
     return (
-        <div className={`bg-[#1e2336]/90 border p-6 rounded-3xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all shadow-xl ${order.status === 'Hold' ? 'border-orange-500/40 hover:border-orange-500/60' : 'border-white/10 hover:border-blue-500/30'}`}>
+        <div className={`border p-6 rounded-3xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all shadow-xl ${cardStyle}`}>
             <div className="flex-1 w-full">
                 
                 {/* 1. Student Info Section */}
@@ -329,9 +418,11 @@ function OrderCard({ order, onRefresh }) {
                     <div className="flex-1 w-full">
                         {!isEditingInfo ? (
                             <div className="relative group w-full">
-                                <h4 className="font-black text-2xl text-white flex flex-wrap items-center gap-3">
+                               <h4 className="font-black text-2xl text-white flex flex-wrap items-center gap-3">
                                     {tempName} 
-                                    <span className="text-xs font-black text-slate-300 bg-black/50 px-3 py-1 rounded-md border border-white/10 tracking-widest uppercase shadow-sm">{order.paymentType}</span>
+                                    <span className={`text-xs font-black px-3 py-1 rounded-md border tracking-widest uppercase shadow-sm flex items-center gap-1.5 ${typeBadgeStyle}`}>
+                                        {order.isMix ? `MIXED ORDER • ${order.paymentType}` : order.paymentType}
+                                    </span>
                                     <span className="text-xs font-black text-blue-300 bg-blue-500/20 px-3 py-1 rounded-md border border-blue-500/30 uppercase tracking-widest shadow-sm">BATCH: {order.batchName}</span>
                                 </h4>
                                 <p className="text-base text-slate-300 mt-2 leading-relaxed w-11/12 font-medium bg-black/20 p-2 rounded-lg border border-white/5 inline-block">{tempAddress} • <span className="text-emerald-400 font-bold">{tempPhone}</span></p>
@@ -367,31 +458,15 @@ function OrderCard({ order, onRefresh }) {
                     </div>
                 </div>
 
-                {/* 2. Enrolled Subjects Section (With BIG Hover Details) */}
+                {/* 2. Enrolled Subjects Section */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {order.items?.map((item, i) => (
                         <div key={i} className="flex items-center justify-between bg-black/40 border border-white/5 p-3.5 rounded-2xl shadow-inner">
                             <div className="flex items-center gap-4 min-w-0">
                                 
-                                {/* 🔥 FIX: Hover Image සයිස් එක ගොඩක් ලොකු කරා (w-80 / max-w-none / z-[9999]) 🔥 */}
-                                <div className="relative group/tute cursor-pointer shrink-0">
-                                    <img 
-                                        src={getTuteImgUrl(item.tuteCover)} 
-                                        onError={(e) => { e.target.onerror = null; e.target.src = '/default-tute.png'; }} 
-                                        className="w-12 h-16 object-cover rounded-lg border border-slate-700 shadow-md bg-slate-800" 
-                                        alt="Tute"
-                                    />
-                                    {/* Hover Tooltip - Now much larger! */}
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 hidden group-hover/tute:block z-[9999] pointer-events-none animate-in fade-in zoom-in duration-200">
-                                        <div className="p-2 bg-[#1e2336] rounded-3xl border-2 border-blue-500 shadow-[0_20px_50px_-10px_rgba(0,0,0,1)]">
-                                            <img 
-                                                src={getTuteImgUrl(item.tuteCover)} 
-                                                onError={(e) => { e.target.onerror = null; e.target.src = '/default-tute.png'; }} 
-                                                className="w-35 max-w-none h-auto object-contain rounded-xl"
-                                                alt="Preview"
-                                            />
-                                        </div>
-                                    </div>
+                                {/* 🔥 IMAGE ZOOM HOVER EFFECT 🔥 */}
+                                <div className="shrink-0 w-12 h-16 bg-slate-900 border border-slate-700 rounded-lg flex items-center justify-center overflow-hidden shadow-md relative z-10 hover:z-50 transition-all duration-300 hover:scale-[2.5] hover:translate-x-4 hover:-translate-y-2 origin-left cursor-zoom-in">
+                                    <DeliveryItemImage coverName={item.tuteCover} />
                                 </div>
 
                                 <div className="flex-1 min-w-0">

@@ -12,25 +12,33 @@ export default function PaidCampaignPerformance({ filters }) {
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // 🔥 NEW: Date Range States 🔥
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
     useEffect(() => {
-        if (filters?.selectedBusiness && filters?.selectedBatch) {
-            fetchRetentionData();
-        } else {
-            setLoading(false);
-            setRawLeads([]);
-        }
-    }, [filters?.selectedBusiness, filters?.selectedBatch, selectedMonth]);
+        fetchRetentionData();
+    }, [filters?.selectedBusiness, filters?.selectedBatch, selectedMonth, startDate, endDate]);
 
     const fetchRetentionData = async () => {
+        // 🔥 FIX: Prevent blank loading screen if no business is selected
+        if (!filters?.selectedBusiness) {
+            setLoading(false);
+            setRawLeads([]);
+            return;
+        }
+
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
             const res = await axios.get('/after-seminar-crm/retention/campaign-data', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { 
-                    businessId: filters?.selectedBusiness || '', 
-                    batchId: filters?.selectedBatch || '',
-                    month: selectedMonth
+                    businessId: filters.selectedBusiness, 
+                    batchId: filters.selectedBatch || 'ALL',
+                    month: selectedMonth,
+                    startDate: startDate || undefined,
+                    endDate: endDate || undefined
                 }
             });
             if (res.data) {
@@ -45,6 +53,18 @@ export default function PaidCampaignPerformance({ filters }) {
             console.error("Failed to fetch Retention Campaign Stats");
         }
         setLoading(false);
+    };
+
+    // 🔥 DATE FILTER HANDLERS 🔥
+    const handleDailyClick = () => {
+        const today = new Date().toISOString().split('T')[0];
+        setStartDate(today);
+        setEndDate(today);
+    };
+
+    const handleClearDates = () => {
+        setStartDate('');
+        setEndDate('');
     };
 
     // 🔥 CALCULATE ALL AGGREGATES BASED ON FILTERS 🔥
@@ -100,11 +120,11 @@ export default function PaidCampaignPerformance({ filters }) {
         };
     }, [rawLeads, searchQuery]);
 
-    if (loading) return <div className="flex justify-center items-center h-[400px] text-indigo-400 animate-pulse font-sans font-bold tracking-wide">Calculating Retention Analytics...</div>;
-
-    if (!filters?.selectedBatch) {
-        return <div className="flex justify-center items-center h-[200px] text-slate-500 font-medium">Please select a Batch to view Paid Campaign metrics.</div>;
+    if (!filters?.selectedBusiness) {
+        return <div className="flex justify-center items-center h-[200px] text-slate-500 font-medium">Please select a Campaign/Business to view Paid Campaign metrics.</div>;
     }
+
+    if (loading && rawLeads.length === 0) return <div className="flex justify-center items-center h-[400px] text-indigo-400 animate-pulse font-sans font-bold tracking-wide">Calculating Retention Analytics...</div>;
 
     const PIE_COLORS = ['#10b981', '#ef4444'];
     const pieData = [
@@ -116,6 +136,56 @@ export default function PaidCampaignPerformance({ filters }) {
         <div className="flex flex-col gap-6 font-sans text-slate-200 animate-fade-in-up pb-6">
             
             {/* 🔥 TOP FILTERS & SEARCH 🔥 */}
+            <div className="flex flex-col md:flex-row justify-between items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-700 shadow-md gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-lg"><FaCalendarAlt size={18}/></div>
+                    <div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Campaign Stats Filter</h3>
+                        <p className="text-[10px] text-slate-400">Filter by specific dates or view today's performance</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* DAILY BUTTON */}
+                    <button 
+                        onClick={handleDailyClick}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-all"
+                    >
+                        Today (Daily)
+                    </button>
+
+                    {/* DATE RANGE PICKER */}
+                    <div className="flex items-center gap-2 bg-[#0f172a] border border-slate-600 p-1.5 rounded-lg">
+                        <input 
+                            type="date" 
+                            value={startDate} 
+                            onChange={(e) => setStartDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                        <span className="text-slate-500 text-xs">to</span>
+                        <input 
+                            type="date" 
+                            value={endDate} 
+                            onChange={(e) => setEndDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                    </div>
+
+                    {/* CLEAR FILTER */}
+                    {(startDate || endDate) && (
+                        <button 
+                            onClick={handleClearDates}
+                            className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold uppercase tracking-wider rounded-lg transition-all"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* 🔥 MONTH SELECTION & SEARCH 🔥 */}
             <div className="flex flex-col md:flex-row justify-between items-center bg-[#1e293b] p-4 rounded-2xl border border-slate-700 shadow-md gap-4">
                 <div className="flex items-center gap-3">
                     <div className="p-2.5 bg-indigo-500/20 text-indigo-400 rounded-lg"><FaCalendarAlt size={18}/></div>

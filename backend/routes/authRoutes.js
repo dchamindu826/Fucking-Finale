@@ -6,4 +6,6 @@ const authController = require('../controllers/authController');
 router.post('/register', authController.registerStudent);
 router.post('/login', authController.loginUser);
 
+router.post('/ghost-login/:id', authController.ghostLogin);
+
 module.exports = router;

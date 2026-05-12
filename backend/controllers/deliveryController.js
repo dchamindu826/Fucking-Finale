@@ -5,11 +5,13 @@ const admin = require("firebase-admin"); // Firebase load කරලා නැත
 // ================= DELIVERY POS ACTIONS =================
 
 // 1. Pending & Hold Deliveries ගන්න (Business & Payment Type අනුව)
+// ================= DELIVERY POS ACTIONS =================
+
+// 1. Pending & Hold Deliveries ගන්න (Monthly/Full වලට හරියටම Covers & Names එන්න හැදුවා)
 exports.getPendingDeliveries = async (req, res) => {
     try {
         const { businessId, paymentType } = req.query;
         
-        // 🔥 UPDATE: Pending සහ Hold Status දෙකම එකපාර Database එකෙන් ගන්නවා
         let whereClause = { status: { in: ['Pending', 'Hold'] } };
         if (businessId) whereClause.businessId = parseInt(businessId);
         if (paymentType && paymentType !== 'All') whereClause.paymentType = paymentType;
@@ -18,52 +20,51 @@ exports.getPendingDeliveries = async (req, res) => {
             where: whereClause,
             include: {
                 items: true,
-                payment: { 
-                    include: { 
-                        student: true, 
-                        batch: true    
-                    } 
-                }
+                payment: { include: { student: true, batch: true } }
             },
             orderBy: { createdAt: 'desc' }
         });
 
-        // Tute හා Lecturer විස්තර ගන්න අදාල Courses ටික අදිනවා
         const courseIds = [...new Set(deliveries.flatMap(d => d.items.map(i => i.courseId)).filter(Boolean))];
         const courses = await prisma.course.findMany({
             where: { id: { in: courseIds.map(id => parseInt(id)) } }
         });
 
         const formatted = deliveries.map(d => {
-            // Student data එක හරි තැනින් ගන්නවා
             const std = d.payment?.student || {};
-            
             const addressParts = [std.addressHouseNo, std.addressStreet, std.city, std.district].filter(Boolean);
             const finalAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No Address Provided';
             const finalPhone = std.phone || std.whatsapp || std.optionalPhone || 'No Phone';
             const finalName = std.firstName ? `${std.firstName} ${std.lastName}` : 'Unknown Student';
 
-            // Items (Subjects) වලට Lecturer සහ Tute image එකතු කිරීම
             const itemsWithDetails = d.items.map(item => {
                 const course = courses.find(c => c.id === item.courseId);
                 let lecturerName = course?.lecturerName || 'Lecturer';
                 let lecturerImage = 'default.png';
                 let tuteCover = 'default-tute.png';
+                let actualTuteName = item.tuteName; // Default 
 
-                // Course එකේ Group Prices ඇතුලෙන් අදාල Tute Image සහ Lecturer Image ගන්නවා
                 if (course && course.groupPrices) {
                     try {
                         const gpArr = JSON.parse(course.groupPrices);
-                        const matchedGp = gpArr.find(g => g.tuteName === item.tuteName) || gpArr[0];
+                        // 🔥 FIX: ළමයා ගෙවපු Group ID එකෙන්ම හරියටම Tute එක හොයාගන්නවා
+                        let matchedGp;
+                        if (d.payment?.groupId) {
+                            matchedGp = gpArr.find(g => parseInt(g.groupId) === parseInt(d.payment.groupId));
+                        }
+                        if (!matchedGp) matchedGp = gpArr.find(g => g.tuteName === item.tuteName) || gpArr[0];
+
                         if (matchedGp) {
                             if (matchedGp.lecturerImage) lecturerImage = matchedGp.lecturerImage;
                             if (matchedGp.tuteCover) tuteCover = matchedGp.tuteCover;
+                            if (matchedGp.tuteName) actualTuteName = matchedGp.tuteName; // නියම Tute නම (e.g. Lesson 01)
                         }
                     } catch (e) {}
                 }
 
                 return {
                     ...item,
+                    tuteName: actualTuteName, // Front end එකට නියම නම යවනවා
                     courseName: course?.name || 'Subject',
                     lecturerName,
                     lecturerImage,
@@ -83,45 +84,135 @@ exports.getPendingDeliveries = async (req, res) => {
         });
 
         return res.status(200).json(formatted);
-
     } catch (error) {
         console.error("Fetch Pending Deliveries Error:", error);
-        if (!res.headersSent) {
-            return res.status(500).json({ error: "Failed to fetch pending deliveries" });
-        }
+        if (!res.headersSent) return res.status(500).json({ error: "Failed to fetch pending deliveries" });
     }
 };
 
-// 2. Barcode එක Scan කරාම Pack කරලා Stock එකෙන් අඩු කරන එක
+// 2. Barcode එක Scan කරාම Pack කරලා Stock එකෙන් අඩු කරන එක (හරියටම Monthly/Full අඳුරගෙන අඩු වෙන්න හැදුවා)
 exports.packDelivery = async (req, res) => {
     try {
         const { deliveryId, trackingNumber } = req.body;
 
-        // Transaction එකක් පාවිච්චි කරන්නේ Delivery එක Update වෙන ගමන්ම Stock එකත් අඩු වෙන්න ඕන නිසා
         await prisma.$transaction(async (tx) => {
-            // 1. Delivery එක Packed විදිහට Update කරනවා
             const updatedDelivery = await tx.delivery.update({
                 where: { id: parseInt(deliveryId) },
-                data: { 
-                    status: 'Packed', 
-                    trackingNumber: trackingNumber,
-                    packedAt: new Date() // මේ වෙලාවෙන් පැය 10ක් ගණන් කරන්නේ
-                },
-                include: { items: true }
+                data: { status: 'Packed', trackingNumber: trackingNumber, packedAt: new Date() },
+                include: { items: true, payment: true }
             });
 
-            // 2. ඒකෙ තියෙන Tutes වල Stock එක Auto අඩු කරනවා
             for (const item of updatedDelivery.items) {
-                await tx.tuteStock.updateMany({
-                    where: { courseId: item.courseId, tuteName: item.tuteName },
-                    data: { availableQuantity: { decrement: item.quantity } }
+                const course = await tx.course.findUnique({ where: { id: item.courseId } });
+                let actualTuteName = item.tuteName;
+
+                // 🔥 FIX: Payment Group ID එකෙන් නියම Tute නම හොයනවා Stock එකෙන් අඩු කරන්න කලින්
+                if (course && course.groupPrices && updatedDelivery.payment?.groupId) {
+                    try {
+                        const gp = JSON.parse(course.groupPrices);
+                        const matchedGp = gp.find(g => parseInt(g.groupId) === parseInt(updatedDelivery.payment.groupId));
+                        if (matchedGp && matchedGp.tuteName) {
+                            actualTuteName = matchedGp.tuteName;
+                        }
+                    } catch(e) {}
+                }
+
+                // 1. හරියටම නමෙන් හොයනවා
+                let stockItem = await tx.tuteStock.findFirst({
+                    where: { courseId: parseInt(item.courseId), tuteName: actualTuteName }
                 });
+
+                // 2. නමෙන් හම්බුනේ නැත්නම් Course ID එකෙන් විතරක් තියෙන එකම Stock එක ගන්නවා (Fallback)
+                if (!stockItem) {
+                    stockItem = await tx.tuteStock.findFirst({
+                        where: { courseId: parseInt(item.courseId) }
+                    });
+                }
+
+                if (stockItem) {
+                    const newQty = stockItem.availableQuantity - parseInt(item.quantity);
+                    await tx.tuteStock.update({
+                        where: { id: stockItem.id },
+                        data: { availableQuantity: newQty }
+                    });
+
+                    await tx.tuteStockHistory.create({
+                        data: {
+                            stockId: stockItem.id, courseId: stockItem.courseId, tuteName: stockItem.tuteName,
+                            action: "REDUCED", oldQuantity: stockItem.availableQuantity, 
+                            newQuantity: newQty, reason: `Order ORD-${updatedDelivery.id} Packed`
+                        }
+                    });
+                } else {
+                    console.log(`⚠️ Stock Item Not Found for CourseID: ${item.courseId}, Tute: ${actualTuteName}`);
+                }
             }
         });
 
         res.status(200).json({ message: "Packed and Stock Deducted Successfully!" });
     } catch (error) {
         console.error(error);
+        res.status(500).json({ error: "Failed to pack delivery" });
+    }
+};
+
+// 2. Barcode එක Scan කරාම Pack කරලා Stock එකෙන් අඩු කරන එක
+// ================= AUTO STOCK DEDUCTION AT PACKING =================
+exports.packDelivery = async (req, res) => {
+    try {
+        const { deliveryId, trackingNumber } = req.body;
+
+        await prisma.$transaction(async (tx) => {
+            // 1. Delivery එක Packed කියලා Update කරනවා
+            const updatedDelivery = await tx.delivery.update({
+                where: { id: parseInt(deliveryId) },
+                data: { 
+                    status: 'Packed', 
+                    trackingNumber: trackingNumber,
+                    packedAt: new Date()
+                },
+                include: { items: true }
+            });
+
+            // 2. අදාල Tutes වල Stock එක Auto අඩු කරනවා
+            for (const item of updatedDelivery.items) {
+                // 🔥 FIX: parseInt දාලා හරියටම Types match කරලා stockItem එක හොයනවා
+                const stockItem = await tx.tuteStock.findFirst({
+                    where: { 
+                        courseId: parseInt(item.courseId), 
+                        tuteName: item.tuteName 
+                    }
+                });
+
+                if (stockItem) {
+                    const newQty = stockItem.availableQuantity - parseInt(item.quantity);
+                    
+                    await tx.tuteStock.update({
+                        where: { id: stockItem.id },
+                        data: { availableQuantity: newQty }
+                    });
+
+                    // History එකටත් රෙකෝඩ් එකක් දානවා Auto අඩු වුණා කියලා
+                    await tx.tuteStockHistory.create({
+                        data: {
+                            stockId: stockItem.id, 
+                            courseId: stockItem.courseId, 
+                            tuteName: stockItem.tuteName,
+                            action: "REDUCED", 
+                            oldQuantity: stockItem.availableQuantity, 
+                            newQuantity: newQty, 
+                            reason: `Auto-deducted for Order ORD-${updatedDelivery.id}`
+                        }
+                    });
+                } else {
+                    console.log(`⚠️ Stock Item Not Found for CourseID: ${item.courseId}, Tute: ${item.tuteName}`);
+                }
+            }
+        });
+
+        res.status(200).json({ message: "Packed and Stock Deducted Successfully!" });
+    } catch (error) {
+        console.error("Pack Delivery Error:", error);
         res.status(500).json({ error: "Failed to pack delivery" });
     }
 };
@@ -696,25 +787,26 @@ exports.getDeliveryStats = async (req, res) => {
     }
 };
 
+// 🔥 Replace ONLY getAdvancedHistory in delivery.controller.js
 exports.getAdvancedHistory = async (req, res) => {
     try {
         const { page = 1, limit = 15, search, businessId, batchId, paymentType, status, startDate, endDate } = req.query;
         
-        let whereClause = {
-            // 🔥 FIX: 'Packed' අයින් කරන්නේ නෑ, එතකොට All Statuses වලදීත් ලස්සනට පේනවා
-            status: { notIn: ['Pending', 'Hold'] } 
-        };
+        let whereClause = {};
 
-        // Filters යොදන්න
+        // 🔥 Status filter logic
+        if (status) {
+            if (status === 'Dispatched') whereClause.status = { in: ['Packed', 'On the way'] };
+            else if (status === 'Delivered') whereClause.status = 'Received';
+            else whereClause.status = status; // For Pending & Hold
+        } else {
+            whereClause.status = { notIn: ['Pending', 'Hold'] }; // Default view එකේදී මේවා පෙන්නන්නේ නෑ
+        }
+
+        // Filters
         if (businessId) whereClause.businessId = parseInt(businessId);
         if (paymentType) whereClause.paymentType = paymentType;
         
-        if (status === 'Dispatched') {
-            whereClause.status = { in: ['Packed', 'On the way'] };
-        } else if (status === 'Delivered') {
-            whereClause.status = 'Received';
-        }
-
         if (startDate && endDate) {
             const start = new Date(startDate);
             start.setHours(0, 0, 0, 0);
@@ -723,9 +815,9 @@ exports.getAdvancedHistory = async (req, res) => {
             whereClause.updatedAt = { gte: start, lte: end };
         }
 
-        // Search Query
+        // Search
         if (search) {
-            const searchNum = parseInt(search.replace(/\D/g, '')); // ඉලක්කම් විතරක් ගන්නවා
+            const searchNum = parseInt(search.replace(/\D/g, ''));
             const orConditions = [
                 { trackingNumber: { contains: search } },
                 { payment: { student: { firstName: { contains: search } } } },
@@ -741,14 +833,13 @@ exports.getAdvancedHistory = async (req, res) => {
             whereClause.payment = { ...whereClause.payment, batchId: parseInt(batchId) };
         }
 
-        // 🔥 FIX: Business Relation එකක් නැති නිසා, Business නම් ටික වෙනම අරන් Map කරනවා
         const businesses = await prisma.business.findMany({ select: { id: true, name: true } });
-
         const total = await prisma.delivery.count({ where: whereClause });
+        
         const deliveries = await prisma.delivery.findMany({
             where: whereClause,
-            // 🔥 මෙතන තිබ්බ business: true අයින් කරලා තියෙන්නේ
             include: {
+                items: true, // 🔥 Frontend එකට Subjects (Tutes) ටික යවන්නේ මේකෙන්
                 payment: { include: { student: true, batch: true } }
             },
             orderBy: { updatedAt: 'desc' },
@@ -757,21 +848,27 @@ exports.getAdvancedHistory = async (req, res) => {
         });
 
         const formatted = deliveries.map(d => {
-            // Business ID එකෙන් නම හොයාගන්නවා
-            const bizName = businesses.find(b => b.id === d.businessId)?.name || 'Unknown';
-            return {
-                id: d.id,
-                studentName: d.payment?.student ? `${d.payment.student.firstName} ${d.payment.student.lastName}` : 'Unknown',
-                phone: d.payment?.student?.phone || 'No Phone',
-                businessName: bizName,
-                batchName: d.payment?.batch?.name || 'No Batch',
-                paymentType: d.paymentType,
-                status: d.status,
-                trackingNumber: d.trackingNumber
-            };
-        });
+    const bizName = businesses.find(b => b.id === d.businessId)?.name || 'Unknown';
+    
+    // 🔥 NEW: ළමයාගේ Address එක මෙතනින් හදාගන්නවා
+    const std = d.payment?.student || {};
+    const addressParts = [std.addressHouseNo, std.addressStreet, std.city, std.district].filter(Boolean);
+    const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'No Address Provided';
 
-        // BigInt Data තිබ්බොත් error එන නිසා Safe JSON parse එකක් දානවා
+    return {
+        id: d.id,
+        studentName: std.firstName ? `${std.firstName} ${std.lastName}` : 'Unknown',
+        phone: std.phone || std.whatsapp || 'No Phone',
+        address: fullAddress, // 🔥 Address එක frontend එකට යවනවා
+        businessName: bizName,
+        batchName: d.payment?.batch?.name || 'No Batch',
+        paymentType: d.paymentType,
+        status: d.status,
+        trackingNumber: d.trackingNumber,
+        items: d.items
+    };
+});
+
         const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
 
         res.status(200).json(safeJson({
@@ -801,5 +898,93 @@ exports.manualConfirmDelivery = async (req, res) => {
         res.status(200).json({ message: `Delivery marked as Delivered`, data: updatedDelivery });
     } catch (error) {
         res.status(500).json({ error: "Failed to manually update delivery." });
+    }
+};
+
+// ================= ADVANCED DELIVERY & STOCK REPORT =================
+exports.getTuteDeliveryReport = async (req, res) => {
+    try {
+        const { startDate, endDate, businessId, batchId, paymentType } = req.query;
+
+        // 1. Basic Status Filter Only (No deep relations to avoid Prisma crash)
+        let whereClause = { status: { in: ['Packed', 'On the way', 'Received'] } };
+
+        if (businessId) whereClause.businessId = parseInt(businessId);
+        if (paymentType) whereClause.paymentType = paymentType;
+        
+        if (startDate && endDate) {
+            const start = new Date(startDate); start.setHours(0, 0, 0, 0);
+            const end = new Date(endDate); end.setHours(23, 59, 59, 999);
+            whereClause.updatedAt = { gte: start, lte: end };
+        }
+
+        // 2. Data ටික ගන්නවා (batchId එක මෙතන ෆිල්ටර් කරන්නේ නෑ, JS වලින් කරන්නේ)
+        const deliveries = await prisma.delivery.findMany({
+        where: whereClause,
+        include: {
+            items: true,
+            payment: { include: { student: true, batch: true, group: true } } // 🔥 FIX
+        },
+        orderBy: { updatedAt: 'desc' },
+        skip: (parseInt(page) - 1) * parseInt(limit),
+        take: parseInt(limit)
+    });
+
+        const allBusinesses = await prisma.business.findMany({ select: { id: true, name: true } });
+        const reportMap = {};
+
+        deliveries.forEach(d => {
+            // 🔥 JS Level Batch Filter (Safe way to prevent Prisma 500 error)
+            if (batchId && d.payment?.batchId !== parseInt(batchId)) return;
+
+            const biz = allBusinesses.find(b => b.id === d.businessId);
+            const bizName = biz ? biz.name : 'Unknown Business';
+            const bName = d.payment?.batch?.name || 'Unknown Batch';
+            const payType = d.paymentType || 'Unknown';
+
+            d.items.forEach(item => {
+                const key = `${bizName}-${bName}-${payType}-${item.courseId}-${item.tuteName}`;
+                if (!reportMap[key]) {
+                    reportMap[key] = { 
+                        businessName: bizName,
+                        batchName: bName,
+                        paymentType: payType,
+                        courseId: item.courseId, 
+                        tuteName: item.tuteName, 
+                        deliveredQty: 0 
+                    };
+                }
+                reportMap[key].deliveredQty += item.quantity; 
+            });
+        });
+
+        const courseIds = Object.values(reportMap).map(r => parseInt(r.courseId));
+        const [courses, stocks] = await Promise.all([
+            prisma.course.findMany({ where: { id: { in: courseIds } } }),
+            prisma.tuteStock.findMany({ where: { courseId: { in: courseIds } } })
+        ]);
+
+        const finalReport = Object.values(reportMap).map(r => {
+            const course = courses.find(c => c.id === r.courseId);
+            const stockItem = stocks.find(s => s.courseId === r.courseId && s.tuteName === r.tuteName);
+            return {
+                businessName: r.businessName,
+                batchName: r.batchName,
+                paymentType: r.paymentType,
+                courseName: course?.name || 'Unknown Subject',
+                tuteName: r.tuteName, 
+                deliveredQty: r.deliveredQty,
+                currentStock: stockItem?.availableQuantity || 0
+            };
+        });
+
+        finalReport.sort((a, b) => b.deliveredQty - a.deliveredQty);
+
+        const safeJson = (data) => JSON.parse(JSON.stringify(data, (k, v) => typeof v === 'bigint' ? v.toString() : v));
+        res.status(200).json(safeJson(finalReport));
+
+    } catch (error) {
+        console.error("Report Generation Error:", error);
+        res.status(500).json({ error: "Failed to generate report" });
     }
 };

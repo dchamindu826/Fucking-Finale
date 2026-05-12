@@ -1,8 +1,8 @@
 import React from 'react';
-import { Search, Users, Activity, CheckCircle, Clock, XCircle, Gift, Tag } from 'lucide-react';
+import { Search, Users, Activity, CheckCircle, Clock, XCircle, Gift, Tag, Download } from 'lucide-react';
 
 export default function PaymentFilters({ 
-    isAdmin, filters, setFilters, businesses, batches, groups, subjects, stats, onOpenStaffStats
+    isAdmin, filters, setFilters, businesses, batches, groups, subjects, stats, onOpenStaffStats, onOpenExport 
 }) {
     const handleChange = (field, value) => {
         setFilters(prev => ({ ...prev, [field]: value }));
@@ -11,26 +11,34 @@ export default function PaymentFilters({
     return (
         <div className="mb-8 font-sans">
             {/* Top Stats Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg hover:scale-[1.02] transition-transform">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2"><Clock size={14} className="text-yellow-500"/> Pending</p>
                     <h3 className="text-2xl font-black text-white">{stats.pending}</h3>
                 </div>
-                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg">
+                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg hover:scale-[1.02] transition-transform">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2"><CheckCircle size={14} className="text-emerald-500"/> Approved</p>
                     <h3 className="text-2xl font-black text-white">{stats.approved}</h3>
                 </div>
-                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg">
+                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg hover:scale-[1.02] transition-transform">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2"><Gift size={14} className="text-yellow-400"/> Free Cards</p>
                     <h3 className="text-2xl font-black text-white">{stats.freeCards}</h3>
                 </div>
-                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg">
+                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg hover:scale-[1.02] transition-transform">
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2"><Tag size={14} className="text-blue-400"/> Discounts</p>
                     <h3 className="text-2xl font-black text-white">{stats.discounts}</h3>
                 </div>
-                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg cursor-pointer hover:bg-white/5 transition-colors" onClick={onOpenStaffStats}>
+                <div className="bg-[#1e2336]/80 border border-white/5 p-4 rounded-2xl flex flex-col justify-center shadow-lg cursor-pointer hover:bg-white/5 transition-all hover:scale-[1.02]" onClick={onOpenStaffStats}>
                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2"><Users size={14} className="text-purple-400"/> Staff Stats</p>
-                    <h3 className="text-sm font-black text-purple-400 mt-1">Click to View Performance</h3>
+                    <h3 className="text-sm font-black text-purple-400 mt-1">Click to View</h3>
+                </div>
+                
+                {/* 🔥 ALUTH EXPORT BUTTON EKA 🔥 */}
+                <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-2xl flex flex-col justify-center shadow-[0_0_15px_rgba(16,185,129,0.15)] cursor-pointer hover:bg-emerald-500/20 transition-all hover:scale-[1.02] group" onClick={onOpenExport}>
+                    <p className="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2 group-hover:text-emerald-300">
+                        <Download size={14} className="text-emerald-400 group-hover:text-emerald-300"/> Export
+                    </p>
+                    <h3 className="text-sm font-black text-white mt-1 group-hover:text-emerald-100">Generate Report</h3>
                 </div>
             </div>
 

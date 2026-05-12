@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
     CheckSquare, Clock, Play, Lock, CheckCircle2, 
-    FileText, Video, X, BookOpen, AlertTriangle, Plus, Check
+    FileText, Video, X, BookOpen, AlertTriangle, Plus, Check, Search, Building2
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../api/axios';
@@ -26,7 +26,11 @@ export default function StaffTaskCenter({ loggedInUser }) {
             else if (activeTab === 'completed') url += `status=COMPLETED&`;
 
             const res = await api.get(url);
-            setTasks(res.data || []);
+            const sorted = (res.data || []).sort((a,b) => {
+                if(!a.deadline) return 1; if(!b.deadline) return -1;
+                return new Date(a.deadline) - new Date(b.deadline);
+            });
+            setTasks(sorted);
         } catch (e) { toast.error("Failed to load tasks"); } finally { setLoading(false); }
     };
 
@@ -40,96 +44,132 @@ export default function StaffTaskCenter({ loggedInUser }) {
     };
 
     const getTaskDetails = (task) => {
-        if (task.taskType === 'CUSTOM') return { icon: CheckSquare, color: 'text-pink-400', bg: 'bg-slate-800', label: task.customTitle || 'Custom Task' };
+        if (task.taskType === 'CUSTOM') return { icon: CheckSquare, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: task.customTitle || 'Custom Task' };
         switch(task.taskType) {
-            case 'LIVE_LINK': return { icon: Play, color: 'text-blue-400', bg: 'bg-slate-800', label: 'Upload Live Link' };
-            case 'RECORDING': return { icon: Video, color: 'text-purple-400', bg: 'bg-slate-800', label: 'Upload Recording' };
-            case 'NOTES': return { icon: FileText, color: 'text-blue-400', bg: 'bg-slate-800', label: 'Upload PDF Notes' };
-            case 'MCQ': return { icon: FileText, color: 'text-orange-400', bg: 'bg-slate-800', label: 'Upload MCQ Paper' };
-            case 'STRUCTURED_PAPER': return { icon: FileText, color: 'text-yellow-400', bg: 'bg-slate-800', label: 'Upload Structured Paper' };
-            default: return { icon: CheckSquare, color: 'text-slate-400', bg: 'bg-slate-800', label: task.taskType.replace('_', ' ') };
+            case 'LIVE_LINK': return { icon: Play, color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'Upload Live Link' };
+            case 'RECORDING': return { icon: Video, color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', label: 'Upload Recording' };
+            case 'NOTES': return { icon: FileText, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', label: 'Upload PDF Notes' };
+            case 'MCQ': return { icon: FileText, color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/20', label: 'Upload MCQ Paper' };
+            case 'STRUCTURED_PAPER': return { icon: FileText, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', label: 'Upload Structured Paper' };
+            default: return { icon: CheckSquare, color: 'text-slate-400', bg: 'bg-slate-800', border: 'border-slate-700', label: task.taskType.replace('_', ' ') };
         }
     };
 
+    const formatTimeOnly = (dateString) => {
+        if (!dateString) return '';
+        return new Date(dateString).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    };
+
+    const formatDateOnly = (dateString) => {
+        if (!dateString) return 'No Deadline';
+        return new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
     return (
-        <div className="w-full text-slate-200 font-sans pb-4">
-            <div className="mb-6 bg-[#1e293b] border border-slate-800 p-5 rounded-xl shadow-sm">
-                <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><CheckSquare className="text-blue-500" /> My Tasks</h2>
-                <div className="flex gap-2 overflow-x-auto custom-scrollbar">
-                    <button onClick={() => setActiveTab('my_tasks')} className={`px-5 py-2 rounded-lg text-sm transition-colors border ${activeTab === 'my_tasks' ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800'}`}>Action Required</button>
-                    <button onClick={() => setActiveTab('in_progress')} className={`px-5 py-2 rounded-lg text-sm transition-colors border ${activeTab === 'in_progress' ? 'bg-slate-700 text-white border-slate-600' : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800'}`}>In Progress</button>
-                    <button onClick={() => setActiveTab('completed')} className={`px-5 py-2 rounded-lg text-sm transition-colors border ${activeTab === 'completed' ? 'bg-green-600 text-white border-green-600' : 'bg-transparent text-slate-400 border-transparent hover:bg-slate-800'}`}>Completed</button>
+        <div className="w-full min-h-screen text-slate-300 font-sans pb-10 bg-[#0a0f1c] animate-in fade-in duration-300">
+            
+            {/* Header */}
+            <div className="mb-8 bg-[#131b2c] border border-slate-800 p-6 md:p-8 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400">
+                        <CheckSquare size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-white tracking-wide">My Work Space</h2>
+                        <p className="text-slate-400 text-sm mt-1">Execute your assigned tasks efficiently</p>
+                    </div>
+                </div>
+
+                <div className="flex gap-2 w-full md:w-auto bg-[#0a0f1c] p-1.5 rounded-xl border border-slate-800 overflow-x-auto">
+                    <button onClick={() => setActiveTab('in_progress')} className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === 'in_progress' ? 'bg-blue-600 text-white' : 'bg-transparent text-slate-400 hover:text-white hover:bg-slate-800'}`}>In Progress</button>
+                    <button onClick={() => setActiveTab('my_tasks')} className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === 'my_tasks' ? 'bg-blue-600 text-white' : 'bg-transparent text-slate-400 hover:text-white hover:bg-slate-800'}`}>Action Required</button>
+                    <button onClick={() => setActiveTab('completed')} className={`px-5 py-2 rounded-lg text-sm font-medium transition-all duration-300 whitespace-nowrap ${activeTab === 'completed' ? 'bg-emerald-600 text-white' : 'bg-transparent text-slate-400 hover:text-white hover:bg-slate-800'}`}>Completed</button>
                 </div>
             </div>
 
-            <div className="space-y-4">
-                {loading ? <div className="text-center py-10 text-slate-400">Fetching tasks...</div> : tasks.length === 0 ? (
-                    <div className="bg-[#1e293b] border border-slate-800 p-10 rounded-xl text-center">
-                        <CheckCircle2 size={32} className="mx-auto text-slate-600 mb-2" />
-                        <p className="text-slate-400 text-sm">You're all caught up!</p>
+            <div className="max-w-4xl mx-auto">
+                {loading ? (
+                    <div className="text-center py-20 text-slate-500 font-medium text-sm flex flex-col items-center">
+                        <Clock size={24} className="animate-pulse mb-2 text-indigo-400"/> Loading Timeline...
+                    </div>
+                ) : tasks.length === 0 ? (
+                    <div className="bg-[#131b2c] border border-slate-800 p-12 rounded-2xl text-center flex flex-col items-center justify-center mt-6">
+                        <div className="bg-slate-800/50 p-5 rounded-full mb-5 text-emerald-500"><CheckCircle2 size={40} /></div>
+                        <h3 className="text-lg font-semibold text-white mb-1">Timeline Clear!</h3>
+                        <p className="text-slate-400 text-sm">You have no tasks pending in this status.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                        {tasks.map(task => {
+                    <div className="relative border-l border-slate-700/60 ml-4 md:ml-10 space-y-8 pb-10 pt-4">
+                        {tasks.map((task) => {
                             const details = getTaskDetails(task);
                             const TaskIcon = details.icon;
                             const isMainTaskWithSubs = task.subTasks && task.subTasks.length > 0;
 
                             return (
-                                <div key={task.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-xl flex flex-col hover:border-slate-700 transition-colors">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className={`p-2 rounded-lg ${details.bg} border border-slate-700`}><TaskIcon className={details.color} size={18} /></div>
-                                        {!isMainTaskWithSubs && task.deadline && (
-                                            <div className="text-right flex flex-col items-end">
-                                                <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Deadline</p>
-                                                <div className={`px-2 py-1 rounded text-xs flex items-center gap-1.5 ${task.isOverdue && task.status !== 'COMPLETED' ? 'bg-red-500/10 text-red-500' : 'bg-[#0f172a] text-orange-400 border border-slate-800'}`}>
-                                                    <Clock size={10}/>
-                                                    <span>{task.deadline ? new Date(task.deadline).toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
+                                <div key={task.id} className="relative pl-8 md:pl-10 group">
                                     
-                                    <h4 className="text-base font-bold text-white mb-1">{details.label}</h4>
-                                    {task.taskType !== 'CUSTOM' ? (
-                                        <p className="text-xs text-blue-400 mb-4 truncate">{task.timetable?.subjectName} - {task.timetable?.title}</p>
-                                    ) : (
-                                        <p className="text-xs text-slate-400 mb-4 line-clamp-2">{task.customDesc}</p>
-                                    )}
-                                    
-                                    <div className="bg-[#0f172a] p-3 rounded-lg border border-slate-800 text-xs text-slate-300 space-y-2 mb-4 flex-1">
-                                        {task.taskType !== 'CUSTOM' ? (
-                                            <>
-                                                <p className="flex justify-between"><span className="text-slate-500">Class Date:</span> <span>{task.timetable?.date?.split('T')[0]}</span></p>
-                                                <p className="flex justify-between"><span className="text-slate-500">Time:</span> <span>{task.timetable?.startTime} - {task.timetable?.endTime}</span></p>
-                                            </>
-                                        ) : null}
-                                        <p className="flex justify-between"><span className="text-slate-500">Batch:</span> <span className="truncate max-w-[120px]">{task.batch?.name}</span></p>
+                                    {/* TIMELINE DOT */}
+                                    <div className={`absolute -left-[7px] top-6 w-3.5 h-3.5 rounded-full border-2 border-[#0a0f1c] z-10 transition-colors ${task.status === 'COMPLETED' ? 'bg-emerald-500' : task.isOverdue ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`}></div>
+
+                                    {/* TIME BADGE */}
+                                    <div className="mb-2.5 pl-1 flex items-center gap-3">
+                                        <span className={`text-lg font-bold ${task.isOverdue && task.status !== 'COMPLETED' ? 'text-red-400' : 'text-slate-200'}`}>{formatTimeOnly(task.deadline)}</span>
+                                        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wide">{formatDateOnly(task.deadline)}</span>
                                     </div>
 
-                                    {isMainTaskWithSubs && (
-                                        <div className="mb-4 space-y-1">
-                                            <p className="text-[10px] text-slate-500 uppercase tracking-widest pl-1">Checklist</p>
-                                            <div className="bg-[#0f172a] rounded-lg p-2 border border-slate-800 space-y-1">
-                                                {task.subTasks.map(sub => (
-                                                    <div key={sub.id} className="flex justify-between items-center p-1.5 rounded text-xs">
-                                                        <span className={sub.status === 'COMPLETED' ? 'line-through text-slate-600' : 'text-slate-300'}>{sub.customTitle}</span>
-                                                        {sub.status === 'COMPLETED' && <CheckCircle2 size={12} className="text-green-500"/>}
+                                    {/* TASK CARD */}
+                                    <div className={`bg-[#131b2c] border p-6 rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-6 transition-all duration-300 hover:shadow-md ${task.isOverdue && task.status !== 'COMPLETED' ? 'border-red-500/40 hover:border-red-500/60' : 'border-slate-800 hover:border-slate-700'}`}>
+                                        
+                                        <div className="flex items-start gap-4 flex-1 min-w-0 w-full">
+                                            <div className={`p-3 rounded-xl ${details.bg} border ${details.border} shrink-0`}>
+                                                <TaskIcon className={details.color} size={22} />
+                                            </div>
+                                            
+                                            <div className="flex-1 min-w-0 pt-1">
+                                                <h4 className="text-base font-semibold text-slate-100 mb-1 leading-tight">{details.label}</h4>
+                                                {task.taskType !== 'CUSTOM' ? (
+                                                    <p className="text-sm text-indigo-400 font-medium truncate mb-2">{task.timetable?.subjectName} - {task.timetable?.title}</p>
+                                                ) : (
+                                                    <p className="text-sm text-slate-400 mb-2 line-clamp-2">{task.customDesc}</p>
+                                                )}
+
+                                                <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-slate-500">
+                                                    <span className="bg-[#0a0f1c] px-2 py-1 rounded border border-slate-800 flex items-center gap-1.5"><Building2 size={12} className="text-slate-400"/> {task.business?.name}</span>
+                                                    <span className="bg-[#0a0f1c] px-2 py-1 rounded border border-slate-800 flex items-center gap-1.5"><BookOpen size={12} className="text-slate-400"/> {task.batch?.name}</span>
+                                                </div>
+
+                                                {isMainTaskWithSubs && (
+                                                    <div className="mt-4 bg-[#0a0f1c] rounded-xl p-3 border border-slate-800 space-y-1.5">
+                                                        <p className="text-[10px] text-slate-500 uppercase font-semibold mb-1">Checklist</p>
+                                                        {task.subTasks.map(sub => (
+                                                            <div key={sub.id} className="flex justify-between items-center bg-[#131b2c] p-2 rounded-lg text-xs border border-slate-800/50">
+                                                                <span className={sub.status === 'COMPLETED' ? 'line-through text-slate-500' : 'text-slate-300'}>{sub.customTitle}</span>
+                                                                {sub.status === 'COMPLETED' ? <CheckCircle2 size={14} className="text-emerald-500"/> : <div className="w-3 h-3 rounded-full border border-slate-600"></div>}
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
                                         </div>
-                                    )}
-                                    
-                                    <div className="mt-auto">
-                                        {(activeTab === 'my_tasks' || activeTab === 'in_progress') && (
-                                            task.status === 'LOCKED' || task.isOverdue ? (
-                                                <button onClick={() => { setSelectedTask(task); setShowUnlockModal(true); }} className="w-full bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/30 py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"><Lock size={16} /> Request Unlock</button>
-                                            ) : (
-                                                <button onClick={() => { setSelectedTask(task); setShowContentModal(true); }} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 text-sm rounded-lg transition-colors flex items-center justify-center gap-2"><Play size={16} /> Execute & Publish</button>
-                                            )
-                                        )}
-                                        {task.status === 'COMPLETED' && <div className="w-full bg-green-500/10 text-green-400 py-2.5 text-sm rounded-lg flex items-center justify-center gap-2 border border-green-500/30"><CheckCircle2 size={16} /> Completed</div>}
+
+                                        <div className="w-full md:w-auto shrink-0 flex flex-col gap-2">
+                                            {(activeTab === 'my_tasks' || activeTab === 'in_progress') && (
+                                                task.status === 'LOCKED' || task.isOverdue ? (
+                                                    <button onClick={() => { setSelectedTask(task); setShowUnlockModal(true); }} className="w-full md:w-40 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 text-sm">
+                                                        <Lock size={16} /> Request Unlock
+                                                    </button>
+                                                ) : (
+                                                    <button onClick={() => { setSelectedTask(task); setShowContentModal(true); }} className="w-full md:w-40 bg-blue-600 hover:bg-blue-500 text-white py-2.5 font-medium rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+                                                        <Play size={16} /> Execute Task
+                                                    </button>
+                                                )
+                                            )}
+                                            {task.status === 'COMPLETED' && (
+                                                <div className="w-full md:w-40 bg-emerald-500/10 text-emerald-400 py-2.5 font-medium rounded-xl flex items-center justify-center gap-2 border border-emerald-500/20 text-sm">
+                                                    <CheckCircle2 size={16} /> Completed
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -138,16 +178,38 @@ export default function StaffTaskCenter({ loggedInUser }) {
                 )}
             </div>
 
-            {/* Content Hub Clone Modal */}
+            {/* Request Unlock Modal */}
+            {showUnlockModal && selectedTask && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-[#131b2c] border border-slate-800 rounded-2xl p-6 md:p-8 w-full max-w-sm shadow-xl relative">
+                        <div className="flex justify-between items-center mb-5">
+                            <h3 className="text-xl font-semibold text-white flex items-center gap-2"><Lock className="text-red-400" size={18}/> Task Locked</h3>
+                            <button onClick={() => setShowUnlockModal(false)} className="text-slate-400 hover:text-white bg-slate-800/50 p-2 rounded-lg transition-colors"><X size={18}/></button>
+                        </div>
+                        <p className="text-sm text-slate-300 mb-5 leading-relaxed">
+                            This task is overdue and locked. You must submit a request to your manager to unlock it.
+                        </p>
+                        <form onSubmit={handleRequestUnlock}>
+                            <label className="text-xs font-semibold text-slate-400 mb-2 block">Reason for Delay *</label>
+                            <textarea name="reason" required rows="3" placeholder="Explain why the task was delayed..." className="w-full bg-[#0a0f1c] border border-slate-800 rounded-xl p-3 text-sm text-white outline-none focus:border-red-500 mb-5 transition-colors resize-none"></textarea>
+                            <button type="submit" className="w-full bg-red-600 hover:bg-red-500 text-white font-medium py-3 rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
+                                <AlertTriangle size={16}/> Send Request
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Execution Modal */}
             {showContentModal && selectedTask && (
-                 <TaskExecutionModal task={selectedTask} onClose={() => setShowContentModal(false)} onComplete={() => { setShowContentModal(false); fetchTasks(); }} />
+                <TaskExecutionModal task={selectedTask} onClose={() => setShowContentModal(false)} onComplete={() => { setShowContentModal(false); fetchTasks(); }} />
             )}
         </div>
     );
 }
 
 // ---------------------------------------------------------------------------
-// CONTENT HUB EXECUTION MODAL (With Folder Create)
+// CONTENT HUB EXECUTION MODAL 
 // ---------------------------------------------------------------------------
 const TaskExecutionModal = ({ task, onClose, onComplete }) => {
     const [submitting, setSubmitting] = useState(false);
@@ -157,8 +219,8 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
     const [lessonGroups, setLessonGroups] = useState([]);
     const [massAssignSubjects, setMassAssignSubjects] = useState([]);
     const [selectedBatchesForContent, setSelectedBatchesForContent] = useState([]);
+    const [activeCourseCode, setActiveCourseCode] = useState(null); 
 
-    // Inline Folder Creation State
     const [isCreatingFolder, setIsCreatingFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [selectedFolder, setSelectedFolder] = useState('');
@@ -183,13 +245,16 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
             if (task.timetable?.subjectName && task.batchId) {
                 const batchData = fetchedBatches.find(b => b.id === task.batchId);
                 if (batchData) {
+                    let foundCode = null;
                     batchData.groups?.forEach(g => {
                         g.courses?.forEach(c => {
                             if (c.name === task.timetable.subjectName) {
                                 setMassAssignSubjects(prev => [...new Set([...prev, c.id])]);
+                                foundCode = c.code || `SUB_${c.id}`;
                             }
                         });
                     });
+                    if (foundCode) setActiveCourseCode(foundCode); 
                 }
             }
         } catch (e) { console.error("Error loading hub data", e); }
@@ -202,7 +267,6 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
         }
     };
 
-    // Folder Creation from inside the modal
     const handleCreateFolder = async () => {
         if (!newFolderName.trim()) return;
         try {
@@ -211,7 +275,7 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
                 type: getTypeInt(contentType), 
                 order: 1, 
                 batch_id: task.batchId, 
-                course_code: null
+                course_code: activeCourseCode 
             };
             const res = await api.post('/admin/manager/content-group/add', payload);
             toast.success("Folder Created!");
@@ -258,17 +322,17 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
 
     if (isCustom) {
         return (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/90 p-4">
-                <div className="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-md shadow-xl p-6">
-                    <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-bold text-white">Execute Task</h3>
-                        <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20}/></button>
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                <div className="bg-[#131b2c] border border-slate-800 rounded-2xl w-full max-w-md shadow-xl p-6 md:p-8 relative">
+                    <div className="flex justify-between items-center mb-5">
+                        <h3 className="text-xl font-semibold text-white">Execute Task</h3>
+                        <button onClick={onClose} className="text-slate-400 hover:text-white bg-slate-800/50 p-2 rounded-lg transition-colors"><X size={18}/></button>
                     </div>
-                    <p className="text-sm text-slate-300 mb-5 bg-[#0f172a] p-3 rounded-lg border border-slate-700">{task.customDesc}</p>
+                    <p className="text-sm text-slate-300 mb-6 bg-[#0a0f1c] p-4 rounded-xl border border-slate-800">{task.customDesc}</p>
                     <form onSubmit={handleSubmit}>
-                        <label className="text-xs text-slate-400 mb-2 block">Upload Proof (Optional Image/PDF)</label>
-                        <input type="file" name="proof" className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2 text-sm text-slate-400 file:bg-slate-700 file:text-white file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 mb-5" />
-                        <button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-lg text-sm transition-colors">{submitting ? 'Executing...' : 'Complete Task'}</button>
+                        <label className="text-xs font-semibold text-slate-400 mb-2 block">Upload Proof (Optional Image/PDF)</label>
+                        <input type="file" name="proof" className="w-full bg-[#0a0f1c] border border-slate-800 rounded-xl p-2.5 text-sm text-slate-400 file:bg-slate-700 file:text-white file:border-0 file:rounded-lg file:px-4 file:py-1.5 file:mr-3 file:cursor-pointer mb-6 cursor-pointer" />
+                        <button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-xl transition-colors">{submitting ? 'Executing...' : 'Complete Task'}</button>
                     </form>
                 </div>
             </div>
@@ -276,101 +340,101 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
     }
 
     return (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/95 p-4 animate-in fade-in">
-            <div className="bg-[#1e293b] border border-slate-700 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-xl">
-                <div className="p-5 border-b border-slate-700 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2"><Plus size={20}/> Execute & Add Content</h3>
-                    <button onClick={onClose} className="text-slate-400 hover:text-white"><X size={20}/></button>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/90 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-[#131b2c] border border-slate-800 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-xl">
+                <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
+                    <h3 className="text-lg font-semibold text-white flex items-center gap-2"><Plus size={18} className="text-indigo-400"/> Execute & Add Content</h3>
+                    <button onClick={onClose} className="text-slate-400 hover:text-white bg-slate-800/50 p-2 rounded-lg transition-colors"><X size={18}/></button>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                    <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="flex flex-col md:flex-row gap-4">
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div className="flex flex-col md:flex-row gap-5">
                             <div className="flex-1">
-                                <label className="text-xs text-slate-400 mb-1 block">Content Type *</label>
-                                <div className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-slate-300 text-sm">
+                                <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Content Type *</label>
+                                <div className="w-full bg-[#0a0f1c] border border-slate-800 rounded-xl p-3 text-slate-300 text-sm">
                                     {task.taskType.replace('_', ' ')}
                                 </div>
                             </div>
                             <div className="flex-1">
-                                <label className="text-xs text-slate-400 mb-1 block">Target Folder</label>
+                                <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Target Folder</label>
                                 <div className="flex gap-2">
                                     {isCreatingFolder ? (
                                         <div className="flex w-full gap-2">
-                                            <input type="text" value={newFolderName} onChange={e=>setNewFolderName(e.target.value)} placeholder="Folder Name..." className="flex-1 bg-[#0f172a] border border-slate-700 rounded-lg p-2 text-white outline-none focus:border-blue-500 text-sm" />
-                                            <button type="button" onClick={handleCreateFolder} className="bg-green-600 text-white p-2 rounded-lg hover:bg-green-500 transition-colors"><Check size={16}/></button>
-                                            <button type="button" onClick={()=>setIsCreatingFolder(false)} className="bg-slate-700 text-white p-2 rounded-lg hover:bg-slate-600 transition-colors"><X size={16}/></button>
+                                            <input type="text" value={newFolderName} onChange={e=>setNewFolderName(e.target.value)} placeholder="Folder Name..." className="flex-1 bg-[#0a0f1c] border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm" />
+                                            <button type="button" onClick={handleCreateFolder} className="bg-emerald-600 text-white px-3 rounded-xl hover:bg-emerald-500 transition-colors"><Check size={16}/></button>
+                                            <button type="button" onClick={()=>setIsCreatingFolder(false)} className="bg-slate-700 text-white px-3 rounded-xl hover:bg-slate-600 transition-colors"><X size={16}/></button>
                                         </div>
                                     ) : (
                                         <>
-                                            <select value={selectedFolder} onChange={e=>setSelectedFolder(e.target.value)} className="flex-1 bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 text-sm">
+                                            <select value={selectedFolder} onChange={e=>setSelectedFolder(e.target.value)} className="flex-1 bg-[#0a0f1c] border border-slate-800 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm cursor-pointer">
                                                 <option value="">Uncategorized</option>
                                                 {lessonGroups.map(f => <option key={f.id} value={f.id}>{f.title || f.name}</option>)}
                                             </select>
-                                            <button type="button" onClick={()=>setIsCreatingFolder(true)} className="bg-slate-700 hover:bg-slate-600 text-white px-3 rounded-lg text-xs transition-colors flex items-center gap-1 shrink-0"><Plus size={14}/> Folder</button>
+                                            <button type="button" onClick={()=>setIsCreatingFolder(true)} className="bg-slate-800 hover:bg-slate-700 text-white px-4 rounded-xl text-xs transition-colors flex items-center gap-1.5 shrink-0"><Plus size={14}/> Folder</button>
                                         </>
                                     )}
                                 </div>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-700">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-[#0a0f1c] p-5 rounded-xl border border-slate-800">
                             <div className="md:col-span-3">
-                                <label className="text-xs text-slate-400 mb-1 block">Title *</label>
-                                <input type="text" name="title" defaultValue={task.timetable?.title} required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 text-sm" />
+                                <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Title *</label>
+                                <input type="text" name="title" defaultValue={task.timetable?.title} required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm" />
                             </div>
                             <div className="md:col-span-1">
-                                <label className="text-xs text-slate-400 mb-1 block">Order</label>
-                                <input type="number" name="itemOrder" defaultValue={1} required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 text-sm" />
+                                <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Order</label>
+                                <input type="number" name="itemOrder" defaultValue={1} required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm" />
                             </div>
 
                             {(contentType === 'live' || contentType === 'recording') && (
                                 <div className="md:col-span-4">
-                                    <label className="text-xs text-slate-400 mb-1 block">URL Link *</label>
-                                    <input type="url" name="link" required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-blue-400 outline-none focus:border-blue-500 text-sm" />
+                                    <label className="text-xs font-semibold text-slate-400 mb-1.5 block">URL Link *</label>
+                                    <input type="url" name="link" required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-blue-400 outline-none focus:border-indigo-500 text-sm" />
                                 </div>
                             )}
 
                             {(contentType === 'document' || contentType === 'sPaper' || contentType === 'paper') && (
                                 <div className="md:col-span-4">
-                                    <label className="text-xs text-slate-400 mb-1 block">File Upload *</label>
-                                    <input type="file" name="file" required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2 text-slate-400 file:bg-slate-700 file:text-white file:border-0 file:rounded file:px-3 file:py-1 file:mr-3 text-sm cursor-pointer" />
+                                    <label className="text-xs font-semibold text-slate-400 mb-1.5 block">File Upload *</label>
+                                    <input type="file" name="file" required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-2.5 text-slate-400 file:bg-slate-700 file:text-white file:border-0 file:rounded-lg file:px-4 file:py-1.5 file:mr-4 text-sm cursor-pointer" />
                                 </div>
                             )}
 
                             <div className="md:col-span-4">
-                                <label className="text-xs text-slate-400 mb-1 block">Date</label>
-                                <input type="date" name="date" defaultValue={task.timetable?.date?.split('T')[0]} required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white outline-none focus:border-blue-500 text-sm [color-scheme:dark]" />
+                                <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Date</label>
+                                <input type="date" name="date" defaultValue={task.timetable?.date?.split('T')[0]} required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm [color-scheme:dark]" />
                             </div>
 
                             {contentType === 'live' && (
                                 <>
-                                    <div className="md:col-span-2"><label className="text-xs text-slate-400 mb-1 block">Start Time</label><input type="time" name="startTime" defaultValue={task.timetable?.startTime} className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white [color-scheme:dark] outline-none text-sm" /></div>
-                                    <div className="md:col-span-2"><label className="text-xs text-slate-400 mb-1 block">End Time</label><input type="time" name="endTime" defaultValue={task.timetable?.endTime} className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white [color-scheme:dark] outline-none text-sm" /></div>
+                                    <div className="md:col-span-2"><label className="text-xs font-semibold text-slate-400 mb-1.5 block">Start Time</label><input type="time" name="startTime" defaultValue={task.timetable?.startTime} className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white [color-scheme:dark] outline-none text-sm" /></div>
+                                    <div className="md:col-span-2"><label className="text-xs font-semibold text-slate-400 mb-1.5 block">End Time</label><input type="time" name="endTime" defaultValue={task.timetable?.endTime} className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white [color-scheme:dark] outline-none text-sm" /></div>
                                 </>
                             )}
                             
                             {contentType === 'paper' && (
                                 <>
-                                    <div className="md:col-span-2"><label className="text-xs text-slate-400 mb-1 block">Time (Min) *</label><input type="number" name="paperTime" required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
-                                    <div className="md:col-span-2"><label className="text-xs text-slate-400 mb-1 block">Questions *</label><input type="number" name="questionCount" required className="w-full bg-[#1e293b] border border-slate-700 rounded-lg p-2.5 text-white outline-none text-sm" /></div>
+                                    <div className="md:col-span-2"><label className="text-xs font-semibold text-slate-400 mb-1.5 block">Time (Min) *</label><input type="number" name="paperTime" required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm" /></div>
+                                    <div className="md:col-span-2"><label className="text-xs font-semibold text-slate-400 mb-1.5 block">Questions *</label><input type="number" name="questionCount" required className="w-full bg-[#131b2c] border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-indigo-500 text-sm" /></div>
                                 </>
                             )}
                         </div>
 
                         <div className="pt-2">
                             <h4 className="text-sm font-semibold text-white mb-3">Assign Subjects</h4>
-                            <div className="bg-[#0f172a] rounded-xl p-4 border border-slate-700">
+                            <div className="bg-[#0a0f1c] rounded-xl p-4 border border-slate-800">
                                 {batches.filter(b => selectedBatchesForContent.includes(b.id)).map(selectedBatch => (
                                     <div key={selectedBatch.id}>
-                                        <h5 className="text-blue-400 text-sm font-bold mb-3">{selectedBatch.name}</h5>
+                                        <h5 className="text-blue-400 text-sm font-semibold mb-3">{selectedBatch.name}</h5>
                                         {selectedBatch.groups?.map((group, gIdx) => (
-                                            <div key={gIdx} className="mb-3">
-                                                <p className="text-xs text-slate-400 mb-2">{group.name}</p>
+                                            <div key={gIdx} className="mb-4 last:mb-0">
+                                                <p className="text-xs text-slate-500 mb-2">{group.name}</p>
                                                 <div className="flex flex-wrap gap-2">
                                                     {group.courses?.map((course, cIdx) => (
-                                                        <label key={cIdx} className={`flex items-center gap-2 cursor-pointer p-2 rounded-lg border text-xs ${massAssignSubjects.includes(course.id) ? 'bg-blue-600/20 border-blue-500 text-blue-300' : 'bg-[#1e293b] border-slate-700 text-slate-400'}`}>
-                                                            <input type="checkbox" checked={massAssignSubjects.includes(course.id)} onChange={() => toggleMassAssignSubject(course.id)} className="w-3.5 h-3.5 accent-blue-500" />
+                                                        <label key={cIdx} className={`flex items-center gap-2 cursor-pointer p-2.5 rounded-xl border text-xs font-medium transition-colors ${massAssignSubjects.includes(course.id) ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300' : 'bg-[#131b2c] border-slate-800 text-slate-400 hover:border-slate-600'}`}>
+                                                            <input type="checkbox" checked={massAssignSubjects.includes(course.id)} onChange={() => toggleMassAssignSubject(course.id)} className="w-3.5 h-3.5 accent-indigo-500" />
                                                             {course.name}
                                                         </label>
                                                     ))}
@@ -382,8 +446,8 @@ const TaskExecutionModal = ({ task, onClose, onComplete }) => {
                             </div>
                         </div>
 
-                        <div className="pt-4 border-t border-slate-700">
-                            <button type="submit" disabled={submitting} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-70 text-sm">
+                        <div className="pt-4 border-t border-slate-800 mt-2 shrink-0">
+                            <button type="submit" disabled={submitting} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-3.5 rounded-xl transition-colors disabled:opacity-70 text-sm">
                                 {submitting ? 'Publishing...' : 'Publish Content & Mark Complete'}
                             </button>
                         </div>

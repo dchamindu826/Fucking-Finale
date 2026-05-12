@@ -22,6 +22,9 @@ export default function ChatArea({ selectedLead }) {
   const [newMessage, setNewMessage] = useState('');
   const [chatTheme, setChatTheme] = useState('dark'); 
   const scrollRef = useRef(null);
+  
+  // 🔥 අලුතින් දාපු Ref එක (User උඩට Scroll කරලාද ඉන්නේ කියලා බලන්න)
+  const isUserScrolledUp = useRef(false);
 
   const [replyingTo, setReplyingTo] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -55,7 +58,19 @@ export default function ChatArea({ selectedLead }) {
       }
   }, [selectedLead]);
 
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, localReactions]);
+  // 🔥 FIX: User උඩට Scroll කරලා නැත්නම් විතරක් පල්ලෙහාට Scroll වෙන්න හදලා තියෙන්නේ
+  useEffect(() => { 
+      if (scrollRef.current && !isUserScrolledUp.current) {
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight; 
+      }
+  }, [messages, localReactions]);
+
+  // 🔥 FIX: Scroll කරනකොට අල්ලගන්න Function එක
+  const handleScroll = () => {
+      if (!scrollRef.current) return;
+      const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+      isUserScrolledUp.current = scrollHeight - (scrollTop + clientHeight) > 100;
+  };
 
   const fetchMessages = async (showLoading = true) => {
     try {
@@ -103,10 +118,26 @@ export default function ChatArea({ selectedLead }) {
       }
   };
 
+  // 🔥 FIX: හරියටම වැඩ කරන Dynamic Audio Recording Logic එක 
   const startRecording = async () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.error("MediaDevices API is completely blocked by the browser.");
+          toast.error("Microphone is blocked! Please check browser permissions.", { duration: 4000 });
+          return;
+      }
+
       try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const recorder = new MediaRecorder(stream);
+          
+          // Browser එක Support කරන හොදම Format එක තෝරගන්නවා
+          let options = {};
+          if (MediaRecorder.isTypeSupported('audio/webm')) {
+              options = { mimeType: 'audio/webm' };
+          } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+              options = { mimeType: 'audio/mp4' }; 
+          }
+
+          const recorder = new MediaRecorder(stream, options);
           audioChunks.current = [];
 
           recorder.ondataavailable = (e) => {
@@ -114,9 +145,16 @@ export default function ChatArea({ selectedLead }) {
           };
 
           recorder.onstop = () => {
-              const audioBlob = new Blob(audioChunks.current, { type: 'audio/ogg; codecs=opus' });
-              const audioFile = new File([audioBlob], `Voice_Note_${Date.now()}.ogg`, { type: 'audio/ogg' });
-              setSelectedFile(audioFile); 
+            const currentMimeType = recorder.mimeType || 'audio/mp4';
+            const ext = currentMimeType.includes('mp4') ? 'mp4' : 'webm';
+            const audioBlob = new Blob(audioChunks.current, { type: currentMimeType });
+            
+            const audioFile = new File([audioBlob], `Voice_Note_${Date.now()}.${ext}`, { 
+                type: currentMimeType,
+                lastModified: Date.now()
+            });
+            
+            setSelectedFile(audioFile); 
           };
 
           recorder.start();
@@ -129,7 +167,8 @@ export default function ChatArea({ selectedLead }) {
           }, 1000);
 
       } catch (err) {
-          toast.error("Microphone access denied or not available.");
+          console.error("Mic error:", err);
+          toast.error("Microphone access denied! Please allow mic permissions in your browser.");
       }
   };
 
@@ -201,6 +240,13 @@ export default function ChatArea({ selectedLead }) {
       }
       
       setNewMessage(''); setReplyingTo(null); setSelectedFile(null); setSuggestedQRs([]); setRecordingDuration(0);
+      
+      // අලුත් මැසේජ් එකක් යැව්වම අනිවාර්යෙන් පල්ලෙහාට යන්න ඕනේ
+      isUserScrolledUp.current = false;
+      setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      }, 100);
+
     } catch (error) { toast.error("Failed to send message."); }
     setIsSending(false);
   };
@@ -338,7 +384,7 @@ export default function ChatArea({ selectedLead }) {
       </div>
 
       {/* Messages Area */}
-      <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar relative ${isDark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} ref={scrollRef}>
+      <div className={`flex-1 overflow-y-auto p-4 custom-scrollbar relative ${isDark ? "bg-[#0b141a]" : "bg-[#efeae2]"}`} ref={scrollRef} onScroll={handleScroll}>
         <div className="relative z-10 flex flex-col">
           {Object.keys(groupedMessages).map(dateLabel => (
              <React.Fragment key={dateLabel}>
@@ -393,7 +439,6 @@ export default function ChatArea({ selectedLead }) {
                                         )}
 
                                         {renderMedia(msg)}
-                                        {/* 🔥 FIX: Changed function call here to pass full object 🔥 */}
                                         {!isSticker && renderMessageText(msg)}
 
                                         {!isSticker && (

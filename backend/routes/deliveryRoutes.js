@@ -65,4 +65,6 @@ router.get('/dispatch', deliveryController.getDispatchDeliveries);
 router.get('/history-advanced', deliveryController.getAdvancedHistory);
 router.put('/manual-confirm/:deliveryId', deliveryController.manualConfirmDelivery);
 
+router.get('/stock/report', deliveryController.getTuteDeliveryReport);
+
 module.exports = router;

@@ -64,15 +64,17 @@ export default function CourseView({ courseId, onBack }) {
         }
     };
 
-    // 🔥 Auto Fullscreen එක අයින් කළා. දැන් Click කරාම Inline ලොකු වෙනවා විතරයි.
    const handlePlayVideo = (item) => {
-        setPlayingVideo(item);
-        setTimeout(() => {
-            if (modalRef.current && !document.fullscreenElement) {
-                modalRef.current.requestFullscreen().catch(err => console.log("Fullscreen blocked by browser until user interaction", err));
-            }
-        }, 100);
-    };
+        const url = item.link || item.url || '';
+        
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            // YouTube ලින්ක් එකක් නම්, අලුත් Tab එකක කෙලින්ම YouTube සයිට් එකට යනවා
+            window.open(url, '_blank');
+        } else {
+            // වෙනත් (Google Drive වගේ) ලින්ක් එකක් නම් ඇප් එක ඇතුළෙම ප්ලේ වෙන්න දෙනවා
+            setPlayingVideo({ ...item, secure_link: getEmbedUrl(url) });
+        }
+    };
 
     const handleCloseVideo = () => {
         if (document.fullscreenElement) {
@@ -194,10 +196,10 @@ export default function CourseView({ courseId, onBack }) {
                         <div className="absolute bottom-0 left-0 w-full h-[55px] md:h-[60px] bg-black z-[50]" onContextMenu={e => e.preventDefault()} onClick={e => e.stopPropagation()} />
 
                         <iframe 
-                            src={getEmbedUrl(playingVideo.link)} 
-                            className="w-full h-full border-none pointer-events-auto" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        ></iframe>
+                            src={playingVideo.secure_link || getEmbedUrl(playingVideo.link)} 
+                            className="w-full h-full border-none pointer-events-auto" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        ></iframe>
                     </div>
                 </div>
             ) : (

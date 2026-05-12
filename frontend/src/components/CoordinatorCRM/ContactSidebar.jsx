@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from '../../api/axios'; 
-import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquare, FaEnvelopeOpenText, FaEnvelope, FaUserMinus } from 'react-icons/fa';
+import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquare, FaEnvelopeOpenText, FaEnvelope, FaUserMinus, FaClock, FaLock, FaUserCheck } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 
 export default function ContactSidebar({ activeMode, selectedLead, setSelectedLead, filters }) {
@@ -14,7 +14,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   const [tabCounts, setTabCounts] = useState({ NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
   const [unreadCounts, setUnreadCounts] = useState({ NEW: 0, IMPORTED: 0, ASSIGNED: 0, ALL: 0 });
   const [totalUnread, setTotalUnread] = useState(0);
-  const [loading, setLoading] = useState(false); // 🔥 MISS WELA THIBBE MEKA 🔥
+  const [loading, setLoading] = useState(false); 
   const [coordinators, setCoordinators] = useState([]);
   
   const [checkedLeads, setCheckedLeads] = useState([]);
@@ -30,6 +30,22 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   const [csvFile, setCsvFile] = useState(null);
 
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // 🔥 LOAD MORE STATE 🔥
+  const [visibleCount, setVisibleCount] = useState(50);
+
+  // 🔥 24-Hour Timer Auto Refresh 🔥
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+      const timer = setInterval(() => setCurrentTime(new Date()), 60000); 
+      return () => clearInterval(timer);
+  }, []);
+
+  // 🔥 Reset visible count when tab or search changes 🔥
+  useEffect(() => {
+    setVisibleCount(50);
+  }, [activeTab, searchQuery]);
 
   const fetchLeads = async (showLoading = true) => {
     // 🔥 STRICT BLOCKER: Business eka thoranakam backend ekata call yanne na 🔥
@@ -75,7 +91,6 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
   };
 
   const fetchCoordinatorsAndQuotas = async () => {
-    // 🔥 STRICT BLOCKER: Business eka thoranakam backend ekata call yanne na 🔥
     if (isManager && (!filters || !filters.selectedBusiness)) {
         setCoordinators([]);
         setAutoAssignData([]);
@@ -132,13 +147,16 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
     if (checkedLeads.length === leads.length) setCheckedLeads([]); else setCheckedLeads(leads.map(l => l.id));
   };
 
-  const handleBulkAction = async (action, assignStaffId = null) => {
-    if (checkedLeads.length === 0) return;
+  // 🔥 ACTION DISPATCHERS 🔥
+  const handleBulkAction = async (action, assignStaffId = null, specificLeads = null) => {
+    const leadsToProcess = specificLeads || checkedLeads;
+    if (leadsToProcess.length === 0) return;
     try {
       const token = localStorage.getItem('token');
-      await axios.post('/coordinator-crm/leads/bulk-action', { action, leadIds: checkedLeads, staffId: assignStaffId }, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.post('/coordinator-crm/leads/bulk-action', { action, leadIds: leadsToProcess, staffId: assignStaffId }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success("Action applied successfully!");
-      setCheckedLeads([]); fetchLeads(true);
+      if (!specificLeads) setCheckedLeads([]); 
+      fetchLeads(true);
     } catch (e) { toast.error("Action failed"); }
   };
 
@@ -204,10 +222,19 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
       }
   };
 
-  const filteredLeads = leads.filter(lead => {
-      const searchLower = searchQuery.toLowerCase();
-      return lead.phone.includes(searchLower) || (lead.name && lead.name.toLowerCase().includes(searchLower));
-  });
+  // 🔥 OPTIMIZED SEARCH 🔥
+  const filteredLeads = useMemo(() => {
+      if (!searchQuery) return leads;
+      const q = String(searchQuery).toLowerCase().trim();
+      return leads.filter(lead => {
+          const phoneMatch = lead.phone ? String(lead.phone).toLowerCase().includes(q) : false;
+          const nameMatch = lead.name ? String(lead.name).toLowerCase().includes(q) : false;
+          return phoneMatch || nameMatch;
+      });
+  }, [leads, searchQuery]);
+
+  // 🔥 LOAD MORE LOGIC 🔥
+  const displayedLeads = filteredLeads.slice(0, visibleCount);
 
   const tabs = [
     { id: 'NEW', label: 'New', total: tabCounts.NEW, unread: unreadCounts.NEW },
@@ -225,10 +252,11 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
             <button onClick={() => setCheckedLeads([])} className="text-white/60 hover:text-white"><FaTimes/></button>
           </div>
           <div className="flex items-center gap-2">
-             <button onClick={handleSelectAll} title="Select All" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"><FaCheckSquare/></button>
-             <button onClick={() => handleBulkAction('MARK_READ')} title="Mark Read" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"><FaEnvelopeOpenText/></button>
-             <button onClick={() => handleBulkAction('MARK_UNREAD')} title="Mark Unread" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white"><FaEnvelope/></button>
-             {isManager && <button onClick={() => handleBulkAction('UNASSIGN')} title="Unassign Leads" className="p-2 bg-red-500/20 hover:bg-red-500 rounded-lg text-red-300 hover:text-white"><FaUserMinus/></button>}
+             <button onClick={handleSelectAll} title="Select All" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all"><FaCheckSquare/></button>
+             <button onClick={() => handleBulkAction('MARK_READ')} title="Mark Read" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all"><FaEnvelopeOpenText/></button>
+             <button onClick={() => handleBulkAction('MARK_UNREAD')} title="Mark Unread" className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-all"><FaEnvelope/></button>
+             <button onClick={() => handleBulkAction('ASSIGN', currentUserId)} title="Assign To Me" className="p-2 bg-emerald-500/30 hover:bg-emerald-500 rounded-lg text-emerald-200 hover:text-white transition-all"><FaUserCheck/></button>
+             {isManager && <button onClick={() => handleBulkAction('UNASSIGN')} title="Unassign Leads" className="p-2 bg-red-500/20 hover:bg-red-500 rounded-lg text-red-300 hover:text-white transition-all"><FaUserMinus/></button>}
              {isManager && (
                 <select onChange={(e) => handleBulkAction('ASSIGN', e.target.value)} className="flex-1 bg-white/10 border-none text-white text-xs font-bold rounded-lg p-2 outline-none">
                   <option value="">Assign To...</option>
@@ -265,7 +293,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`relative flex-1 flex flex-col items-center justify-center py-1.5 rounded-lg transition-all ${activeTab === tab.id ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
                 <span className="text-[11px] font-bold tracking-widest uppercase">{tab.label}</span>
                 <span className="text-[9px] font-medium opacity-60 mt-0.5">Total: {tab.total || 0}</span>
-                {tab.unread > 0 && <span className="absolute -top-2 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full">{tab.unread}</span>}
+                {tab.unread > 0 && <span className="absolute -top-2 -right-1 bg-red-500 text-white text-[9px] px-1.5 py-0.5 rounded-full shadow-md">{tab.unread}</span>}
               </button>
             ))}
           </div>
@@ -297,35 +325,98 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 bg-[#1a2430]">
         {loading && leads.length === 0 ? ( <div className="flex justify-center mt-10"><div className="animate-spin h-8 w-8 border-4 border-emerald-600 border-t-transparent rounded-full"></div></div> ) 
         : filteredLeads.length === 0 ? ( <div className="text-center text-slate-600 text-sm mt-10 font-medium">No contacts found.</div> ) : (
-          filteredLeads.map(lead => (
-            <div key={lead.id} className={`p-3 rounded-2xl mb-2 transition-all flex gap-3 items-center border ${selectedLead?.id === lead.id ? 'bg-[#0f172a] border-emerald-600/50 shadow-md' : 'bg-[#121a24] border-transparent hover:border-white/10'}`}>
-              <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                 <input type="checkbox" checked={checkedLeads.includes(lead.id)} onChange={(e) => { if (e.target.checked) setCheckedLeads([...checkedLeads, lead.id]); else setCheckedLeads(checkedLeads.filter(id => id !== lead.id)); }} className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" />
-              </div>
+          <>
+            {displayedLeads.map(lead => {
+                
+              // 🔥 24-Hour Active Window Logic 🔥
+              const leadTime = new Date(lead.updatedAt || lead.createdAt);
+              const hoursPassed = (currentTime.getTime() - leadTime.getTime()) / (1000 * 60 * 60);
 
-              <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => handleLeadClick(lead)}>
-                <FaUserCircle className="text-3xl text-slate-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-0.5">
-                    <h4 className="font-bold text-[16px] text-slate-200">{lead.phone}</h4>
-                    <div className="text-right">
-                       <span className="text-[10px] text-emerald-500 font-bold block">{new Date(lead.updatedAt).toLocaleDateString('en-GB')}</span>
-                       <span className="text-[9px] text-slate-500 block">{new Date(lead.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+              let overlayClass = 'bg-[#121a24] border-transparent hover:border-white/10'; // Default
+              let timeIcon = null;
+
+              if (hoursPassed >= 24) {
+                  overlayClass = 'bg-red-900/20 border-red-500/30 hover:border-red-500/50'; 
+                  timeIcon = <span className="text-[9px] text-red-400 font-bold flex items-center gap-1"><FaClock/> Expired</span>;
+              } else if (hoursPassed >= 20) {
+                  overlayClass = 'bg-yellow-900/20 border-yellow-500/30 hover:border-yellow-500/50'; 
+                  timeIcon = <span className="text-[9px] text-yellow-400 font-bold flex items-center gap-1"><FaClock/> Expiring Soon</span>;
+              } else {
+                  overlayClass = 'bg-emerald-900/20 border-emerald-500/30 hover:border-emerald-500/50'; 
+                  timeIcon = <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1"><FaCheckSquare/> Active Window</span>;
+              }
+
+              if (selectedLead?.id === lead.id) {
+                  overlayClass = 'bg-[#0f172a] border-blue-500 shadow-md shadow-blue-500/20';
+              }
+
+              return (
+              <div key={lead.id} className={`p-3 rounded-2xl mb-2 transition-all flex gap-3 items-center border ${overlayClass}`}>
+                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                   <input type="checkbox" checked={checkedLeads.includes(lead.id)} onChange={(e) => { if (e.target.checked) setCheckedLeads([...checkedLeads, lead.id]); else setCheckedLeads(checkedLeads.filter(id => id !== lead.id)); }} className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" />
+                </div>
+
+                <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => handleLeadClick(lead)}>
+                  <FaUserCircle className="text-3xl text-slate-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                      
+                      <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-[15px] text-slate-200 leading-none">{lead.phone}</h4>
+                              {lead.unreadCount > 0 && (
+                                  <span className="flex items-center justify-center bg-red-500 text-white text-[10px] font-black h-[18px] min-w-[18px] px-1 rounded-full shadow-md shadow-red-500/40">
+                                      {lead.unreadCount}
+                                  </span>
+                              )}
+                          </div>
+                          
+                          {lead.assignedUser ? (
+                              <span className="text-[10px] text-blue-400 font-semibold mt-0.5">👤 {lead.assignedUser.firstName} {lead.assignedUser.lastName}</span>
+                          ) : (
+                              (!lead.assignedTo && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleBulkAction('ASSIGN', currentUserId, [lead.id]); }} className="text-[9px] w-max bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-md flex items-center gap-1 transition-all mt-1">
+                                     <FaUserCheck size={10}/> Assign to me
+                                  </button>
+                              ))
+                          )}
+                      </div>
+                      
+                      <div className="flex flex-col items-end shrink-0 ml-2 gap-1.5">
+                          <div className="text-right">
+                              <span className="text-[10px] text-emerald-500 font-bold block mb-0.5">{new Date(lead.updatedAt).toLocaleDateString('en-GB')}</span>
+                              <span className="text-[9px] text-slate-500 block">{new Date(lead.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          </div>
+                      </div>
                     </div>
-                  </div>
-                  
-                  {lead.assignedUser && (
-                     <div className="text-[10px] text-blue-400 font-semibold mb-1">👤 {lead.assignedUser.firstName} {lead.assignedUser.lastName}</div>
-                  )}
 
-                  <div className="flex justify-between items-center mt-1">
-                    <p className="text-[11px] font-medium text-slate-500 truncate w-[70%]">{lead.lastMessage || 'No messages'}</p>
-                    {lead.unreadCount > 0 && <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 shadow-lg">{lead.unreadCount} NEW</span>}
+                    {lead.isLocked && (
+                       <div className="text-[9px] text-red-400 font-black mt-1 mb-1 flex items-center gap-1 bg-red-500/10 w-max px-2 py-0.5 rounded"><FaLock/> 24H LOCKED</div>
+                    )}
+
+                    <div className="flex justify-between items-end mt-1">
+                      <p className="text-[11px] font-medium text-slate-500 truncate w-[60%]">{lead.lastMessage || 'No messages'}</p>
+                      <div className="flex flex-col items-end gap-1">
+                          {timeIcon}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))
+            )})}
+            
+            {/* 🔥 LOAD MORE BUTTON 🔥 */}
+            {filteredLeads.length > visibleCount && (
+                <div className="flex justify-center mt-4 mb-2">
+                    <button 
+                        onClick={() => setVisibleCount(prev => prev + 50)} 
+                        className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold py-2 px-6 rounded-full transition-colors shadow-lg"
+                    >
+                        Load More Leads
+                    </button>
+                </div>
+            )}
+          </>
         )}
       </div>
 
@@ -422,7 +513,7 @@ export default function ContactSidebar({ activeMode, selectedLead, setSelectedLe
                     <button type="submit" className="w-full bg-emerald-600 text-white font-bold py-2 rounded-lg text-sm">Import Single</button>
                   </form>
                </div>
-            </div>
+             </div>
          </div>
       )}
     </div>

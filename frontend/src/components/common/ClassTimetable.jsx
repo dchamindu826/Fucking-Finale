@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, BookOpen, User, X, Trash2, Filter } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, BookOpen, User, X, Trash2, Filter, Building2, Layers } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
 
@@ -106,7 +106,7 @@ export default function ClassTimetable() {
   const blanks = Array(firstDayOfMonth).fill(null);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
 
-  // 🔥 FIX: Exact Local Date Converter to prevent "Today falls to Yesterday" Bug 🔥
+  // Exact Local Date Converter to prevent "Today falls to Yesterday" Bug
   const getLocalDateStr = (isoString) => {
     if (!isoString) return '';
     const d = new Date(isoString);
@@ -169,107 +169,152 @@ export default function ClassTimetable() {
     return null;
   };
 
-  return (
-    <div className="w-full text-slate-200 font-sans pb-4">
-      {/* HEADER & FILTERS */}
-      <div className="mb-6 bg-[#1e293b] border border-slate-800 p-5 rounded-xl shadow-sm">
-        <h2 className="text-xl font-bold text-white flex items-center gap-3 mb-5">
-          <Calendar className="text-blue-500" size={24} /> Class Timetable
-        </h2>
-        
-        <div className="flex flex-col md:flex-row gap-4 items-center bg-[#0f172a] p-3 rounded-lg border border-slate-700">
-          <Filter size={18} className="text-slate-400 shrink-0 ml-2" />
-          <select value={selectedBiz} onChange={handleBusinessChange} className="w-full md:w-1/3 bg-transparent text-sm text-white outline-none focus:border-blue-500 border-none cursor-pointer">
-            <option value="" className="bg-slate-800">-- Select Business --</option>
-            {businesses.map(b => <option key={b.id} value={b.id} className="bg-slate-800">{b.name}</option>)}
-          </select>
+  const getBusinessName = () => businesses.find(b => b.id.toString() === selectedBiz?.toString())?.name || '';
 
-          <select 
-            value={selectedBatch?.id || ''} 
-            onChange={(e) => {
-              const batch = batches.find(b => b.id.toString() === e.target.value);
-              setSelectedBatch(batch);
-            }} 
-            disabled={!selectedBiz}
-            className="w-full md:w-1/3 bg-transparent text-sm text-white outline-none focus:border-blue-500 disabled:opacity-50 border-none cursor-pointer"
-          >
-            <option value="" className="bg-slate-800">-- Select Batch to View Calendar --</option>
-            {batches.map(b => <option key={b.id} value={b.id} className="bg-slate-800">{b.name}</option>)}
-          </select>
+  return (
+    <div className="w-full text-slate-200 font-sans pb-10 animate-in fade-in duration-300">
+      
+      {/* HEADER & FILTERS */}
+      <div className="mb-6 bg-slate-800/40 backdrop-blur-xl border border-white/10 p-6 rounded-3xl shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-blue-400">
+            <Calendar size={28} />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white tracking-wide">Class Timetable</h2>
+            <p className="text-slate-400 text-sm font-medium mt-1">Schedule and manage upcoming classes & events</p>
+          </div>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-4 w-full xl:w-auto bg-black/30 p-2 rounded-2xl border border-white/5">
+          <div className="relative flex-1 sm:w-64">
+            <Building2 size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <select value={selectedBiz} onChange={handleBusinessChange} className="w-full bg-transparent border-none text-sm font-bold text-white outline-none focus:ring-0 appearance-none pl-11 pr-4 py-3 cursor-pointer">
+              <option value="" className="bg-slate-800">-- Select Business --</option>
+              {businesses.map(b => <option key={b.id} value={b.id} className="bg-slate-800">{b.name}</option>)}
+            </select>
+          </div>
+          <div className="hidden sm:block w-px bg-white/10 my-2"></div>
+          <div className="relative flex-1 sm:w-64">
+            <Layers size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+            <select 
+              value={selectedBatch?.id || ''} 
+              onChange={(e) => {
+                const batch = batches.find(b => b.id.toString() === e.target.value);
+                setSelectedBatch(batch);
+              }} 
+              disabled={!selectedBiz}
+              className="w-full bg-transparent border-none text-sm font-bold text-white outline-none focus:ring-0 appearance-none pl-11 pr-4 py-3 disabled:opacity-50 cursor-pointer"
+            >
+              <option value="" className="bg-slate-800">-- Select Batch --</option>
+              {batches.map(b => <option key={b.id} value={b.id} className="bg-slate-800">{b.name}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
+      {/* DYNAMIC BATCH HEADER */}
+      {selectedBiz && selectedBatch && (
+        <div className="mb-6 bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 p-5 md:p-6 rounded-3xl flex items-center justify-between shadow-lg">
+           <div>
+               <h3 className="text-blue-300 font-bold text-xs uppercase tracking-widest mb-1">{getBusinessName()}</h3>
+               <h2 className="text-xl md:text-2xl font-black text-white">{selectedBatch.name}</h2>
+           </div>
+           <div className="hidden md:flex items-center gap-3">
+              <div className="bg-black/40 px-4 py-2 rounded-xl border border-white/10">
+                <span className="text-slate-400 text-xs font-bold uppercase block text-center">Total Classes</span>
+                <span className="text-white text-lg font-black block text-center">{schedule.length}</span>
+              </div>
+           </div>
+        </div>
+      )}
+
       {/* CALENDAR SECTION */}
       {selectedBatch ? (
-        <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-xl shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-white uppercase tracking-widest">
+        <div className="bg-slate-800/40 backdrop-blur-xl border border-white/10 p-4 md:p-8 rounded-3xl shadow-xl">
+          
+          {/* Calendar Header */}
+          <div className="flex justify-between items-center mb-8 bg-black/20 p-3 pl-6 rounded-2xl border border-white/5">
+            <h3 className="text-xl md:text-2xl font-black text-white uppercase tracking-wider">
               {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
             </h3>
             <div className="flex gap-2">
-              <button onClick={prevMonth} className="p-2 bg-[#0f172a] hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700">
-                <ChevronLeft size={18} />
+              <button onClick={prevMonth} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-colors border border-white/10 shadow-sm">
+                <ChevronLeft size={20} />
               </button>
-              <button onClick={nextMonth} className="p-2 bg-[#0f172a] hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700">
-                <ChevronRight size={18} />
+              <button onClick={nextMonth} className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl transition-colors border border-white/10 shadow-sm">
+                <ChevronRight size={20} />
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-3 mb-2">
-            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(day => (
-              <div key={day} className="text-center font-bold text-slate-500 text-xs tracking-widest pb-2 border-b border-slate-700/50">
+          {/* Days of Week */}
+          <div className="grid grid-cols-7 gap-2 md:gap-4 mb-4">
+            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day, idx) => (
+              <div key={day} className={`text-center font-black text-[10px] md:text-xs tracking-widest pb-3 border-b-2 ${idx === 0 || idx === 6 ? 'text-blue-400 border-blue-500/30' : 'text-slate-500 border-white/5'}`}>
                 {day}
               </div>
             ))}
           </div>
 
-          <div className="grid grid-cols-7 gap-3">
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-2 md:gap-4">
+            {/* Blank Cells */}
             {blanks.map((_, i) => (
-              <div key={`blank-${i}`} className="min-h-[100px] rounded-xl bg-transparent"></div>
+              <div key={`blank-${i}`} className="min-h-[100px] md:min-h-[140px] rounded-2xl bg-white/5 border border-white/5 opacity-40"></div>
             ))}
             
+            {/* Actual Days */}
             {days.map(day => {
               const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-              // 🔥 FIX: Match events based on converted Local Date 🔥
               const dayEvents = schedule.filter(e => getLocalDateStr(e.date) === dateStr);
-              
               const isToday = getLocalDateStr(new Date().toISOString()) === dateStr;
 
               return (
                 <div 
                   key={day} 
                   onClick={() => { if(canEdit) { setSelectedDay(day); setShowAddModal(true); } }}
-                  className={`min-h-[100px] p-2.5 rounded-xl border transition-colors relative group ${
-                    canEdit ? 'cursor-pointer hover:border-slate-500' : ''
-                  } ${isToday ? 'bg-[#0f172a] border-blue-500' : 'bg-[#0f172a] border-slate-800'}`}
+                  className={`min-h-[110px] md:min-h-[140px] p-2 md:p-3 rounded-2xl border transition-all relative flex flex-col group overflow-hidden ${
+                    canEdit ? 'cursor-pointer hover:border-blue-500/50 hover:bg-white/10' : ''
+                  } ${isToday ? 'bg-blue-600/10 border-blue-500/40 shadow-[inset_0_0_20px_rgba(59,130,246,0.1)]' : 'bg-black/30 border-white/5'}`}
                 >
-                  <span className={`text-sm font-bold block mb-1.5 ${isToday ? 'text-blue-400' : 'text-slate-400'}`}>
-                    {day}
-                  </span>
+                  {/* Day Number */}
+                  <div className="flex justify-between items-start mb-2">
+                    <span className={`flex items-center justify-center text-sm md:text-base font-black w-7 h-7 md:w-8 md:h-8 rounded-full z-10 ${
+                      isToday ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/40' : 'text-slate-400 group-hover:text-white'
+                    }`}>
+                      {day}
+                    </span>
+                    {canEdit && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-400 bg-blue-500/10 p-1.5 rounded-lg">
+                            <Plus size={14}/>
+                        </div>
+                    )}
+                  </div>
                   
-                  <div className="flex flex-col gap-1.5 relative z-10">
+                  {/* Events Container */}
+                  <div className="flex-1 flex flex-col gap-2 overflow-y-auto custom-scrollbar relative z-10">
                     {dayEvents.map(event => {
                       const lecImg = getLecturerImage(event.lecturerName);
                       return (
                       <div 
                         key={event.id} 
                         onClick={(e) => { e.stopPropagation(); setSelectedEvent(event); setShowViewModal(true); }}
-                        className="bg-[#1e3a8a]/40 border border-blue-900/50 hover:bg-[#1e3a8a]/60 p-1.5 rounded-md cursor-pointer transition-colors flex items-center justify-between gap-1"
+                        className="bg-gradient-to-br from-blue-500/20 to-blue-600/5 border border-blue-500/30 hover:border-blue-400 hover:from-blue-500/30 p-2 md:p-2.5 rounded-xl cursor-pointer transition-all shadow-sm"
                       >
-                        <div className="overflow-hidden">
-                            <p className="text-[10px] font-bold text-blue-200 truncate">{event.subjectName}</p>
-                            <p className="text-[9px] text-blue-300 flex items-center gap-1 mt-0.5 whitespace-nowrap">
-                              <Clock size={8}/> {event.startTime} - {event.endTime}
-                            </p>
+                        <h4 className="font-bold text-white text-[10px] md:text-xs truncate leading-tight" title={event.subjectName}>{event.subjectName}</h4>
+                        <div className="flex items-center justify-between mt-1.5 gap-2">
+                            <span className="text-[9px] md:text-[10px] text-blue-300 font-semibold flex items-center gap-1 bg-black/40 px-1.5 py-0.5 rounded-md truncate">
+                                <Clock size={10}/> {event.startTime}
+                            </span>
+                            {lecImg ? (
+                                <img src={lecImg} alt={event.lecturerName} className="w-4 h-4 md:w-5 md:h-5 rounded-full object-cover shrink-0 border border-blue-500/50" />
+                            ) : (
+                                <div className="w-4 h-4 md:w-5 md:h-5 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 border border-blue-500/30">
+                                    <User size={10} className="text-blue-300" />
+                                </div>
+                            )}
                         </div>
-                        {lecImg ? (
-                            <img src={lecImg} alt={event.lecturerName} className="w-5 h-5 rounded-full object-cover shrink-0" />
-                        ) : (
-                            <div className="w-5 h-5 rounded-full bg-white/5 flex items-center justify-center shrink-0">
-                                <User size={10} className="text-blue-400" />
-                            </div>
-                        )}
                       </div>
                     )})}
                   </div>
@@ -279,71 +324,76 @@ export default function ClassTimetable() {
           </div>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-64 bg-[#1e293b] rounded-xl border border-slate-800">
-          <Calendar size={40} className="text-slate-600 mb-3" />
-          <p className="text-slate-400 font-medium text-sm">Please select a Business and Batch to view the timetable.</p>
+        <div className="flex flex-col items-center justify-center h-80 bg-slate-800/40 rounded-3xl border border-white/5 backdrop-blur-xl shadow-lg">
+          <div className="w-20 h-20 bg-black/40 rounded-full flex items-center justify-center mb-4 border border-white/10 shadow-inner">
+            <Calendar size={40} className="text-slate-600" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">No Timetable Selected</h3>
+          <p className="text-slate-400 font-medium text-sm text-center px-4 max-w-md">Please select a Business and a Batch from the filters above to view or manage the class schedule.</p>
         </div>
       )}
 
+      {/* ----------------- MODALS ----------------- */}
+
       {/* SCHEDULE ADD MODAL */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4">
-          <div className="bg-[#1e293b] border border-slate-700 rounded-xl p-6 w-full max-w-sm shadow-xl relative">
-            <div className="flex justify-between items-start mb-5">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-800/95 border border-white/10 rounded-3xl p-8 w-full max-w-md shadow-2xl relative backdrop-blur-2xl">
+            <div className="flex justify-between items-start mb-8">
               <div>
-                <h3 className="text-xl font-bold text-white mb-2">Schedule Class</h3>
-                <span className="bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded text-xs font-bold border border-indigo-500/20">
-                  {currentDate.getFullYear()}-{String(currentDate.getMonth() + 1).padStart(2, '0')}-{String(selectedDay).padStart(2, '0')}
+                <h3 className="text-2xl font-black text-white mb-2">Schedule Class</h3>
+                <span className="bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/20 uppercase tracking-widest">
+                  Date: {currentDate.getFullYear()}-{String(currentDate.getMonth() + 1).padStart(2, '0')}-{String(selectedDay).padStart(2, '0')}
                 </span>
               </div>
-              <button onClick={() => setShowAddModal(false)} className="bg-[#0f172a] p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors"><X size={16}/></button>
+              <button onClick={() => setShowAddModal(false)} className="bg-black/20 p-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-red-500 transition-colors"><X size={18}/></button>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="space-y-4">
+            <form onSubmit={handleAddSubmit} className="space-y-5">
               <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1 block">Subject *</label>
-                <select name="subjectName" required className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500">
-                  <option value="">Select Subject</option>
-                  {subjects.map((sub, i) => <option key={i} value={sub.name}>{sub.name}</option>)}
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Subject *</label>
+                <select name="subjectName" required className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-sm text-white font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                  <option value="" className="bg-slate-800">-- Select Subject --</option>
+                  {subjects.map((sub, i) => <option key={i} value={sub.name} className="bg-slate-800">{sub.name}</option>)}
                 </select>
               </div>
               
               <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1 block">Title/Topic *</label>
-                <input type="text" name="title" required placeholder="e.g. Mechanics Part 1" className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500" />
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Title/Topic *</label>
+                <input type="text" name="title" required placeholder="e.g. Mechanics Part 1" className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-sm text-white font-medium outline-none focus:border-blue-500 transition-colors" />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 mb-1 block">Start Time *</label>
-                  <input type="time" name="startTime" required className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500 [color-scheme:dark]" />
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block flex items-center gap-1"><Clock size={12}/> Start Time</label>
+                  <input type="time" name="startTime" required className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-sm text-white font-bold outline-none focus:border-blue-500 [color-scheme:dark] transition-colors" />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 mb-1 block">End Time *</label>
-                  <input type="time" name="endTime" required className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500 [color-scheme:dark]" />
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block flex items-center gap-1"><Clock size={12}/> End Time</label>
+                  <input type="time" name="endTime" required className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-sm text-white font-bold outline-none focus:border-blue-500 [color-scheme:dark] transition-colors" />
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 p-3 bg-[#0f172a] border border-slate-700 rounded-lg">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" name="optionalMCQ" className="w-4 h-4 accent-blue-500" />
-                      <span className="text-xs font-medium text-slate-300">Require MCQ Paper Task</span>
+              <div className="flex flex-col gap-3 p-4 bg-black/30 border border-white/5 rounded-xl shadow-inner">
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                      <input type="checkbox" name="optionalMCQ" className="w-5 h-5 accent-blue-500 shrink-0" />
+                      <span className="text-sm font-semibold text-slate-300 group-hover:text-white transition-colors">Require <span className="text-blue-400">MCQ Paper</span> Task</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" name="optionalPaper" className="w-4 h-4 accent-blue-500" />
-                      <span className="text-xs font-medium text-slate-300">Require Structured Paper Task</span>
+                  <label className="flex items-center gap-3 cursor-pointer group">
+                      <input type="checkbox" name="optionalPaper" className="w-5 h-5 accent-blue-500 shrink-0" />
+                      <span className="text-sm font-semibold text-slate-300 group-hover:text-white transition-colors">Require <span className="text-blue-400">Structured Paper</span> Task</span>
                   </label>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-400 mb-1 block">Lecturer (Optional)</label>
-                <select name="lecturerName" className="w-full bg-[#0f172a] border border-slate-700 rounded-lg p-2.5 text-sm text-white outline-none focus:border-blue-500">
-                  <option value="">Not Assigned</option>
-                  {lecturers.map((lec, i) => <option key={i} value={lec.name}>{lec.name}</option>)}
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Lecturer (Optional)</label>
+                <select name="lecturerName" className="w-full bg-black/40 border border-white/10 rounded-xl p-3.5 text-sm text-white font-bold outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                  <option value="" className="bg-slate-800">Not Assigned</option>
+                  {lecturers.map((lec, i) => <option key={i} value={lec.name} className="bg-slate-800">{lec.name}</option>)}
                 </select>
               </div>
 
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-3 rounded-lg mt-2 transition-colors text-sm">
+              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-xl mt-4 transition-transform hover:scale-[1.02] text-sm uppercase tracking-widest shadow-lg shadow-blue-500/20">
                 Save to Schedule
               </button>
             </form>
@@ -351,42 +401,49 @@ export default function ClassTimetable() {
         </div>
       )}
 
-      {/* VIEW / EDIT MODAL */}
+      {/* VIEW / CANCEL MODAL */}
       {showViewModal && selectedEvent && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4">
-          <div className="bg-[#1e293b] border border-slate-700 rounded-xl p-6 w-full max-w-sm shadow-xl relative">
-            <div className="flex justify-between items-start mb-5">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-800/95 border border-white/10 rounded-3xl p-8 w-full max-w-sm shadow-2xl relative backdrop-blur-2xl">
+            <div className="flex justify-between items-start mb-6 border-b border-white/10 pb-6">
               <div>
-                <h3 className="text-xl font-bold text-white mb-2">{selectedEvent.subjectName}</h3>
-                <span className="bg-indigo-500/20 text-indigo-300 px-2.5 py-1 rounded text-xs font-bold border border-indigo-500/20">
+                <h3 className="text-2xl font-black text-white mb-2 leading-tight">{selectedEvent.subjectName}</h3>
+                <span className="bg-indigo-500/10 text-indigo-400 px-3 py-1.5 rounded-lg text-[10px] uppercase font-black tracking-widest border border-indigo-500/20">
                   {selectedEvent.date.split('T')[0]}
                 </span>
               </div>
-              <button onClick={() => setShowViewModal(false)} className="bg-[#0f172a] p-1.5 rounded-lg border border-slate-700 text-slate-400 hover:text-white transition-colors"><X size={16}/></button>
+              <button onClick={() => setShowViewModal(false)} className="bg-black/20 p-2.5 rounded-xl border border-white/10 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors shrink-0"><X size={18}/></button>
             </div>
 
-            <div className="space-y-4 bg-[#0f172a] p-4 rounded-lg border border-slate-700 mb-5">
-              <div className="flex items-start gap-3">
-                <BookOpen className="text-slate-400 mt-0.5" size={16} />
+            <div className="space-y-4 bg-black/30 p-5 rounded-2xl border border-white/5 mb-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-blue-500/10 p-2.5 rounded-xl text-blue-400 border border-blue-500/20"><BookOpen size={20} /></div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Topic</p>
-                  <p className="text-sm text-white font-medium">{selectedEvent.title}</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Topic / Details</p>
+                  <p className="text-base text-white font-bold">{selectedEvent.title}</p>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <Clock className="text-slate-400 mt-0.5" size={16} />
+              <div className="flex items-start gap-4">
+                <div className="bg-orange-500/10 p-2.5 rounded-xl text-orange-400 border border-orange-500/20"><Clock size={20} /></div>
                 <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Time</p>
-                  <p className="text-sm text-white font-medium">{selectedEvent.startTime} - {selectedEvent.endTime}</p>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Time Allocation</p>
+                  <p className="text-base text-white font-bold">{selectedEvent.startTime} — {selectedEvent.endTime}</p>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                <User className="text-slate-400 mt-0.5" size={16} />
-                <div>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Lecturer</p>
-                  <p className="text-sm text-white font-medium">{selectedEvent.lecturerName || 'TBA'}</p>
+              <div className="flex items-start gap-4">
+                <div className="bg-emerald-500/10 p-2.5 rounded-xl text-emerald-400 border border-emerald-500/20"><User size={20} /></div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Lecturer</p>
+                  <div className="flex items-center gap-3 mt-1">
+                      {getLecturerImage(selectedEvent.lecturerName) ? (
+                          <img src={getLecturerImage(selectedEvent.lecturerName)} className="w-8 h-8 rounded-full border border-white/20 object-cover" alt="Lec"/>
+                      ) : (
+                          <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center border border-white/10"><User size={14} className="text-slate-400"/></div>
+                      )}
+                      <p className="text-base text-white font-bold">{selectedEvent.lecturerName || 'TBA'}</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -394,9 +451,9 @@ export default function ClassTimetable() {
             {canEdit && (
               <button 
                 onClick={() => handleDeleteEvent(selectedEvent.id)} 
-                className="w-full bg-[#0f172a] hover:bg-red-500/10 text-red-400 border border-slate-700 hover:border-red-500/30 font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
+                className="w-full bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 font-black py-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm uppercase tracking-widest shadow-lg"
               >
-                <Trash2 size={16}/> Cancel Class
+                <Trash2 size={18}/> Cancel Class
               </button>
             )}
           </div>

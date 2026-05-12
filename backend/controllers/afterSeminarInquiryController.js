@@ -83,10 +83,10 @@ exports.getLeads = async (req, res) => {
 
         if (businessId && businessId !== '') {
             whereClause.OR = [
-    { phone: { endsWith: `BIZ_${businessId}` } },
-    { phone: { endsWith: `BIZ_${businessId}_AS` } },
-    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
-];
+                { phone: { endsWith: `BIZ_${businessId}` } },
+                { phone: { endsWith: `BIZ_${businessId}_AS` } },
+                { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+            ];
         }
         if (batchId && batchId !== '') whereClause.batchId = parseInt(batchId);
         if (paymentGroup && paymentGroup !== '') whereClause.paymentIntention = paymentGroup;
@@ -122,7 +122,6 @@ exports.getLeads = async (req, res) => {
 
                 // 24 Hour Delay Check (For pending calls)
                 if (hoursPassed >= 24 && l.phase === 1 && (!l.callStatus || l.callStatus === 'pending')) {
-                    // 🔥 NEW_INQ වලට විතරක් Lock එක අයින් කළා 🔥
                     if (l.inquiryType !== 'NEW_INQ') {
                         leads[i].isLocked = true; 
                     } else {
@@ -132,11 +131,18 @@ exports.getLeads = async (req, res) => {
                     leads[i].isLocked = false;
                 }
 
-                // 5 Days Non-Enrolled Delay Check
-                if (daysPassed >= 5 && l.enrollmentStatus === 'NON_ENROLLED') {
+                // 🔥 2nd Round: 5 Days Delay Check (All leads) 🔥
+                if (daysPassed >= 5) {
                     leads[i].needs5DayCall = true; 
                 } else {
                     leads[i].needs5DayCall = false;
+                }
+
+                // 🔥 3rd Round: 10 Days Non-Enrolled Delay Check 🔥
+                if (daysPassed >= 10 && l.enrollmentStatus === 'NON_ENROLLED') {
+                    leads[i].needs10DayCall = true; 
+                } else {
+                    leads[i].needs10DayCall = false;
                 }
             }
 
@@ -176,7 +182,7 @@ exports.getLeads = async (req, res) => {
                         if (l.enrollmentStatus !== 'ENROLLED' || l.paymentIntention !== actualIntention) {
                             updateData.enrollmentStatus = 'ENROLLED';
                             updateData.paymentIntention = actualIntention;
-                            updateData.isLocked = false; // Reset lock if they paid
+                            updateData.isLocked = false; 
                             needsUpdate = true;
                         }
 
@@ -352,10 +358,10 @@ exports.assignLeads = async (req, res) => {
                 whereClause.batchId = parseInt(batchId);
             } else if (businessId && businessId !== '') {
                 whereClause.OR = [
-    { phone: { endsWith: `BIZ_${businessId}` } },
-    { phone: { endsWith: `BIZ_${businessId}_AS` } },
-    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
-];
+                    { phone: { endsWith: `BIZ_${businessId}` } },
+                    { phone: { endsWith: `BIZ_${businessId}_AS` } },
+                    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+                ];
             }
 
             if (assignType === 'NEW_INQ') whereClause.inquiryType = 'NEW_INQ';
@@ -412,7 +418,6 @@ exports.updateCallCampaign = async (req, res) => {
             if (lead.phase === 1) nextPhase = 2;
             else if (lead.phase === 2) nextPhase = 3;
         } else if (status === 'answered' || status === 'reject') {
-            // Once handled, you might want to stop phase progression, or keep as is.
              nextPhase = lead.phase;
         }
 
@@ -428,7 +433,7 @@ exports.updateCallCampaign = async (req, res) => {
                 feedback: feedback !== undefined ? feedback : lead.feedback, 
                 phase: nextPhase,
                 coordinationRound: coordinationRound !== undefined ? parseInt(coordinationRound) : lead.coordinationRound,
-                callAttempt: callAttempt !== undefined ? parseInt(callAttempt) : lead.callAttempt, // 🔥 NEW: Track attempt separate from round
+                callAttempt: callAttempt !== undefined ? parseInt(callAttempt) : lead.callAttempt,
                 paymentIntention: paymentIntention || lead.paymentIntention,
                 enrollmentStatus: enrollmentStatus || lead.enrollmentStatus,
                 inquiryType: inquiryType || lead.inquiryType,
@@ -469,10 +474,10 @@ exports.getAllCampaignLeads = async (req, res) => {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
-    { phone: { endsWith: `BIZ_${businessId}` } },
-    { phone: { endsWith: `BIZ_${businessId}_AS` } },
-    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
-];
+                { phone: { endsWith: `BIZ_${businessId}` } },
+                { phone: { endsWith: `BIZ_${businessId}_AS` } },
+                { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+            ];
         }
         
         const leads = await prisma.lead.findMany({ where: whereClause, orderBy: { updatedAt: 'desc' } }); 
@@ -524,7 +529,7 @@ const downloadMetaMedia = async (mediaId, metaApiKey) => {
 };
 
 // ==========================================
-// 6. RECEIVE MESSAGE WEBHOOK (WITH DEEP DEBUGGING)
+// 6. RECEIVE MESSAGE WEBHOOK (WITH FULL BUTTON SUPPORT)
 // ==========================================
 exports.receiveMessage = async (req, res) => {
     try {
@@ -536,6 +541,11 @@ exports.receiveMessage = async (req, res) => {
             let phone = msgData.from; 
             let name = contactData?.profile?.name || "Unknown"; 
             let metaMsgId = msgData.id; 
+
+            // 🔥 FULL DEBUG LOG 🔥
+            console.log("\n🟢 ====== INCOMING MESSAGE WEBHOOK ======");
+            console.log(JSON.stringify(msgData, null, 2));
+            console.log("=========================================\n");
 
             const existingMessage = await prisma.chatMessage.findFirst({
                 where: { metaMessageId: metaMsgId }
@@ -563,36 +573,45 @@ exports.receiveMessage = async (req, res) => {
                 messageText = mediaObj.caption || mediaObj.filename || `${msgData.type.toUpperCase()} Message`;
                 const mediaRes = await downloadMetaMedia(mediaObj.id, settings.metaApiKey);
                 if (mediaRes) { mediaUrl = mediaRes.url; mediaType = mediaRes.type; }
-            } else if (msgData.type === "interactive" && msgData.interactive?.type === "button_reply") {
+            } 
+            else if (msgData.type === "interactive" && msgData.interactive?.type === "button_reply") {
                 interactiveId = msgData.interactive.button_reply.id; 
                 messageText = msgData.interactive.button_reply.title; 
                 if (interactiveId === "FU_YES" || interactiveId === "FU_NO") isFollowUpReply = true;
-            } else if (msgData.text) {
+            } 
+            else if (msgData.type === "button" && msgData.button) {
+                interactiveId = msgData.button.payload; 
+                messageText = msgData.button.text; 
+            } 
+            else if (msgData.text) {
                 messageText = msgData.text.body;
+            } 
+            else {
+                messageText = `Unsupported Message (${msgData.type})`;
             }
 
             let parsedBatchId = settings.batchId ? parseInt(settings.batchId) : null;
             let dbPhone = `${phone}_BIZ_${settings.businessId}`;
             if (parsedBatchId) dbPhone += `_BATCH_${parsedBatchId}`;
 
-
             // ========================================================
             // 1. AFTER SEMINAR MESSAGE EKAK NAM
             // ========================================================
             if (settings.campaignType === 'AFTER_SEMINAR') {
-                console.log(`\n\n======================================================`);
-                console.log(`🚀 [AFTER_SEMINAR WEBHOOK] NEW MESSAGE TRIGGERED!`);
-                console.log(`📱 Phone: ${phone} | Text: "${messageText}"`);
-                console.log(`======================================================`);
-                
                 const msgLower = (messageText || "").toLowerCase().trim();
                 const existingLeadCheck = await prisma.lead.findUnique({ where: { phone: dbPhone } });
 
                 const isRestartCommand = ['hi', 'hello', 'hey', 'menu', 'start'].includes(msgLower);
                 const timeSinceLastMsg = existingLeadCheck && existingLeadCheck.updatedAt ? new Date() - new Date(existingLeadCheck.updatedAt) : 10000;
-                const isSpamming = timeSinceLastMsg < 2000; 
+                
+                // 🔥 FIX 1: Spam limit changed to 10000 (10 seconds)
+                const isSpamming = timeSinceLastMsg < 10000; 
+
                 let resetData = {};
-                if (isRestartCommand) resetData = { autoReplyStep: 0, sequenceCompleted: false };
+                // 🔥 FIX 2: Reset sequence if user types 'hi' OR if they message again after 12 hours
+                if (isRestartCommand || timeSinceLastMsg > 43200000) { 
+                    resetData = { autoReplyStep: 0, sequenceCompleted: false };
+                }
 
                 let detInquiryType = 'NEW_INQ'; 
                 let newInqTs = null;
@@ -640,7 +659,6 @@ exports.receiveMessage = async (req, res) => {
                     });
                 } catch (upsertError) {
                     if (upsertError.code === 'P2002' && upsertError.meta?.target?.includes('phone')) {
-                        console.warn(`⚠️ Concurrency issue detected for ${dbPhone}. Retrying...`);
                         await new Promise(resolve => setTimeout(resolve, 50)); 
                         existingLead = await prisma.lead.update({
                             where: { phone: dbPhone },
@@ -653,35 +671,19 @@ exports.receiveMessage = async (req, res) => {
                     data: { leadId: existingLead.id, message: messageText, mediaUrl: mediaUrl, mediaType: mediaType, direction: 'inbound', senderType: 'USER', senderName: name, metaMessageId: metaMsgId } 
                 });
 
-                // 🔥 AUTO REPLY DEBUG SECTION 🔥
-                console.log(`\n🤖 --- AUTO REPLY EVALUATION [AFTER_SEMINAR] ---`);
-                const botAllowed = (settings?.botMode === 'ON' || settings?.botMode === 'AUTO_REPLY_ONLY');
+                const botAllowed = ['ON', 'AUTO_REPLY_ONLY', 'AUTO_FOLLOW_UP'].includes(settings?.botMode);
                 
-                console.log(`1. Settings Bot Mode   : ${settings?.botMode} (Bot Allowed: ${botAllowed})`);
-                console.log(`2. Sequence Completed  : ${existingLead.sequenceCompleted}`);
-                console.log(`3. Is Restart Command? : ${isRestartCommand} (Triggers Reset)`);
-                console.log(`4. Is Spamming?        : ${isSpamming} (Time gap: ${timeSinceLastMsg}ms)`);
-                console.log(`5. Is FollowUp Reply?  : ${isFollowUpReply}`);
-
                 if (botAllowed && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
-                    console.log(`✅ ALL CONDITIONS PASSED! Fetching replies for Business ID: ${settings.businessId}`);
-                    
                     const autoReplies = await prisma.autoReply.findMany({ 
                         where: { campaignType: 'AFTER_SEMINAR', businessId: settings.businessId }, 
                         orderBy: { stepOrder: 'asc' } 
                     });
                     
-                    console.log(`📂 Auto Replies found in DB for AFTER_SEMINAR: ${autoReplies.length}`);
-
                     if (autoReplies.length > 0) {
                         const currentStep = existingLead.autoReplyStep || 0;
-                        console.log(`📍 Lead is currently at step: ${currentStep}`);
-                        
                         const nextReply = autoReplies.find(r => r.stepOrder > currentStep);
 
                         if (nextReply) {
-                            console.log(`📤 Preparing to send Step ${nextReply.stepOrder} (ID: ${nextReply.id})`);
-                            
                             let formattedPhone = phone.startsWith('0') ? '94' + phone.substring(1) : phone;
                             let metaPayload = { messaging_product: "whatsapp", recipient_type: "individual", to: formattedPhone };
 
@@ -695,30 +697,21 @@ exports.receiveMessage = async (req, res) => {
                                 metaPayload.type = "text"; metaPayload.text = { body: nextReply.message }; 
                             }
 
+                            // 🔥 FIX 3: Better Error Logging & Removed duplicate axios require
                             try {
-                                const axios = require('axios');
-                                await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
-                                await prisma.chatMessage.create({ data: { leadId: existingLead.id, message: nextReply.message, mediaUrl: nextReply.attachment, mediaType: nextReply.attachmentType, direction: 'outbound', senderType: 'SYSTEM', senderName: 'AutoBot' } });
+                                const metaRes = await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
+                                await prisma.chatMessage.create({ data: { leadId: existingLead.id, message: nextReply.message, mediaUrl: nextReply.attachment, mediaType: nextReply.attachmentType, direction: 'outbound', senderType: 'SYSTEM', senderName: 'AutoBot', metaMessageId: metaRes.data?.messages?.[0]?.id } });
                                 
                                 const isLastStep = autoReplies[autoReplies.length - 1].id === nextReply.id;
                                 await prisma.lead.update({ where: { id: existingLead.id }, data: { autoReplyStep: nextReply.stepOrder, sequenceCompleted: isLastStep } });
-                                
-                                console.log(`🟢 SUCCESS: Auto Reply Step ${nextReply.stepOrder} sent & DB updated!`);
                             } catch (sendErr) {
-                                console.log(`🔴 ERROR: Meta API rejected the auto-reply!`);
-                                console.log(sendErr.response?.data || sendErr.message);
+                                console.log(`🔴 ERROR: Meta API rejected the AFTER_SEMINAR auto-reply!`);
+                                console.log(`Payload Sent:`, JSON.stringify(metaPayload, null, 2));
+                                console.log(`Error Details:`, sendErr.response?.data || sendErr.message);
                             }
-                        } else {
-                            console.log(`⚠️ Sequence completed. No higher step found than ${currentStep}.`);
                         }
-                    } else {
-                        console.log(`⚠️ WARNING: No templates exist in DB for campaignType='AFTER_SEMINAR' & businessId='${settings.businessId}'`);
                     }
-                } else {
-                    console.log(`⛔ STOPPED: Auto reply aborted due to failed conditions.`);
                 }
-                console.log(`======================================================\n`);
-
                 return res.status(200).send("EVENT_RECEIVED");
             }
 
@@ -726,15 +719,19 @@ exports.receiveMessage = async (req, res) => {
             // 2. FREE SEMINAR MESSAGE EKAK NAM
             // ========================================================
             if (settings.campaignType === 'FREE_SEMINAR') {
-                // (පරණ ලොජික් එක එහෙම්මම තියෙනවා)
                 const msgLower = (messageText || "").toLowerCase().trim();
                 const isRestartCommand = ['hi', 'hello', 'hey', 'menu', 'start'].includes(msgLower);
                 let existingLead = await prisma.lead.findUnique({ where: { phone: dbPhone } });
                 const timeSinceLastMsg = existingLead && existingLead.updatedAt ? new Date() - new Date(existingLead.updatedAt) : 10000;
-                const isSpamming = timeSinceLastMsg < 2000; 
+                
+                // 🔥 FIX 1: Spam limit changed to 10000 (10 seconds)
+                const isSpamming = timeSinceLastMsg < 10000; 
                 
                 let resetData = {};
-                if (isRestartCommand) resetData = { autoReplyStep: 0, sequenceCompleted: false };
+                // 🔥 FIX 2: Reset sequence if user types 'hi' OR if they message again after 12 hours
+                if (isRestartCommand || timeSinceLastMsg > 43200000) { 
+                    resetData = { autoReplyStep: 0, sequenceCompleted: false };
+                }
 
                 let createDataFreeSeminar = { 
                     name: name, phone: dbPhone, source: 'whatsapp', campaignType: 'FREE_SEMINAR', 
@@ -763,7 +760,8 @@ exports.receiveMessage = async (req, res) => {
                     } 
                 });
 
-                const botAllowed = (settings?.botMode === 'ON' || settings?.botMode === 'AUTO_REPLY_ONLY');
+                const botAllowed = ['ON', 'AUTO_REPLY_ONLY', 'AUTO_FOLLOW_UP'].includes(settings?.botMode);
+                
                 if (botAllowed && !existingLead.sequenceCompleted && !isSpamming && !isFollowUpReply) {
                     const autoReplies = await prisma.autoReply.findMany({ where: { campaignType: 'FREE_SEMINAR', businessId: settings.businessId }, orderBy: { stepOrder: 'asc' } });
                     if (autoReplies.length > 0) {
@@ -784,13 +782,17 @@ exports.receiveMessage = async (req, res) => {
                                 metaPayload.type = "text"; metaPayload.text = { body: nextReply.message }; 
                             }
 
+                            // 🔥 FIX 3: Better Error Logging & Removed duplicate axios require
                             try {
-                                const axios = require('axios');
-                                await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
-                                await prisma.chatMessage.create({ data: { leadId: existingLead.id, message: nextReply.message, mediaUrl: nextReply.attachment, mediaType: nextReply.attachmentType, direction: 'outbound', senderType: 'SYSTEM', senderName: 'AutoBot' } });
+                                const metaRes = await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
+                                await prisma.chatMessage.create({ data: { leadId: existingLead.id, message: nextReply.message, mediaUrl: nextReply.attachment, mediaType: nextReply.attachmentType, direction: 'outbound', senderType: 'SYSTEM', senderName: 'AutoBot', metaMessageId: metaRes.data?.messages?.[0]?.id } });
                                 const isLastStep = autoReplies[autoReplies.length - 1].id === nextReply.id;
                                 await prisma.lead.update({ where: { id: existingLead.id }, data: { autoReplyStep: nextReply.stepOrder, sequenceCompleted: isLastStep } });
-                            } catch (sendErr) {}
+                            } catch (sendErr) {
+                                console.log(`🔴 ERROR: Meta API rejected the FREE_SEMINAR auto-reply!`);
+                                console.log(`Payload Sent:`, JSON.stringify(metaPayload, null, 2));
+                                console.log(`Error Details:`, sendErr.response?.data || sendErr.message);
+                            }
                         }
                     }
                 }
@@ -815,7 +817,8 @@ exports.getMessages = async (req, res) => {
 
 exports.sendMessage = async (req, res) => {
     try {
-        const { leadId, message, senderName, replyToMetaId, localUIMessage } = req.body; 
+        const { leadId, message, senderName, replyToMetaId, localUIMessage, isTemplate, templateName, templateLanguage } = req.body; 
+        
         const lead = await prisma.lead.findUnique({ where: { id: parseInt(leadId) } });
         if (!lead) return res.status(404).json({ error: "Lead not found" });
         
@@ -830,8 +833,6 @@ exports.sendMessage = async (req, res) => {
             mediaUrl = `/storage/documents/${req.file.filename}`; 
             mediaType = req.file.mimetype; 
 
-            // 🔥 ALUTH KALLA: Audio conversion (WebM to OGG/Opus) 🔥
-            // මේක run වෙන්නේ webm හරි audio එකක් හරි upload උනොත් විතරයි
             const isWebmAudio = mediaType.includes('audio') || mediaType.includes('webm') || req.file.originalname.endsWith('.webm') || req.file.originalname.endsWith('.ogg');
             
             if (isWebmAudio) {
@@ -849,15 +850,12 @@ exports.sendMessage = async (req, res) => {
                             .save(outputPath);
                     });
                     
-                    // Convert උනාට පස්සේ අලුත් file එකේ details variable වලට දානවා
                     mediaUrl = `/storage/documents/${outputFilename}`;
                     mediaType = 'audio/ogg; codecs=opus';
                 } catch (error) {
                     console.error("Audio conversion failed:", error);
-                    // Conversion එක fail උනොත් පරණ file එකම යවන්න try කරනවා (Fallback)
                 }
             }
-            // 🔥 ALUTH KALLA AWARAI 🔥
         }
 
         const newMsg = await prisma.chatMessage.create({
@@ -887,22 +885,33 @@ exports.sendMessage = async (req, res) => {
 
             if (settings && settings.metaApiKey && settings.waNumId) {
                 let metaPayload = { messaging_product: "whatsapp", recipient_type: "individual", to: formattedPhone };
-                if (replyToMetaId && replyToMetaId !== 'null' && replyToMetaId !== 'undefined') metaPayload.context = { message_id: replyToMetaId };
+                
+                if (replyToMetaId && replyToMetaId !== 'null' && replyToMetaId !== 'undefined' && isTemplate !== 'true') {
+                    metaPayload.context = { message_id: replyToMetaId };
+                }
 
-                if (message && !mediaUrl) {
+                if (isTemplate === 'true') {
+                    metaPayload.type = "template";
+                    metaPayload.template = {
+                        name: templateName,
+                        language: {
+                            code: templateLanguage || "en" 
+                        }
+                    };
+                } 
+                else if (message && !mediaUrl) {
                     metaPayload.type = "text"; 
                     metaPayload.text = { preview_url: false, body: message };
-                } else if (mediaUrl) {
+                } 
+                else if (mediaUrl) {
                     const liveMediaUrl = `https://imacampus.online${mediaUrl}`; 
                     
-                    // 🔥 Audio check logic fix for Voice Notes
                     const isAudio = mediaType.includes('audio') || 
                                     mediaType.includes('ogg') || 
                                     mediaUrl.toLowerCase().endsWith('.ogg') || 
                                     mediaUrl.toLowerCase().endsWith('.mp3');
 
                     if (isAudio) { 
-                        // Voice Note ekak widihata yawanna kiyanawa
                         metaPayload.type = "audio";
                         metaPayload.audio = { link: liveMediaUrl };
                     } 
@@ -924,7 +933,6 @@ exports.sendMessage = async (req, res) => {
                     }
                 }
 
-                const axios = require('axios');
                 const metaRes = await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { 
                     headers: { 'Authorization': `Bearer ${settings.metaApiKey}`, 'Content-Type': 'application/json' } 
                 });
@@ -933,9 +941,14 @@ exports.sendMessage = async (req, res) => {
                     await prisma.chatMessage.update({ where: { id: newMsg.id }, data: { metaMessageId: metaRes.data.messages[0].id } });
                 }
             }
-        } catch (metaError) { }
+        } catch (metaError) { 
+            console.error("Meta API Error:", metaError.response?.data || metaError.message);
+        }
         res.status(201).json(newMsg);
-    } catch (error) { res.status(500).json({ error: "Failed to send message" }); }
+    } catch (error) { 
+        console.error("SendMessage Error:", error);
+        res.status(500).json({ error: "Failed to send message" }); 
+    }
 };
 
 exports.sendReaction = async (req, res) => {
@@ -955,7 +968,6 @@ exports.sendReaction = async (req, res) => {
         }
 
         if (settings && settings.metaApiKey && settings.waNumId) {
-            const axios = require('axios');
             await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, { messaging_product: "whatsapp", recipient_type: "individual", to: formattedPhone, type: "reaction", reaction: { message_id: metaMessageId, emoji: emoji } }, { headers: { 'Authorization': `Bearer ${settings.metaApiKey}` } });
             res.status(200).json({ success: true });
         }
@@ -975,7 +987,6 @@ exports.sendBroadcast = async (req, res) => {
         if (req.file) { mediaUrl = `/storage/documents/${req.file.filename}`; mediaType = req.file.mimetype; }
 
         let results = { success: 0, failed: 0, reasons: [] };
-        const axios = require('axios');
 
         for (const lead of leads) {
             let formattedPhone = lead.phone.split('_')[0].replace(/[^0-9]/g, ''); 
@@ -1020,7 +1031,6 @@ exports.updateLeadBatch = async (req, res) => {
     }
 };
 
-//New Inquaries
 exports.revertDeletedRound = async (req, res) => {
     try {
         const { roundToDelete, targetRound, inquiryType } = req.body;
@@ -1042,9 +1052,6 @@ exports.revertDeletedRound = async (req, res) => {
     }
 };
 
-// ==========================================
-// 🔥 NEW: TEST FOLLOW UP DIRECTLY 🔥
-// ==========================================
 exports.testDirectFollowUp = async (req, res) => {
     try {
         const { leadId } = req.body;
@@ -1087,5 +1094,63 @@ exports.testDirectFollowUp = async (req, res) => {
     } catch (error) {
         console.error("Test FollowUp Error:", error.response?.data || error.message);
         res.status(500).json({ error: "Failed to send test follow-up" });
+    }
+};
+
+exports.getMetaTemplates = async (req, res) => {
+    try {
+        const { businessId } = req.query;
+        console.log("\n=== DEBUG: GET META TEMPLATES ===");
+        console.log("1. Received Business ID:", businessId);
+
+        if (!businessId) {
+            console.log("Error: Business ID is missing");
+            return res.status(400).json({ error: "Business ID is required." });
+        }
+
+        const settings = await prisma.crmSettings.findFirst({
+            where: { 
+                businessId: parseInt(businessId), 
+                campaignType: 'AFTER_SEMINAR' 
+            }
+        });
+
+        console.log("2. Found Settings in DB:", settings ? "Yes" : "No");
+
+        if (!settings || !settings.metaApiKey || !settings.waId) {
+            console.log("Error: Missing API Keys or waId in DB");
+            return res.status(404).json({ error: "WhatsApp API credentials missing." });
+        }
+
+        console.log(`3. Calling Meta API for waId: ${settings.waId}`);
+
+        const metaResponse = await axios.get(`https://graph.facebook.com/v19.0/${settings.waId}/message_templates`, {
+            params: { status: 'APPROVED', limit: 100 },
+            headers: { Authorization: `Bearer ${settings.metaApiKey}` }
+        });
+
+        console.log("4. Meta API Raw Response (Templates Count):", metaResponse.data?.data?.length);
+
+        const templates = metaResponse.data.data.map(tpl => {
+            const bodyComponent = tpl.components.find(c => c.type === 'BODY');
+            return {
+                id: tpl.id,
+                name: tpl.name,
+                language: tpl.language,
+                text: bodyComponent ? bodyComponent.text : 'Media/Interactive Template (No Body Text)',
+                rawComponents: tpl.components
+            };
+        });
+
+        console.log("5. Formatted Templates Sent to Frontend:", templates.length);
+        console.log("=================================\n");
+        res.status(200).json(templates);
+
+    } catch (error) {
+        console.error("\n=== META API ERROR ===");
+        console.error("Error Status:", error.response?.status);
+        console.error("Error Data:", error.response?.data || error.message);
+        console.error("======================\n");
+        res.status(500).json({ error: "Failed to fetch templates from Meta API." });
     }
 };

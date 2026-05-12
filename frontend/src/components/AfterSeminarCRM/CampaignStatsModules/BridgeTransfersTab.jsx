@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from '../../../api/axios';
 import toast from 'react-hot-toast';
 import { Users, Loader2, ArrowRight } from 'lucide-react';
-import { FaCheckCircle, FaExclamationCircle, FaUserTie, FaSearch, FaFileExcel } from 'react-icons/fa';
+import { FaCheckCircle, FaExclamationCircle, FaUserTie, FaSearch, FaFileExcel, FaCalendarAlt } from 'react-icons/fa';
 
 export default function BridgeTransfersTab({ filters }) {
     const [pendingLeads, setPendingLeads] = useState([]);
@@ -16,19 +16,25 @@ export default function BridgeTransfersTab({ filters }) {
     const [selectedStaff, setSelectedStaff] = useState('');
 
     const [loadingStats, setLoadingStats] = useState(true);
+    
+    // 🔥 NEW: Date Range States 🔥
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
     const [bridgeStats, setBridgeStats] = useState({
         totalTransferred: 0, totalContacted: 0, totalPending: 0, totalEnrolled: 0, staffBreakdown: []
     });
 
     useEffect(() => {
-        if (filters.selectedBusiness) {
+        if (filters?.selectedBusiness) {
             fetchBridgeData();
             fetchCoordinators();
         } else {
             setPendingLeads([]);
+            setBridgeStats({ totalTransferred: 0, totalContacted: 0, totalPending: 0, totalEnrolled: 0, staffBreakdown: [] });
             setLoadingStats(false);
         }
-    }, [filters]);
+    }, [filters?.selectedBusiness, filters?.selectedBatch, startDate, endDate]);
 
     const fetchCoordinators = async () => {
         try {
@@ -39,23 +45,47 @@ export default function BridgeTransfersTab({ filters }) {
     };
 
     const fetchBridgeData = async () => {
+        if (!filters?.selectedBusiness) return;
+
         setLoadingStats(true);
         const token = localStorage.getItem('token');
         try {
+            const params = { 
+                businessId: filters.selectedBusiness, 
+                batchId: filters.selectedBatch || 'ALL',
+                startDate: startDate || undefined,
+                endDate: endDate || undefined
+            };
+
             const pendingRes = await axios.get('/after-seminar-crm/bridge/pending', {
                 headers: { Authorization: `Bearer ${token}` },
-                params: { businessId: filters.selectedBusiness, batchId: filters.selectedBatch }
+                params
             });
             setPendingLeads(pendingRes.data.leads || []);
             setSelectedLeads([]);
 
             const statsRes = await axios.get('/after-seminar-crm/stats/bridge', {
                 headers: { Authorization: `Bearer ${token}` },
-                params: { businessId: filters.selectedBusiness, batchId: filters.selectedBatch }
+                params
             });
             if (statsRes.data) setBridgeStats(statsRes.data);
-        } catch (error) { toast.error("Error loading Bridge Analytics"); }
+        } catch (error) { 
+            toast.error("Error loading Bridge Analytics"); 
+            setBridgeStats({ totalTransferred: 0, totalContacted: 0, totalPending: 0, totalEnrolled: 0, staffBreakdown: [] });
+        }
         setLoadingStats(false);
+    };
+
+    // 🔥 DATE FILTER HANDLERS 🔥
+    const handleDailyClick = () => {
+        const today = new Date().toISOString().split('T')[0];
+        setStartDate(today);
+        setEndDate(today);
+    };
+
+    const handleClearDates = () => {
+        setStartDate('');
+        setEndDate('');
     };
 
     // Filter by Search Query
@@ -118,7 +148,7 @@ export default function BridgeTransfersTab({ filters }) {
         csvContent += "Student Name,Phone Number,Status\n"; // Header row
 
         leadsToExport.forEach(row => {
-            const name = row.name ? row.name.replace(/,/g, '') : 'Unknown'; // කොමා තිබ්බොත් අයින් කරනවා
+            const name = row.name ? row.name.replace(/,/g, '') : 'Unknown';
             const phone = row.phone || '';
             const status = row.status || 'NEW';
             csvContent += `${name},${phone},${status}\n`;
@@ -135,8 +165,8 @@ export default function BridgeTransfersTab({ filters }) {
         toast.success("Successfully exported selected leads!");
     };
 
-    if (!filters.selectedBusiness) {
-        return <div className="text-center py-20 text-slate-500 bg-white/[0.02] backdrop-blur-md rounded-2xl border border-white/5 h-full flex items-center justify-center font-sans tracking-wide">Please select a Business to view Bridge Analytics.</div>;
+    if (!filters?.selectedBusiness) {
+        return <div className="flex justify-center items-center h-[400px] text-slate-500 font-sans tracking-wide">Please select a Campaign/Business to view Bridge Analytics.</div>;
     }
 
     const conversionRate = bridgeStats.totalTransferred > 0 ? Math.round((bridgeStats.totalEnrolled / bridgeStats.totalTransferred) * 100) : 0;
@@ -145,6 +175,58 @@ export default function BridgeTransfersTab({ filters }) {
     return (
         <div className="space-y-6 font-sans text-slate-200">
             
+            {/* 🔥 DATE FILTERS ROW 🔥 */}
+            <div className="flex flex-col md:flex-row justify-between items-center bg-[#141a23] p-4 rounded-2xl border border-slate-800 shadow-md gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-lg">
+                        <FaCalendarAlt size={18}/>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Campaign Stats Filter</h3>
+                        <p className="text-[10px] text-slate-400">Filter by specific dates or view today's performance</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* DAILY BUTTON */}
+                    <button 
+                        onClick={handleDailyClick}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-all"
+                    >
+                        Today (Daily)
+                    </button>
+
+                    {/* DATE RANGE PICKER */}
+                    <div className="flex items-center gap-2 bg-[#0b0e14] border border-slate-700 p-1.5 rounded-lg">
+                        <input 
+                            type="date" 
+                            value={startDate} 
+                            onChange={(e) => setStartDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                        <span className="text-slate-500 text-xs">to</span>
+                        <input 
+                            type="date" 
+                            value={endDate} 
+                            onChange={(e) => setEndDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                    </div>
+
+                    {/* CLEAR FILTER */}
+                    {(startDate || endDate) && (
+                        <button 
+                            onClick={handleClearDates}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider rounded-lg transition-all"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* MANAGER OVERALL STATS */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-slate-800/50 p-5 rounded-2xl border border-slate-700">
@@ -242,7 +324,6 @@ export default function BridgeTransfersTab({ filters }) {
                         <span className="text-sm font-bold text-slate-300">
                             {selectedLeads.length} Leads Selected
                         </span>
-                        {/* 🔥 EXPORT BUTTON (Select කරාම විතරක් පෙන්නනවා) */}
                         {selectedLeads.length > 0 && (
                             <button 
                                 onClick={handleExportSelected} 

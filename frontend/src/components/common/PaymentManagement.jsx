@@ -5,21 +5,22 @@ import axios from '../../api/axios';
 import toast from 'react-hot-toast';
 import PaymentFilters from './PaymentFilters';
 import StaffPerformanceModal from './StaffPerformanceModal';
+import ExportReportModal from './ExportReportModal'; // 🔥 ALUTHIN ADD KALA: Export Modal Import eka
 
 export default function PaymentManagement({ loggedInUser }) {
     const isSystemAdmin = loggedInUser?.role?.toUpperCase() === 'SYSTEM_ADMIN' || loggedInUser?.role?.toUpperCase() === 'DIRECTOR';
     const isFinance = loggedInUser?.department === 'Finance';
     const isAdmin = isSystemAdmin || isFinance;
-    
+
     const [loading, setLoading] = useState(true);
     const [payments, setPayments] = useState([]);
-    const [businesses, setBusinesses] = useState([]); 
-    const [batches, setBatches] = useState([]); 
-    const [groups, setGroups] = useState([]); 
-    const [subjects, setSubjects] = useState([]); 
+    const [businesses, setBusinesses] = useState([]);
+    const [batches, setBatches] = useState([]);
+    const [groups, setGroups] = useState([]);
+    const [subjects, setSubjects] = useState([]);
 
-    const [activeTab, setActiveTab] = useState('Pending'); 
-    const [approvedFilter, setApprovedFilter] = useState('All'); 
+    const [activeTab, setActiveTab] = useState('Pending');
+    const [approvedFilter, setApprovedFilter] = useState('All');
 
     const [filters, setFilters] = useState({
         search: '', businessId: 'All', batchId: 'All', groupId: 'All', subjectId: 'All', dateFrom: '', dateTo: '', method: 'All'
@@ -28,19 +29,22 @@ export default function PaymentManagement({ loggedInUser }) {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 20;
 
-    const [studentActionModal, setStudentActionModal] = useState(null); 
+    const [studentActionModal, setStudentActionModal] = useState(null);
     const [actioningPaymentId, setActioningPaymentId] = useState(null);
     const [installmentModal, setInstallmentModal] = useState(null);
     const [nextDueDate, setNextDueDate] = useState('');
     const [isTestApprove, setIsTestApprove] = useState(false);
-    const [advancedActionModal, setAdvancedActionModal] = useState(null); 
-    const [customPrices, setCustomPrices] = useState({}); 
+    const [advancedActionModal, setAdvancedActionModal] = useState(null);
+    const [customPrices, setCustomPrices] = useState({});
     const [actionRemark, setActionRemark] = useState('');
     const [showStaffModal, setShowStaffModal] = useState(false);
 
     const [approveModal, setApproveModal] = useState(null);
     const [actualAmount, setActualAmount] = useState('');
-    const [institutePaymentModal, setInstitutePaymentModal] = useState(null); 
+    const [institutePaymentModal, setInstitutePaymentModal] = useState(null);
+    
+    // 🔥 ALUTHIN ADD KALA: Export Modal State eka
+    const [showExportModal, setShowExportModal] = useState(false);
 
     const fetchData = async () => {
         setLoading(true);
@@ -62,11 +66,11 @@ export default function PaymentManagement({ loggedInUser }) {
 
     useEffect(() => {
         if (filters.businessId !== 'All') {
-             axios.get(`/admin/batches/${filters.businessId}`).then(res => setBatches(res.data.batches || res.data || []));
+            axios.get(`/admin/batches/${filters.businessId}`).then(res => setBatches(res.data.batches || res.data || []));
         } else {
-             const uniqueBatches = Array.from(new Set(payments.map(p => JSON.stringify({id: p.batchId || p.batch_id, name: p.batch || p.batchName}))))
-                 .map(str => JSON.parse(str)).filter(b => b.name && b.name !== 'N/A' && b.id);
-             setBatches(uniqueBatches);
+            const uniqueBatches = Array.from(new Set(payments.map(p => JSON.stringify({ id: p.batchId || p.batch_id, name: p.batch || p.batchName }))))
+                .map(str => JSON.parse(str)).filter(b => b.name && b.name !== 'N/A' && b.id);
+            setBatches(uniqueBatches);
         }
     }, [filters.businessId, payments]);
 
@@ -75,19 +79,19 @@ export default function PaymentManagement({ loggedInUser }) {
         let extractedSubjects = new Map();
 
         const selectedBatch = batches.find(b => (b.id?.toString() === filters.batchId || b.batch_id?.toString() === filters.batchId));
-        
+
         if (selectedBatch && selectedBatch.groups && selectedBatch.groups.length > 0) {
             extractedGroups = selectedBatch.groups;
             selectedBatch.groups.forEach(g => {
                 const coursesList = g.courses || g.subjects || [];
                 coursesList.forEach(c => {
-                    if(c.id) extractedSubjects.set(c.id, { id: c.id, name: c.name, code: c.code || '' });
+                    if (c.id) extractedSubjects.set(c.id, { id: c.id, name: c.name, code: c.code || '' });
                 });
             });
         } else {
-            const validPayments = payments.filter(p => 
-                filters.batchId === 'All' || 
-                p.batchId?.toString() === filters.batchId || 
+            const validPayments = payments.filter(p =>
+                filters.batchId === 'All' ||
+                p.batchId?.toString() === filters.batchId ||
                 p.batch_id?.toString() === filters.batchId
             );
 
@@ -96,7 +100,7 @@ export default function PaymentManagement({ loggedInUser }) {
                 const gName = p.groupName || p.group || (gId ? `Group ${gId}` : 'Unknown');
                 return JSON.stringify({ id: gId, name: gName });
             }))).map(str => JSON.parse(str)).filter(g => g.id);
-            
+
             extractedGroups = uniqueGroups;
 
             validPayments.forEach(p => {
@@ -114,9 +118,9 @@ export default function PaymentManagement({ loggedInUser }) {
         setSubjects(Array.from(extractedSubjects.values()));
     }, [filters.batchId, batches, payments]);
 
-    useEffect(() => { 
-        setCurrentPage(1); 
-        setApprovedFilter('All'); 
+    useEffect(() => {
+        setCurrentPage(1);
+        setApprovedFilter('All');
     }, [activeTab, filters]);
 
     const filteredPayments = payments.filter(p => {
@@ -126,7 +130,10 @@ export default function PaymentManagement({ loggedInUser }) {
         else matchesTab = p.status === activeTab && p.status !== 'Trash';
 
         const searchVal = filters.search.toLowerCase();
-        const matchesSearch = p.studentName?.toLowerCase().includes(searchVal) || p.studentNo?.toLowerCase().includes(searchVal);
+        const matchesSearch = 
+    p.studentName?.toLowerCase().includes(searchVal) || 
+    p.studentNo?.toLowerCase().includes(searchVal) || 
+    p.phone?.toLowerCase().includes(searchVal);
 
         const pBizId = p.businessId || p.business_id;
         const pBatchId = p.batchId || p.batch_id;
@@ -177,9 +184,9 @@ export default function PaymentManagement({ loggedInUser }) {
             const bPay = b.allPayments.find(p => p.status === 'Post Pay');
             const aTime = aPay && aPay.validUntil ? new Date(aPay.validUntil).getTime() : 9999999999999;
             const bTime = bPay && bPay.validUntil ? new Date(bPay.validUntil).getTime() : 9999999999999;
-            return aTime - bTime; 
+            return aTime - bTime;
         }
-        return 0; 
+        return 0;
     });
 
     const totalPages = Math.ceil(visibleStudents.length / itemsPerPage) || 1;
@@ -203,8 +210,8 @@ export default function PaymentManagement({ loggedInUser }) {
         const { payment, isSelfPicked } = approveModal;
         try {
             setActioningPaymentId(payment.id);
-            await axios.post('/admin/payments/action', { 
-                paymentId: payment.id, 
+            await axios.post('/admin/payments/action', {
+                paymentId: payment.id,
                 action: 'Approve',
                 isSelfPicked: isSelfPicked,
                 actualAmountPaid: parseFloat(actualAmount || 0),
@@ -212,30 +219,30 @@ export default function PaymentManagement({ loggedInUser }) {
             });
             toast.success(`Payment Approved${isSelfPicked ? ' (Self-Picked)' : ''}!`);
             refreshAfterAction(payment.studentId);
-        } catch (error) { 
-            toast.error(`Failed to process payment.`); 
-        } finally { 
-            setActioningPaymentId(null); 
+        } catch (error) {
+            toast.error(`Failed to process payment.`);
+        } finally {
+            setActioningPaymentId(null);
         }
     };
 
     const handleQuickApprove = async (payment, isSelfPicked = false) => {
-        if(!window.confirm(`Directly approve this payment for exactly LKR ${parseFloat(payment.amount).toLocaleString()}?`)) return;
-        
+        if (!window.confirm(`Directly approve this payment for exactly LKR ${parseFloat(payment.amount).toLocaleString()}?`)) return;
+
         try {
             setActioningPaymentId(payment.id);
             if (payment.type === 'Installment') {
-                await axios.post('/admin/payments/action/installment', { 
-                    paymentId: payment.id, 
-                    nextDueDate: getDefaultNextDueDate(), 
+                await axios.post('/admin/payments/action/installment', {
+                    paymentId: payment.id,
+                    nextDueDate: getDefaultNextDueDate(),
                     action: 'Approve',
                     actualAmountPaid: parseFloat(payment.amount),
                     remark: '',
                     isSelfPicked: isSelfPicked
                 });
             } else {
-                await axios.post('/admin/payments/action', { 
-                    paymentId: payment.id, 
+                await axios.post('/admin/payments/action', {
+                    paymentId: payment.id,
                     action: 'Approve',
                     isSelfPicked: isSelfPicked,
                     actualAmountPaid: parseFloat(payment.amount),
@@ -244,10 +251,10 @@ export default function PaymentManagement({ loggedInUser }) {
             }
             toast.success(`Payment Quick Approved${isSelfPicked ? ' (Self-Picked)' : ''}!`);
             refreshAfterAction(payment.studentId);
-        } catch (error) { 
-            toast.error(`Failed to approve payment.`); 
-        } finally { 
-            setActioningPaymentId(null); 
+        } catch (error) {
+            toast.error(`Failed to approve payment.`);
+        } finally {
+            setActioningPaymentId(null);
         }
     };
 
@@ -256,17 +263,17 @@ export default function PaymentManagement({ loggedInUser }) {
         try {
             setActioningPaymentId(payment.id);
             if (payment.type === 'Installment') {
-                await axios.post('/admin/payments/action/installment', { 
-                    paymentId: payment.id, 
-                    nextDueDate: getDefaultNextDueDate(), 
+                await axios.post('/admin/payments/action/installment', {
+                    paymentId: payment.id,
+                    nextDueDate: getDefaultNextDueDate(),
                     action: 'Approve',
                     actualAmountPaid: parseFloat(payment.amount),
                     remark: '[Institute Payment]',
                     isSelfPicked: isSelfPicked
                 });
             } else {
-                await axios.post('/admin/payments/action', { 
-                    paymentId: payment.id, 
+                await axios.post('/admin/payments/action', {
+                    paymentId: payment.id,
                     action: 'Approve',
                     isSelfPicked: isSelfPicked,
                     actualAmountPaid: parseFloat(payment.amount),
@@ -275,10 +282,10 @@ export default function PaymentManagement({ loggedInUser }) {
             }
             toast.success(`Institute Payment Approved! ${isSelfPicked ? '(No Delivery)' : '(Sent to Delivery)'}`);
             refreshAfterAction(payment.studentId);
-        } catch (error) { 
-            toast.error(`Failed to approve payment.`); 
-        } finally { 
-            setActioningPaymentId(null); 
+        } catch (error) {
+            toast.error(`Failed to approve payment.`);
+        } finally {
+            setActioningPaymentId(null);
         }
     };
 
@@ -287,9 +294,9 @@ export default function PaymentManagement({ loggedInUser }) {
         const { payment, isSelfPicked } = installmentModal;
         try {
             const actionType = isTestApprove ? 'Test Approve' : 'Approve';
-            await axios.post('/admin/payments/action/installment', { 
-                paymentId: payment.id, 
-                nextDueDate: nextDueDate, 
+            await axios.post('/admin/payments/action/installment', {
+                paymentId: payment.id,
+                nextDueDate: nextDueDate,
                 action: actionType,
                 actualAmountPaid: parseFloat(actualAmount || 0),
                 remark: actionRemark,
@@ -305,40 +312,40 @@ export default function PaymentManagement({ loggedInUser }) {
         if (isSelfPicked) confirmMessage = `Approve and mark as SELF-PICKED (Tute Delivered)?`;
         if (action === 'SendToDelivery') confirmMessage = `Send this record to Delivery Hub?`;
 
-        if(!window.confirm(confirmMessage)) return;
-        
+        if (!window.confirm(confirmMessage)) return;
+
         try {
             setActioningPaymentId(payment.id);
-            await axios.post('/admin/payments/action', { 
-                paymentId: payment.id, 
+            await axios.post('/admin/payments/action', {
+                paymentId: payment.id,
                 action: action,
-                isSelfPicked: isSelfPicked 
+                isSelfPicked: isSelfPicked
             });
             toast.success(`Action ${action} successful!`);
             refreshAfterAction(payment.studentId);
-        } catch (error) { 
-            toast.error(`Failed to process payment.`); 
-        } finally { 
-            setActioningPaymentId(null); 
+        } catch (error) {
+            toast.error(`Failed to process payment.`);
+        } finally {
+            setActioningPaymentId(null);
         }
     };
 
     const submitAdvancedAction = async () => {
         const { type, payment } = advancedActionModal;
-        
+
         if (type !== 'PostPay' && actionRemark.trim() === '') {
             return toast.error("A remark is mandatory for Discounts and Free Cards.");
         }
-        
+
         try {
             setActioningPaymentId(payment.id);
-            
+
             if (type === 'PostPay') {
-                await axios.post('/admin/payments/post-pay', { paymentId: payment.id }); 
+                await axios.post('/admin/payments/post-pay', { paymentId: payment.id });
                 toast.success(`Post Pay granted for 7 days!`);
             } else {
                 let finalAmount = 0; let detailedRemark = actionRemark;
-                
+
                 if (type === 'FreeCard') {
                     detailedRemark = `[Free Card Granted]\nReason: ${actionRemark}`;
                 } else if (type === 'Discount') {
@@ -346,19 +353,19 @@ export default function PaymentManagement({ loggedInUser }) {
                     const breakdownStr = payment.subjectsList.map(sub => `${sub.code}: LKR ${customPrices[sub.id] || 0}`).join(' | ');
                     detailedRemark = `Custom Breakdown: [${breakdownStr}]\nReason: ${actionRemark}`;
                 }
-                
+
                 await axios.post('/admin/payments/action', {
                     paymentId: payment.id, action: type === 'FreeCard' ? 'Free Card' : 'Discount',
                     customAmount: finalAmount, remark: detailedRemark
                 });
                 toast.success(`Payment processed as ${type}!`);
             }
-            
+
             refreshAfterAction(payment.studentId);
-        } catch (error) { 
-            toast.error("Failed to process action."); 
-        } finally { 
-            setActioningPaymentId(null); 
+        } catch (error) {
+            toast.error("Failed to process action.");
+        } finally {
+            setActioningPaymentId(null);
         }
     };
 
@@ -366,18 +373,18 @@ export default function PaymentManagement({ loggedInUser }) {
     const refreshAfterAction = async (studentId) => {
         const payRes = await axios.get('/admin/payments');
         setPayments(payRes.data || []);
-        
+
         setStudentActionModal(null);
         setAdvancedActionModal(null);
         setApproveModal(null);
         setInstitutePaymentModal(null);
         setInstallmentModal(null);
-        
+
         setActiveTab('Pending');
     };
 
     const openAdvancedModal = (type, payment) => {
-        setAdvancedActionModal({ type, payment }); 
+        setAdvancedActionModal({ type, payment });
         setActionRemark('');
         if (type === 'Discount') {
             const initialPrices = {};
@@ -386,7 +393,7 @@ export default function PaymentManagement({ loggedInUser }) {
             setCustomPrices(initialPrices);
         }
     };
-    
+
     const handleCustomPriceChange = (id, val) => setCustomPrices(prev => ({ ...prev, [id]: val }));
 
     const openSlipsInNewTab = (slips, studentName, studentNo, studentPhone) => {
@@ -461,18 +468,18 @@ export default function PaymentManagement({ loggedInUser }) {
     };
 
     const getTabClass = (tabName) => {
-        const base = "px-5 py-2.5 rounded-xl font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap border";
-        if (activeTab !== tabName) return `${base} bg-white/5 border-white/5 text-slate-400 hover:bg-white/10`;
-        switch(tabName) {
-            case 'Pending': return `${base} bg-emerald-500 text-white border-emerald-400 shadow-lg shadow-emerald-500/20`;
-            case 'Approved': return `${base} bg-blue-500/20 text-blue-400 border-blue-500/30`;
-            case 'Free Card': return `${base} bg-yellow-500/20 text-yellow-400 border-yellow-500/30`;
-            case 'Discount': return `${base} bg-cyan-500/20 text-cyan-400 border-cyan-500/30`;
-            case 'Rejected': return `${base} bg-red-500/20 text-red-400 border-red-500/30`;
-            case 'Upcoming': return `${base} bg-purple-500/20 text-purple-400 border-purple-500/30`;
-            case 'Non Paid': return `${base} bg-red-500/20 text-red-400 border-red-500/30`;
-            case 'Post Pay': return `${base} bg-orange-500/20 text-orange-400 border-orange-500/30`;
-            case 'Trash': return `${base} bg-slate-700 text-white border-slate-600 shadow-lg`;
+        const base = "px-5 py-2.5 rounded-xl font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap border backdrop-blur-md";
+        if (activeTab !== tabName) return `${base} bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-700/50 hover:text-white hover:border-white/10`;
+        switch (tabName) {
+            case 'Pending': return `${base} bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]`;
+            case 'Approved': return `${base} bg-blue-500/20 text-blue-300 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.2)]`;
+            case 'Free Card': return `${base} bg-yellow-500/20 text-yellow-300 border-yellow-500/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]`;
+            case 'Discount': return `${base} bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.2)]`;
+            case 'Rejected': return `${base} bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]`;
+            case 'Upcoming': return `${base} bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]`;
+            case 'Non Paid': return `${base} bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]`;
+            case 'Post Pay': return `${base} bg-orange-500/20 text-orange-300 border-orange-500/40 shadow-[0_0_15px_rgba(249,115,22,0.2)]`;
+            case 'Trash': return `${base} bg-slate-700/50 text-slate-200 border-slate-600 shadow-lg`;
             default: return `${base} bg-white/10 text-white border-white/20`;
         }
     };
@@ -481,7 +488,7 @@ export default function PaymentManagement({ loggedInUser }) {
         if (!expiryDate) return "ACTIVE";
         const diff = new Date(expiryDate).getTime() - new Date().getTime();
         if (diff <= 0) return "EXPIRED";
-        
+
         const days = Math.floor(diff / (1000 * 60 * 60 * 24));
         const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
         const minutes = Math.floor((diff / (1000 * 60)) % 60);
@@ -489,160 +496,159 @@ export default function PaymentManagement({ loggedInUser }) {
     };
 
     const renderPaymentCard = (pay) => (
-        <div key={pay.id} className="bg-black/30 border border-white/10 rounded-2xl p-5 md:p-6 relative overflow-hidden mb-4">
-            <div className={`absolute top-0 left-0 w-1 h-full ${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-indigo-500' : 'bg-blue-500'}`}></div>
-            
-            <div className="absolute top-4 right-4 flex gap-2">
+        <div key={pay.id} className="bg-slate-800/40 backdrop-blur-xl border border-white/10 hover:border-white/20 rounded-3xl p-6 relative overflow-hidden mb-5 shadow-xl transition-all duration-300 group">
+            <div className={`absolute top-0 left-0 w-1.5 h-full ${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-gradient-to-b from-indigo-400 to-indigo-600' : 'bg-gradient-to-b from-blue-400 to-blue-600'}`}></div>
+
+            <div className="absolute top-4 right-4 flex gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
                 {pay.status === 'Post Pay' && (
-                    <div className="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 animate-pulse">
-                        <Unlock size={12}/> Time Left: {getCountdown(pay.validUntil)}
+                    <div className="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-3 py-1.5 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center gap-2 animate-pulse backdrop-blur-md">
+                        <Unlock size={14} /> {getCountdown(pay.validUntil)}
                     </div>
                 )}
                 {pay.status !== 'Trash' && (
-                    <button onClick={() => handleAction(pay, 'Trash')} className="bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 border border-transparent hover:border-red-500/30 p-2 rounded-lg transition-all" title="Move to Trash">
+                    <button onClick={() => handleAction(pay, 'Trash')} className="bg-slate-900/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 p-2.5 rounded-xl transition-all backdrop-blur-md" title="Move to Trash">
                         <Trash2 size={16} />
                     </button>
                 )}
             </div>
 
-            <div className="flex flex-col justify-between items-start gap-4 mb-6 pr-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pr-12">
                 <div>
-                    <p className="text-xs text-slate-400 font-normal uppercase tracking-widest mb-1">{pay.date}</p>
-                    <h5 className="text-lg font-bold text-white">{pay.business} <span className="text-slate-400 text-sm font-normal">| {pay.batch}</span></h5>
-                    <div className="flex items-center gap-2 mt-2">
-                        <span className="bg-white/10 text-white text-[10px] px-2 py-1 rounded font-normal uppercase tracking-widest">{pay.type}</span>
+                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-widest mb-1.5">{pay.date}</p>
+                    <h5 className="text-xl font-bold text-white tracking-tight">{pay.business} <span className="text-slate-500 text-sm font-medium ml-2">{pay.batch}</span></h5>
+                    <div className="flex items-center gap-2 mt-3">
+                        <span className="bg-white/5 text-slate-300 text-[10px] px-2.5 py-1 rounded-md font-semibold uppercase tracking-widest border border-white/10">{pay.type}</span>
                         {pay.type === 'Installment' && (
-                            <span className="bg-purple-500/20 text-purple-300 text-[10px] px-2 py-1 rounded font-normal uppercase tracking-widest border border-purple-500/30">
+                            <span className="bg-purple-500/10 text-purple-300 text-[10px] px-2.5 py-1 rounded-md font-semibold uppercase tracking-widest border border-purple-500/20">
                                 Phase {pay.installmentNo} of {Math.max(pay.installmentNo, pay.totalPhases || 1)}
                             </span>
                         )}
                     </div>
                 </div>
-                <div className={`${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-blue-500/10 border-blue-500/20'} p-3 rounded-xl border min-w-[140px]`}>
-                    <p className={`text-[10px] ${pay.method === 'PayHere' || pay.method === 'Online' ? 'text-indigo-400' : 'text-blue-400'} font-normal uppercase tracking-widest mb-1`}>Paid via {pay.method}</p>
-                    <p className="text-2xl font-bold text-white">LKR {parseFloat(pay.amount).toLocaleString()}</p>
+                <div className={`${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20' : 'bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20'} p-4 rounded-2xl border min-w-[150px] text-right md:text-left backdrop-blur-md shadow-inner`}>
+                    <p className={`text-[10px] ${pay.method === 'PayHere' || pay.method === 'Online' ? 'text-indigo-400' : 'text-blue-400'} font-semibold uppercase tracking-widest mb-1`}>Via {pay.method}</p>
+                    <p className="text-3xl font-extrabold text-white tracking-tight"><span className="text-sm font-medium text-slate-400 mr-1">LKR</span>{parseFloat(pay.amount).toLocaleString()}</p>
                 </div>
             </div>
 
-            <div className="bg-white/5 rounded-xl border border-white/10 p-4 mb-6">
-                <div className="flex justify-between items-start">
-                    <h6 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><ShieldCheck size={14}/> System Tally</h6>
-                    
+            <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 mb-6 shadow-inner">
+                <div className="flex justify-between items-center mb-4">
+                    <h6 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={16} className="text-emerald-500" /> System Tally</h6>
+
                     {(pay.excessAmount > 0 || pay.arrearsAmount > 0) && (
                         <div className="flex gap-2">
-                            {pay.excessAmount > 0 && <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">Excess: +LKR {pay.excessAmount}</span>}
-                            {pay.arrearsAmount > 0 && <span className="text-[10px] text-red-400 font-bold bg-red-500/10 px-2 py-1 rounded border border-red-500/20">Short: -LKR {pay.arrearsAmount}</span>}
+                            {pay.excessAmount > 0 && <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">Excess: +LKR {pay.excessAmount}</span>}
+                            {pay.arrearsAmount > 0 && <span className="text-[11px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20">Short: -LKR {pay.arrearsAmount}</span>}
                         </div>
                     )}
                 </div>
-                
+
                 {pay.subjectsList && pay.subjectsList.length > 0 ? (
-                    <div className="space-y-2 mb-4">
+                    <div className="space-y-3 mb-4">
                         {pay.subjectsList.map((sub, i) => (
-                            <div key={i} className="flex justify-between items-center text-sm border-b border-white/5 pb-2">
-                                <span className="text-white font-medium">{sub.name} <span className="text-xs text-slate-500">({sub.code})</span></span>
-                                <span className="text-emerald-400 font-medium">LKR {parseFloat(sub.price).toLocaleString()}</span>
+                            <div key={i} className="flex justify-between items-center text-sm border-b border-white/5 pb-3">
+                                <span className="text-slate-300 font-medium">{sub.name} <span className="text-xs text-slate-500 ml-1">({sub.code})</span></span>
+                                <span className="text-emerald-400 font-semibold">LKR {parseFloat(sub.price).toLocaleString()}</span>
                             </div>
                         ))}
                         <div className="flex justify-between items-center text-sm pt-2">
-                            <span className="text-white font-bold">System Expected Total:</span>
-                            <span className="text-red-400 font-bold text-lg">LKR {parseFloat(pay.systemTotal).toLocaleString()}</span>
+                            <span className="text-slate-300 font-bold">System Expected:</span>
+                            <span className="text-white font-black text-lg">LKR {parseFloat(pay.systemTotal).toLocaleString()}</span>
                         </div>
                     </div>
                 ) : (
-                    <p className="text-xs text-slate-500 mb-4 font-normal">No specific subjects selected or recognized.</p>
+                    <p className="text-xs text-slate-500 mb-4 font-medium italic">No specific subjects recognized.</p>
                 )}
 
                 {pay.type === 'Installment' ? (
-                    <div className="p-3 rounded-lg text-xs font-medium flex items-center justify-between border bg-purple-500/10 text-purple-400 border-purple-500/20">
-                        <span>Amount on Slip: LKR {parseFloat(pay.amount).toLocaleString()}</span>
-                        <span>Partial Installment Expected</span>
+                    <div className="p-3.5 rounded-xl text-xs font-semibold flex items-center justify-between border bg-purple-500/10 text-purple-300 border-purple-500/20 backdrop-blur-md">
+                        <span>Slip Amount: LKR {parseFloat(pay.amount).toLocaleString()}</span>
+                        <span className="bg-purple-500/20 px-2 py-1 rounded-md">Partial Installment</span>
                     </div>
                 ) : (
-                    <div className={`p-3 rounded-lg text-xs font-medium flex items-center justify-between border ${parseFloat(pay.systemTotal) === parseFloat(pay.amount) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
-                        <span>Amount on Slip: LKR {parseFloat(pay.amount).toLocaleString()}</span>
-                        {parseFloat(pay.systemTotal) !== parseFloat(pay.amount) && <span>Mismatch Detected!</span>}
-                        {parseFloat(pay.systemTotal) === parseFloat(pay.amount) && <span>Perfect Match!</span>}
+                    <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center justify-between border backdrop-blur-md ${parseFloat(pay.systemTotal) === parseFloat(pay.amount) ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-red-500/10 text-red-300 border-red-500/20'}`}>
+                        <span>Slip Amount: LKR {parseFloat(pay.amount).toLocaleString()}</span>
+                        {parseFloat(pay.systemTotal) !== parseFloat(pay.amount) ? <span className="bg-red-500/20 px-2 py-1 rounded-md text-red-200">Mismatch Detected</span> : <span className="bg-emerald-500/20 px-2 py-1 rounded-md text-emerald-200">Perfect Match</span>}
                     </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
                 <div>
-                    <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><FileImage size={14}/> Attached Slips</p>
+                    <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2"><FileImage size={16} /> Slips & Docs</p>
                         {pay.slips && pay.slips.length > 0 && (
-                            <button 
+                            <button
                                 onClick={() => openSlipsInNewTab(pay.slips, studentActionModal?.studentName || pay.studentName, studentActionModal?.studentNo || pay.studentNo, studentActionModal?.phone || pay.phone)}
-                                className="text-[10px] font-bold bg-blue-500/20 text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white transition-all border border-blue-500/30 shadow-lg shadow-blue-500/10"
+                                className="text-[10px] font-bold bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white transition-all border border-blue-500/30 shadow-sm"
                             >
-                                Open Slips View
+                                Open Gallery
                             </button>
                         )}
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar">
+                    <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
                         {pay.slips && pay.slips.length > 0 ? pay.slips.map((imgStr, i) => {
                             const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                             const backendBaseUrl = isLocalhost ? 'http://localhost:5000' : 'https://imacampus.online';
-                            const fileUrl = `${backendBaseUrl}/api/storage/documents/${imgStr}`; 
+                            const fileUrl = `${backendBaseUrl}/api/storage/documents/${imgStr}`;
                             const isPdf = imgStr.toLowerCase().endsWith('.pdf');
-                            
+
                             return (
-                                <div key={i} onClick={() => openSlipsInNewTab(pay.slips, studentActionModal?.studentName || pay.studentName, studentActionModal?.studentNo || pay.studentNo, studentActionModal?.phone || pay.phone)} className="relative shrink-0 w-20 h-20 border border-white/10 rounded-lg overflow-hidden hover:border-emerald-500 transition-colors cursor-pointer bg-black/40 flex items-center justify-center group" title="Click to view slip">
+                                <div key={i} onClick={() => openSlipsInNewTab(pay.slips, studentActionModal?.studentName || pay.studentName, studentActionModal?.studentNo || pay.studentNo, studentActionModal?.phone || pay.phone)} className="relative shrink-0 w-24 h-24 border border-white/10 rounded-xl overflow-hidden hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer bg-slate-900/50 flex items-center justify-center group" title="Click to view">
                                     {isPdf ? (
-                                        <div className="flex flex-col items-center text-white/50 text-[10px] font-normal uppercase"><FileText size={24} className="text-red-400 mb-1"/> PDF</div>
+                                        <div className="flex flex-col items-center text-white/40 text-[10px] font-medium uppercase group-hover:text-white/80 transition-colors"><FileText size={28} className="text-red-400/80 mb-1.5 group-hover:text-red-400 transition-colors" /> PDF</div>
                                     ) : (
-                                        <img src={fileUrl} alt="slip" className="h-full w-full object-cover" onError={(e) => { e.target.src='/logo.png'; }} />
+                                        <img src={fileUrl} alt="slip" className="h-full w-full object-cover opacity-80 group-hover:opacity-100 transition-opacity group-hover:scale-105 duration-500" onError={(e) => { e.target.src = '/logo.png'; }} />
                                     )}
                                 </div>
                             )
-                        }) : <span className="text-xs text-slate-500 font-normal">No slips uploaded.</span>}
+                        }) : <span className="text-xs text-slate-500 font-medium italic bg-slate-900/30 px-3 py-2 rounded-lg border border-white/5 inline-block">No documents attached</span>}
                     </div>
                 </div>
                 <div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><MessageSquare size={14}/> System Remark</p>
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-slate-300 italic min-h-[80px] whitespace-pre-wrap font-normal">
-                        {pay.remark ? pay.remark : "No remark."}
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><MessageSquare size={16} /> Remarks</p>
+                    <div className="bg-slate-900/50 border border-white/5 rounded-xl p-4 text-sm text-slate-300 italic min-h-[96px] whitespace-pre-wrap font-medium shadow-inner">
+                        {pay.remark ? pay.remark : "No system remarks available for this transaction."}
                     </div>
                 </div>
             </div>
 
             {/* PROCESS PAYMENT ACTIONS */}
             {['Pending', 'Non Paid', 'Upcoming', 'Rejected', 'Post Pay'].includes(activeTab) && pay.status !== 'Approved' && (
-                <div className="bg-[#1e2336] rounded-xl border border-white/10 p-5 mt-2">
+                <div className="bg-slate-900/60 rounded-2xl border border-white/5 p-5 mt-4 shadow-inner backdrop-blur-sm">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
-                        <ShieldCheck size={14}/> Process Payment
+                        <ShieldCheck size={14} /> Action Panel
                     </p>
-                    
-                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleQuickApprove(pay, false)} className="bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-emerald-500/20">
-                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={16}/> : <Check size={18}/>} Quick Approve
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleQuickApprove(pay, false)} className="bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg shadow-emerald-500/20 border border-emerald-400/30">
+                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} Quick Approve
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => openApproveModal(pay, false)} className="bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/30 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-blue-500/10">
-                            <Wallet size={18}/> Adjust Amount
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => openApproveModal(pay, false)} className="bg-slate-800 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 hover:border-blue-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
+                            <Wallet size={18} /> Adjust Amount
                         </button>
-                        
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => setInstitutePaymentModal(pay)} className="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-indigo-500/10">
-                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={16}/> : <CheckCircle2 size={18}/>} Institute Payment
+
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => setInstitutePaymentModal(pay)} className="bg-slate-800 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 hover:border-indigo-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
+                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Institute
                         </button>
-                        
+
                         {activeTab !== 'Post Pay' && (
-                            <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('PostPay', pay)} className="bg-orange-500/20 hover:bg-orange-500 text-orange-400 hover:text-white border border-orange-500/30 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-orange-500/10">
-                                <Unlock size={18}/> Grant Post Pay
+                            <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('PostPay', pay)} className="bg-slate-800 hover:bg-orange-600 text-orange-400 hover:text-white border border-orange-500/30 hover:border-orange-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
+                                <Unlock size={18} /> Post Pay
                             </button>
                         )}
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('FreeCard', pay)} className="bg-yellow-500/20 hover:bg-yellow-500 text-yellow-400 hover:text-white border border-yellow-500/30 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-yellow-500/10">
-                            <Gift size={18}/> Free Card
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('FreeCard', pay)} className="bg-slate-800 hover:bg-yellow-600 text-yellow-400 hover:text-white border border-yellow-500/30 hover:border-yellow-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
+                            <Gift size={18} /> Free Card
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('Discount', pay)} className="bg-cyan-500/20 hover:bg-cyan-500 text-cyan-400 hover:text-white border border-cyan-500/30 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-cyan-500/10">
-                            <Tag size={18}/> Custom Price
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('Discount', pay)} className="bg-slate-800 hover:bg-cyan-600 text-cyan-400 hover:text-white border border-cyan-500/30 hover:border-cyan-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
+                            <Tag size={18} /> Discount
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleAction(pay, 'Reject')} className="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center gap-1.5 text-center shadow-lg shadow-red-500/10">
-                            <CloseIcon size={18}/> Reject
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleAction(pay, 'Reject')} className="bg-slate-800 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 hover:border-red-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg lg:col-span-1 col-span-2">
+                            <CloseIcon size={18} /> Reject
                         </button>
                     </div>
                 </div>
@@ -651,16 +657,15 @@ export default function PaymentManagement({ loggedInUser }) {
             {/* Delivery Hub Button */}
             {['Free Card', 'Discount', 'Approved'].includes(pay.status) && (
                 <div className="mt-4">
-                    <button 
-                        disabled={actioningPaymentId === pay.id || !!pay.hasDelivery} 
-                        onClick={() => handleAction(pay, 'SendToDelivery')} 
-                        className={`w-full py-3.5 rounded-xl transition-all text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 shadow-lg ${
-                            pay.hasDelivery 
-                            ? 'bg-white/5 text-slate-500 border border-white/10 cursor-not-allowed shadow-none' 
-                            : 'bg-purple-500/20 hover:bg-purple-500 text-purple-400 hover:text-white border border-purple-500/30 shadow-purple-500/10'
-                        }`}
+                    <button
+                        disabled={actioningPaymentId === pay.id || !!pay.hasDelivery}
+                        onClick={() => handleAction(pay, 'SendToDelivery')}
+                        className={`w-full py-4 rounded-xl transition-all text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 shadow-lg backdrop-blur-md ${pay.hasDelivery
+                                ? 'bg-slate-800/50 text-slate-500 border border-white/5 cursor-not-allowed shadow-none'
+                                : 'bg-gradient-to-r from-purple-600/20 to-purple-500/20 hover:from-purple-600 hover:to-purple-500 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+                            }`}
                     >
-                        <Truck size={18}/> {pay.hasDelivery ? 'Already in Delivery Hub' : 'Send to Delivery Hub'}
+                        <Truck size={18} /> {pay.hasDelivery ? 'Dispatched to Delivery' : 'Send to Delivery Hub'}
                     </button>
                 </div>
             )}
@@ -669,62 +674,68 @@ export default function PaymentManagement({ loggedInUser }) {
 
     return (
         <div className="w-full animate-fade-in text-slate-200 pb-10 font-sans relative">
-            <div className="flex items-center gap-4 mb-8 bg-[#1e2336]/60 p-6 md:p-8 rounded-[2rem] border border-white/5 shadow-xl backdrop-blur-xl">
-                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-400 shrink-0">
-                    <Wallet size={28}/>
-                </div>
-                <div>
-                    <h2 className="text-2xl md:text-3xl font-bold text-white tracking-wide">Manage Payments</h2>
-                    <p className="text-slate-400 font-normal text-sm mt-1">Manage student payments, review slips, and filter effortlessly.</p>
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8 bg-gradient-to-r from-slate-900/80 to-slate-800/80 p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="flex items-center gap-5 relative z-10">
+                    <div className="p-4 bg-gradient-to-br from-emerald-400/20 to-emerald-600/20 rounded-2xl border border-emerald-400/30 text-emerald-400 shadow-inner">
+                        <Wallet size={32} strokeWidth={1.5} />
+                    </div>
+                    <div>
+                        <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">Payment Hub</h2>
+                        <p className="text-slate-400 font-medium text-sm mt-1">Review, approve, and manage transactions seamlessly.</p>
+                    </div>
                 </div>
             </div>
 
-            <PaymentFilters 
-                isAdmin={isAdmin} filters={filters} setFilters={setFilters} 
-                businesses={businesses} batches={batches} groups={groups} 
+            {/* 🔥 ALUTHIN ADD KALA: onOpenExport prop eka */}
+            <PaymentFilters
+                isAdmin={isAdmin} filters={filters} setFilters={setFilters}
+                businesses={businesses} batches={batches} groups={groups}
                 subjects={subjects} stats={stats} onOpenStaffStats={() => setShowStaffModal(true)}
+                onOpenExport={() => setShowExportModal(true)}
             />
 
-            <div className="flex gap-3 mb-8 pb-2 overflow-x-auto custom-scrollbar">
-                <button onClick={() => setActiveTab('Pending')} className={getTabClass('Pending')}><Clock size={16}/> Pending</button>
-                <button onClick={() => setActiveTab('Approved')} className={getTabClass('Approved')}><Check size={16}/> Approved</button>
-                <button onClick={() => setActiveTab('Free Card')} className={getTabClass('Free Card')}><Gift size={16}/> Free Card</button>
-                <button onClick={() => setActiveTab('Discount')} className={getTabClass('Discount')}><Tag size={16}/> Discount</button>
-                <button onClick={() => setActiveTab('Rejected')} className={getTabClass('Rejected')}><CloseIcon size={16}/> Rejected</button>
-                <button onClick={() => setActiveTab('Non Paid')} className={getTabClass('Non Paid')}><AlertCircle size={16}/> Non Paid</button>
-                <button onClick={() => setActiveTab('Post Pay')} className={getTabClass('Post Pay')}><Unlock size={16}/> Post Pay</button>
-                <button onClick={() => setActiveTab('Upcoming')} className={getTabClass('Upcoming')}><CalendarDays size={16}/> Upcoming Dues</button>
-                <button onClick={() => setActiveTab('Trash')} className={getTabClass('Trash')}><Trash2 size={16}/> Trash</button>
+            <div className="flex gap-3 mb-8 pb-3 overflow-x-auto custom-scrollbar p-1">
+                <button onClick={() => setActiveTab('Pending')} className={getTabClass('Pending')}><Clock size={16} /> Pending</button>
+                <button onClick={() => setActiveTab('Approved')} className={getTabClass('Approved')}><Check size={16} /> Approved</button>
+                <button onClick={() => setActiveTab('Free Card')} className={getTabClass('Free Card')}><Gift size={16} /> Free Card</button>
+                <button onClick={() => setActiveTab('Discount')} className={getTabClass('Discount')}><Tag size={16} /> Discount</button>
+                <button onClick={() => setActiveTab('Rejected')} className={getTabClass('Rejected')}><CloseIcon size={16} /> Rejected</button>
+                <button onClick={() => setActiveTab('Non Paid')} className={getTabClass('Non Paid')}><AlertCircle size={16} /> Non Paid</button>
+                <button onClick={() => setActiveTab('Post Pay')} className={getTabClass('Post Pay')}><Unlock size={16} /> Post Pay</button>
+                <button onClick={() => setActiveTab('Upcoming')} className={getTabClass('Upcoming')}><CalendarDays size={16} /> Upcoming Dues</button>
+                <button onClick={() => setActiveTab('Trash')} className={getTabClass('Trash')}><Trash2 size={16} /> Trash</button>
             </div>
 
             {/* APPROVED TAB MAIN VIEW SPLIT */}
             {activeTab === 'Approved' ? (
                 <div className="space-y-6">
-                    <div className="flex flex-wrap items-center gap-2 bg-black/20 p-2 rounded-2xl w-max border border-white/5">
-                        <button onClick={() => setApprovedFilter('All')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'All' ? 'bg-white/10 text-white border border-white/10 shadow-lg' : 'text-slate-400 hover:text-white'}`}>All Approved</button>
-                        <button onClick={() => setApprovedFilter('Slips')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'Slips' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-lg' : 'text-slate-400 hover:text-white'}`}>Slip Payments</button>
-                        <button onClick={() => setApprovedFilter('Online')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'Online' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shadow-lg' : 'text-slate-400 hover:text-white'}`}>Online (PayHere)</button>
+                    <div className="flex flex-wrap items-center gap-2 bg-slate-900/40 p-2 rounded-2xl w-max border border-white/5 backdrop-blur-md shadow-inner">
+                        <button onClick={() => setApprovedFilter('All')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'All' ? 'bg-white/10 text-white border border-white/10 shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>All Approved</button>
+                        <button onClick={() => setApprovedFilter('Slips')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'Slips' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-md' : 'text-slate-400 hover:text-white hover:bg-emerald-500/10'}`}>Slip Payments</button>
+                        <button onClick={() => setApprovedFilter('Online')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'Online' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-md' : 'text-slate-400 hover:text-white hover:bg-indigo-500/10'}`}>Online (PayHere)</button>
                     </div>
 
                     {loading ? (
-                        <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40}/></div>
+                        <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40} /></div>
                     ) : (
                         <>
                             {/* SLIP PAYMENTS SECTION */}
                             {(approvedFilter === 'All' || approvedFilter === 'Slips') && (
-                                <div className="bg-[#1e2336]/40 p-6 rounded-[2rem] border border-emerald-500/20 shadow-lg">
-                                    <h3 className="text-emerald-400 font-bold text-lg mb-6 flex items-center gap-2"><FileImage size={20}/> Slip Payments</h3>
+                                <div className="bg-slate-800/30 backdrop-blur-xl p-6 rounded-[2rem] border border-emerald-500/20 shadow-xl">
+                                    <h3 className="text-emerald-400 font-bold text-lg mb-6 flex items-center gap-2"><FileImage size={20} /> Slip Payments</h3>
                                     <div className="space-y-4">
                                         {paginatedStudents.map(student => {
                                             const slipPays = student.allPayments.filter(p => p.method !== 'PayHere' && p.method !== 'Online');
                                             if (slipPays.length === 0) return null;
                                             return (
-                                                <div key={`slip-${student.studentId}`} className="bg-[#15192b] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-md">
+                                                <div key={`slip-${student.studentId}`} className="bg-slate-900/60 border border-white/5 hover:border-white/10 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-md transition-colors">
                                                     <div className="flex items-center gap-4 w-full">
-                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"><User size={20}/></div>
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"><User size={20} /></div>
                                                         <div>
                                                             <h4 className="font-bold text-white text-md flex items-center flex-wrap gap-2">
-                                                                {student.studentName} 
+                                                                {student.studentName}
                                                                 <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 tracking-widest uppercase">{student.studentNo}</span>
                                                                 {student.phone && student.phone !== 'N/A' && <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
                                                             </h4>
@@ -744,19 +755,19 @@ export default function PaymentManagement({ loggedInUser }) {
 
                             {/* ONLINE PAYMENTS SECTION */}
                             {(approvedFilter === 'All' || approvedFilter === 'Online') && (
-                                <div className="bg-[#1e2336]/40 p-6 rounded-[2rem] border border-indigo-500/20 shadow-lg mt-6">
-                                    <h3 className="text-indigo-400 font-bold text-lg mb-6 flex items-center gap-2"><CreditCard size={20}/> Online (PayHere) Payments</h3>
+                                <div className="bg-slate-800/30 backdrop-blur-xl p-6 rounded-[2rem] border border-indigo-500/20 shadow-xl mt-6">
+                                    <h3 className="text-indigo-400 font-bold text-lg mb-6 flex items-center gap-2"><CreditCard size={20} /> Online (PayHere) Payments</h3>
                                     <div className="space-y-4">
                                         {paginatedStudents.map(student => {
                                             const onlinePays = student.allPayments.filter(p => p.method === 'PayHere' || p.method === 'Online');
                                             if (onlinePays.length === 0) return null;
                                             return (
-                                                <div key={`online-${student.studentId}`} className="bg-[#15192b] border border-white/5 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-md">
+                                                <div key={`online-${student.studentId}`} className="bg-slate-900/60 border border-white/5 hover:border-white/10 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-md transition-colors">
                                                     <div className="flex items-center gap-4 w-full">
-                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-indigo-500/20 bg-indigo-500/10 text-indigo-400"><User size={20}/></div>
+                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-indigo-500/20 bg-indigo-500/10 text-indigo-400"><User size={20} /></div>
                                                         <div>
                                                             <h4 className="font-bold text-white text-md flex items-center flex-wrap gap-2">
-                                                                {student.studentName} 
+                                                                {student.studentName}
                                                                 <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 tracking-widest uppercase">{student.studentNo}</span>
                                                                 {student.phone && student.phone !== 'N/A' && <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
                                                             </h4>
@@ -775,10 +786,10 @@ export default function PaymentManagement({ loggedInUser }) {
                             )}
 
                             {totalPages > 1 && (
-                                <div className="flex justify-between items-center mt-6 bg-[#1e2336]/40 p-4 rounded-xl border border-white/5">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16}/> Prev</button>
+                                <div className="flex justify-between items-center mt-6 bg-slate-800/40 backdrop-blur-md p-4 rounded-xl border border-white/5 shadow-inner">
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16} /> Prev</button>
                                     <span className="text-sm font-medium text-white bg-black/40 px-4 py-1.5 rounded-lg border border-white/5">Page {currentPage} of {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16}/></button>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16} /></button>
                                 </div>
                             )}
                         </>
@@ -787,54 +798,55 @@ export default function PaymentManagement({ loggedInUser }) {
             ) : (
                 <div className="space-y-4">
                     {loading ? (
-                        <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40}/></div>
+                        <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40} /></div>
                     ) : paginatedStudents.length === 0 ? (
-                        <div className="text-center py-20 bg-[#1e2336]/40 rounded-[2rem] border border-white/5"><p className="text-slate-500 font-normal text-lg">No records found for the selected filters.</p></div>
+                        <div className="text-center py-20 bg-slate-800/30 backdrop-blur-xl rounded-[2rem] border border-white/5"><p className="text-slate-500 font-medium text-lg">No records found for the selected filters.</p></div>
                     ) : (
                         <>
                             {paginatedStudents.map(student => {
                                 const latestPayment = student.allPayments[0];
                                 return (
-                                <div key={student.studentId} className="bg-[#1e2336]/80 border border-white/5 hover:border-white/10 p-5 md:p-6 rounded-2xl flex flex-col md:flex-row items-start justify-between gap-6 transition-colors shadow-lg">
-                                    <div className="flex items-start gap-4 flex-1 w-full">
-                                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 mt-1">
-                                            <User size={26} strokeWidth={1.5}/>
+                                    <div key={student.studentId} className="bg-slate-800/30 backdrop-blur-md border border-white/5 hover:border-white/10 p-5 md:p-6 rounded-2xl flex flex-col md:flex-row items-start justify-between gap-6 transition-colors shadow-xl group">
+                                        <div className="flex items-start gap-4 flex-1 w-full">
+                                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 mt-1">
+                                                <User size={26} strokeWidth={1.5} />
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-bold text-lg text-white flex items-center flex-wrap gap-3">
+                                                    {student.studentName}
+                                                    <span className="text-[10px] font-normal text-white/50 bg-black/40 px-2.5 py-1 rounded-md border border-white/5 tracking-widest uppercase">{student.studentNo}</span>
+                                                    {student.phone && student.phone !== 'N/A' && <span className="text-[10px] font-normal text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
+                                                </h4>
+                                                {latestPayment && (
+                                                    <>
+                                                        <p className="text-xs text-slate-400 mt-2 flex items-center gap-2">
+                                                            <span className="text-white font-medium bg-white/10 px-2 py-0.5 rounded">{latestPayment.date}</span>
+                                                            <span>• {latestPayment.business}</span>
+                                                            <span>• {latestPayment.batch}</span>
+                                                        </p>
+                                                        <div className="flex flex-wrap gap-2 mt-3 items-center">
+                                                            <span className="text-[10px] font-normal bg-blue-500/10 text-blue-400 px-3 py-1 rounded-md border border-blue-500/20 uppercase tracking-widest">Type: {latestPayment.type}</span>
+                                                            <span className="text-[10px] font-normal bg-purple-500/10 text-purple-400 px-3 py-1 rounded-md border border-purple-500/20 uppercase tracking-widest">Method: {latestPayment.method}</span>
+                                                            {student.allPayments.length > 1 && <span className="text-[10px] font-normal text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded uppercase tracking-widest">+{student.allPayments.length - 1} Payments</span>}
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex-1">
-                                            <h4 className="font-bold text-lg text-white flex items-center flex-wrap gap-3">
-                                                {student.studentName} 
-                                                <span className="text-[10px] font-normal text-white/50 bg-black/40 px-2.5 py-1 rounded-md border border-white/5 tracking-widest uppercase">{student.studentNo}</span>
-                                                {student.phone && student.phone !== 'N/A' && <span className="text-[10px] font-normal text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
-                                            </h4>
-                                            {latestPayment && (
-                                                <>
-                                                    <p className="text-xs text-slate-400 mt-2 flex items-center gap-2">
-                                                        <span className="text-white font-medium bg-white/10 px-2 py-0.5 rounded">{latestPayment.date}</span>
-                                                        <span>• {latestPayment.business}</span>
-                                                        <span>• {latestPayment.batch}</span>
-                                                    </p>
-                                                    <div className="flex flex-wrap gap-2 mt-3 items-center">
-                                                        <span className="text-[10px] font-normal bg-blue-500/10 text-blue-400 px-3 py-1 rounded-md border border-blue-500/20 uppercase tracking-widest">Type: {latestPayment.type}</span>
-                                                        <span className="text-[10px] font-normal bg-purple-500/10 text-purple-400 px-3 py-1 rounded-md border border-purple-500/20 uppercase tracking-widest">Method: {latestPayment.method}</span>
-                                                        {student.allPayments.length > 1 && <span className="text-[10px] font-normal text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded uppercase tracking-widest">+{student.allPayments.length - 1} Payments</span>}
-                                                    </div>
-                                                </>
-                                            )}
+                                        <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-white/5 md:border-t-0 pt-4 md:pt-0 shrink-0">
+                                            <button onClick={() => setStudentActionModal(student)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 px-8 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg whitespace-nowrap">
+                                                Review Payments
+                                            </button>
                                         </div>
                                     </div>
-                                    <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-white/5 md:border-t-0 pt-4 md:pt-0 shrink-0">
-                                        <button onClick={() => setStudentActionModal(student)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 px-8 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg whitespace-nowrap">
-                                            Review Payments
-                                        </button>
-                                    </div>
-                                </div>
-                            )})}
+                                )
+                            })}
 
                             {totalPages > 1 && (
-                                <div className="flex justify-between items-center mt-6 bg-[#1e2336]/40 p-4 rounded-xl border border-white/5">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16}/> Prev</button>
+                                <div className="flex justify-between items-center mt-6 bg-slate-800/40 backdrop-blur-md p-4 rounded-xl border border-white/5 shadow-inner">
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16} /> Prev</button>
                                     <span className="text-sm font-medium text-white bg-black/40 px-4 py-1.5 rounded-lg border border-white/5">Page {currentPage} of {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16}/></button>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16} /></button>
                                 </div>
                             )}
                         </>
@@ -844,12 +856,12 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* 🔥 STUDENT ACTION MODAL (REVIEW PAYMENTS) - LOKU RECTANGLE SHAPE 🔥 */}
             {studentActionModal && createPortal(
-                <div className="fixed inset-0 z-[9990] bg-[#0a0f1c]/95 backdrop-blur-sm p-4 md:p-8 flex items-center justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <div className="bg-[#15192b] border border-white/10 rounded-[2.5rem] w-full max-w-[95vw] min-h-[90vh] max-h-[95vh] shadow-2xl relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
-                        
-                        <div className="bg-[#15192b] border-b border-white/5 p-6 md:px-10 rounded-t-[2.5rem] flex justify-between items-center shadow-sm shrink-0">
+                <div className="fixed inset-0 z-[9990] bg-slate-900/80 backdrop-blur-xl p-4 md:p-8 flex items-center justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <div className="bg-slate-900/90 border border-white/10 rounded-[2.5rem] w-full max-w-[95vw] min-h-[90vh] max-h-[95vh] shadow-[0_0_50px_rgba(0,0,0,0.5)] relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden backdrop-blur-3xl">
+
+                        <div className="bg-slate-800/50 border-b border-white/5 p-6 md:px-10 rounded-t-[2.5rem] flex justify-between items-center shadow-sm shrink-0">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex justify-center items-center border border-emerald-500/20"><User size={28}/></div>
+                                <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex justify-center items-center border border-emerald-500/20"><User size={28} /></div>
                                 <div>
                                     <h3 className="text-2xl font-black text-white tracking-wide">{studentActionModal.studentName}</h3>
                                     <div className="flex items-center gap-2 mt-1.5">
@@ -862,10 +874,10 @@ export default function PaymentManagement({ loggedInUser }) {
                         </div>
 
                         <div className="p-6 md:p-10 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-10 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                            
+
                             <div className="space-y-6 h-full">
-                                <h4 className="font-black text-white uppercase tracking-widest text-sm flex items-center gap-2 mb-6 border-b border-white/10 pb-4"><AlertCircle className="text-emerald-500" size={20}/> Payment to Action</h4>
-                                
+                                <h4 className="font-black text-white uppercase tracking-widest text-sm flex items-center gap-2 mb-6 border-b border-white/10 pb-4"><AlertCircle className="text-emerald-500" size={20} /> Payment to Action</h4>
+
                                 {(() => {
                                     const allStudentPays = studentActionModal.allPayments || [];
                                     let leftSidePayment = allStudentPays.find(p => {
@@ -886,9 +898,9 @@ export default function PaymentManagement({ loggedInUser }) {
                                 })()}
                             </div>
 
-                            <div className="bg-black/30 rounded-[2rem] border border-white/5 p-8 h-full shadow-inner flex flex-col">
-                                <h4 className="font-black text-white uppercase tracking-widest text-sm flex items-center gap-2 mb-6 border-b border-white/10 pb-4"><Clock className="text-blue-500" size={20}/> Other Payments History</h4>
-                                
+                            <div className="bg-slate-900/50 rounded-[2rem] border border-white/5 p-8 h-full shadow-inner flex flex-col backdrop-blur-md">
+                                <h4 className="font-black text-white uppercase tracking-widest text-sm flex items-center gap-2 mb-6 border-b border-white/10 pb-4"><Clock className="text-blue-500" size={20} /> Other Payments History</h4>
+
                                 <div className="space-y-4 flex-1 overflow-y-auto pr-2 pb-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                                     {(() => {
                                         const allStudentPays = studentActionModal.allPayments || [];
@@ -908,7 +920,7 @@ export default function PaymentManagement({ loggedInUser }) {
                                                 </div>
                                             );
                                         }
-                                        
+
                                         return rightSidePayments.map(hist => (
                                             <div key={hist.id} className={`bg-white/5 rounded-[1.5rem] p-5 md:p-6 border hover:bg-white/10 transition-all shadow-md ${hist.status === 'Trash' ? 'border-red-500/30 opacity-60' : 'border-white/5'}`}>
                                                 <div className="flex justify-between items-start mb-3">
@@ -922,7 +934,7 @@ export default function PaymentManagement({ loggedInUser }) {
                                                     <div className="flex items-center gap-4">
                                                         {hist.slips && hist.slips.length > 0 && (
                                                             <button onClick={() => openSlipsInNewTab(hist.slips, studentActionModal.studentName, studentActionModal.studentNo, studentActionModal.phone)} className="text-[11px] font-bold text-blue-400 hover:text-blue-300 hover:underline cursor-pointer bg-blue-500/10 px-4 py-1.5 rounded-xl border border-blue-500/20 flex items-center gap-1.5 transition-colors shadow-sm">
-                                                                <FileImage size={14}/> View Slips
+                                                                <FileImage size={14} /> View Slips
                                                             </button>
                                                         )}
                                                         <span className="font-black text-white text-xl">LKR {parseFloat(hist.amount).toLocaleString()}</span>
@@ -941,13 +953,13 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* 🔥 VERIFY AMOUNT MODAL (OVER/UNDER PAY OPTION) 🔥 */}
             {approveModal && createPortal(
-                <div className="fixed inset-0 z-[99999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md">
-                    <div className="bg-[#15192b] border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[99999] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-xl">
+                    <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
                         <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><CheckCircle2 className="text-emerald-500"/> Verify Payment</h3>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><CheckCircle2 className="text-emerald-500" /> Verify Payment</h3>
                             <button onClick={() => setApproveModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={20} /></button>
                         </div>
-                        
+
                         <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
                             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1">Expected Amount</p>
                             <p className="text-3xl font-black text-white">LKR {parseFloat(approveModal.payment.amount || 0).toLocaleString()}</p>
@@ -956,11 +968,11 @@ export default function PaymentManagement({ loggedInUser }) {
                         {/* 🔥 Actual Amount Paid Field 🔥 */}
                         <div className="mb-4">
                             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block">Actual Amount Paid (LKR)</label>
-                            <input 
-                                type="number" 
-                                value={actualAmount} 
-                                onChange={e => setActualAmount(e.target.value)} 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 text-lg text-center shadow-inner" 
+                            <input
+                                type="number"
+                                value={actualAmount}
+                                onChange={e => setActualAmount(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 text-lg text-center shadow-inner"
                                 placeholder="Enter actual slip amount"
                             />
                             <p className="text-[10px] text-orange-400/80 mt-2 text-center bg-orange-500/10 p-1.5 rounded-lg border border-orange-500/20">
@@ -970,16 +982,16 @@ export default function PaymentManagement({ loggedInUser }) {
 
                         <div className="mb-6">
                             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block flex items-center gap-1">Admin Remark (Optional)</label>
-                            <textarea 
-                                value={actionRemark} 
-                                onChange={e => setActionRemark(e.target.value)} 
-                                placeholder="Any internal notes?" rows="2" 
+                            <textarea
+                                value={actionRemark}
+                                onChange={e => setActionRemark(e.target.value)}
+                                placeholder="Any internal notes?" rows="2"
                                 className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-normal outline-none focus:border-emerald-500 transition-colors resize-none"
                             ></textarea>
                         </div>
 
                         <button disabled={actioningPaymentId !== null} onClick={submitApprove} className="w-full font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20">
-                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16}/> : <Check size={16}/>} 
+                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
                             Confirm Approve {approveModal.isSelfPicked && '(Self-Picked)'}
                         </button>
                     </div>
@@ -988,13 +1000,13 @@ export default function PaymentManagement({ loggedInUser }) {
             )}
 
             {advancedActionModal && createPortal(
-                <div className="fixed inset-0 z-[99999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md">
-                    <div className="bg-[#15192b] border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[99999] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-xl">
+                    <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
                         <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
                             <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                {advancedActionModal.type === 'Discount' && <><Tag className="text-cyan-400"/> Set Custom Prices</>}
-                                {advancedActionModal.type === 'FreeCard' && <><Gift className="text-yellow-400"/> Grant Free Card</>}
-                                {advancedActionModal.type === 'PostPay' && <><Unlock className="text-orange-400"/> Grant Post Pay</>}
+                                {advancedActionModal.type === 'Discount' && <><Tag className="text-cyan-400" /> Set Custom Prices</>}
+                                {advancedActionModal.type === 'FreeCard' && <><Gift className="text-yellow-400" /> Grant Free Card</>}
+                                {advancedActionModal.type === 'PostPay' && <><Unlock className="text-orange-400" /> Grant Post Pay</>}
                             </h3>
                             <button onClick={() => setAdvancedActionModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={20} /></button>
                         </div>
@@ -1039,7 +1051,7 @@ export default function PaymentManagement({ loggedInUser }) {
                         )}
 
                         <button disabled={actioningPaymentId !== null} onClick={submitAdvancedAction} className={`w-full font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg ${advancedActionModal.type === 'Discount' ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20' : advancedActionModal.type === 'FreeCard' ? 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-yellow-500/20' : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20'}`}>
-                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16}/> : <Check size={16}/>} 
+                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
                             Confirm {advancedActionModal.type === 'Discount' ? 'Custom Approval' : advancedActionModal.type === 'FreeCard' ? 'Free Card' : '7 Days Temp Unlock'}
                         </button>
                     </div>
@@ -1049,22 +1061,22 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* 🔥 INSTITUTE PAYMENT OPTION MODAL 🔥 */}
             {institutePaymentModal && createPortal(
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 overflow-hidden">
-                    <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4 overflow-hidden">
+                    <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
                         <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><CheckCircle2 className="text-indigo-500"/> Institute Payment</h3>
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><CheckCircle2 className="text-indigo-500" /> Institute Payment</h3>
                             <button onClick={() => setInstitutePaymentModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={20} /></button>
                         </div>
-                        
+
                         <p className="text-sm text-slate-300 mb-6 text-center">How should the tutes be handled for this student?</p>
-                        
+
                         <div className="flex flex-col gap-3">
                             <button disabled={actioningPaymentId !== null} onClick={() => handleInstituteApprove(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg flex justify-center items-center gap-2">
-                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16}/> : <User size={18}/>} Self Picked (No Delivery)
+                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <User size={18} />} Self Picked (No Delivery)
                             </button>
-                            
+
                             <button disabled={actioningPaymentId !== null} onClick={() => handleInstituteApprove(false)} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg flex justify-center items-center gap-2">
-                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16}/> : <Truck size={18}/>} Send to Delivery Hub
+                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <Truck size={18} />} Send to Delivery Hub
                             </button>
                         </div>
                     </div>
@@ -1074,10 +1086,10 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* 🔥 Installment Verify Modal with Actual Amount 🔥 */}
             {installmentModal && createPortal(
-                <div className="fixed inset-0 z-[99999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md">
-                    <form onSubmit={handleInstallmentApprove} className="bg-[#15192b] border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 z-[99999] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-xl">
+                    <form onSubmit={handleInstallmentApprove} className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
                         <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-4">
-                            <h3 className="text-white font-bold text-lg flex items-center gap-2"><CheckCircle2 className="text-emerald-500"/> Verify Installment</h3>
+                            <h3 className="text-white font-bold text-lg flex items-center gap-2"><CheckCircle2 className="text-emerald-500" /> Verify Installment</h3>
                             <button type="button" onClick={() => setInstallmentModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={16} /></button>
                         </div>
 
@@ -1088,11 +1100,11 @@ export default function PaymentManagement({ loggedInUser }) {
 
                         <div className="mb-4">
                             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block">Actual Amount Paid (LKR)</label>
-                            <input 
-                                type="number" 
-                                value={actualAmount} 
-                                onChange={e => setActualAmount(e.target.value)} 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 text-center text-lg shadow-inner" 
+                            <input
+                                type="number"
+                                value={actualAmount}
+                                onChange={e => setActualAmount(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 text-center text-lg shadow-inner"
                             />
                         </div>
 
@@ -1103,16 +1115,16 @@ export default function PaymentManagement({ loggedInUser }) {
 
                         <div className="mb-6">
                             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block flex items-center gap-1">Admin Remark (Optional)</label>
-                            <textarea 
-                                value={actionRemark} 
-                                onChange={e => setActionRemark(e.target.value)} 
-                                placeholder="Any notes?" rows="2" 
+                            <textarea
+                                value={actionRemark}
+                                onChange={e => setActionRemark(e.target.value)}
+                                placeholder="Any notes?" rows="2"
                                 className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-normal outline-none focus:border-emerald-500 transition-colors resize-none"
                             ></textarea>
                         </div>
 
                         <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-4 text-xs tracking-widest uppercase font-bold transition-all shadow-lg shadow-emerald-600/20 flex justify-center items-center gap-2">
-                            <Check size={16}/> Confirm Installment
+                            <Check size={16} /> Confirm Installment
                         </button>
                     </form>
                 </div>,
@@ -1120,8 +1132,20 @@ export default function PaymentManagement({ loggedInUser }) {
             )}
 
             {showStaffModal && (
-                <StaffPerformanceModal 
-                    onClose={() => setShowStaffModal(false)} 
+                <StaffPerformanceModal
+                    onClose={() => setShowStaffModal(false)}
+                />
+            )}
+
+            {/* 🔥 ALUTHIN ADD KALA: EXPORT REPORT MODAL RENDER EKA 🔥 */}
+            {showExportModal && (
+                <ExportReportModal 
+                    onClose={() => setShowExportModal(false)}
+                    payments={payments}
+                    filters={filters}
+                    businesses={businesses}
+                    batches={batches}
+                    subjects={subjects}
                 />
             )}
         </div>

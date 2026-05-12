@@ -40,7 +40,7 @@ exports.getPayments = async (req, res) => {
             let currentStatus = 'Pending';
             
             if (p.status === 5) currentStatus = 'Trash'; 
-            else if (p.payment_type === 1 && p.status === 1 && p.valid_until && new Date(p.valid_until) < today) {
+            else if (parseInt(p.payment_type) === 1 && p.status === 1 && p.valid_until && new Date(p.valid_until) < today) {
                 currentStatus = 'Non Paid';
                 await prisma.payment.update({ where: { id: p.id }, data: { status: 3 } });
             } 
@@ -91,7 +91,7 @@ exports.getPayments = async (req, res) => {
                 amount: p.amount || 0,
                 systemTotal: systemTotal, 
                 subjectsList: parsedSubjects, 
-                type: p.payment_type === 1 ? 'Monthly' : (p.payment_type === 2 ? 'Installment' : 'Full'),
+                type: parseInt(p.payment_type) === 1 ? 'Monthly' : (parseInt(p.payment_type) === 2 ? 'Installment' : 'Full'),
                 method: p.method || 'Slip',
                 status: currentStatus,
                 date: p.created_at ? new Date(p.created_at).toISOString().split('T')[0] : '-',
@@ -131,7 +131,7 @@ exports.paymentAction = async (req, res) => {
                     const subIds = JSON.parse(payRecord.subjects).map(id => parseInt(id));
                     const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
                     if (courses.length > 0) {
-                        const paymentTypeStr = payRecord.payment_type === 1 ? 'Monthly' : (payRecord.payment_type === 2 ? 'Installment' : 'Full');
+                        const paymentTypeStr = parseInt(payRecord.payment_type) === 1 ? 'Monthly' : (parseInt(payRecord.payment_type) === 2 ? 'Installment' : 'Full');
                         await prisma.delivery.create({
                             data: {
                                 paymentId: payRecord.id, studentId: payRecord.studentId.toString(), businessId: payRecord.businessId,
@@ -182,12 +182,12 @@ exports.paymentAction = async (req, res) => {
         }
 
         if (['Approve', 'Free Card', 'Discount'].includes(action)) {
-            if (payRecord.payment_type === 1) { 
-                let validDate = new Date();
-                validDate.setDate(validDate.getDate() + 30);
-                updateData.valid_until = validDate;
-            }
-        }
+    if (parseInt(payRecord.payment_type) === 1) { // 🔥 මෙතනටත් parseInt දාන්න
+        let validDate = new Date();
+        validDate.setDate(validDate.getDate() + 30);
+        updateData.valid_until = validDate;
+    }
+}
 
         if (remark && action !== 'Trash') {
             updateData.remark = updateData.remark 

@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../api/axios';
-import { FaCommentDots, FaUserTie, FaPhoneVolume, FaCheckCircle, FaExclamationCircle, FaChartBar } from 'react-icons/fa';
+import { FaCommentDots, FaUserTie, FaPhoneVolume, FaCheckCircle, FaExclamationCircle, FaChartBar, FaCalendarAlt } from 'react-icons/fa';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export default function NewInquiriesPerformance({ filters }) {
     const [loading, setLoading] = useState(true);
+    
+    // 🔥 NEW: Date Range States 🔥
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
     const [stats, setStats] = useState({
         totalNewInq: 0,
         totalContacted: 0,
@@ -15,34 +20,57 @@ export default function NewInquiriesPerformance({ filters }) {
 
     useEffect(() => {
         fetchNewInqStats();
-    }, [filters?.selectedBusiness, filters?.selectedBatch]);
+    }, [filters?.selectedBusiness, filters?.selectedBatch, startDate, endDate]);
 
     const fetchNewInqStats = async () => {
+        // 🔥 FIX: Business ekak nattan witharak return wenna. Batch eka 'ALL' wunata kamak na.
+        if (!filters?.selectedBusiness) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
             const res = await axios.get('/after-seminar-crm/stats/new-inquiries', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { 
-                    businessId: filters?.selectedBusiness || '', 
-                    batchId: filters?.selectedBatch || '' 
+                    businessId: filters.selectedBusiness, 
+                    batchId: filters.selectedBatch || 'ALL', 
+                    startDate: startDate || undefined,
+                    endDate: endDate || undefined
                 }
             });
             if (res.data) setStats(res.data);
         } catch (error) {
             console.error("Failed to fetch New Inq Stats", error);
-            // ⚠️ MOCK DATA FOR UI TESTING (Backend එක හදනකන් පේන්න)
             setStats({
-                totalNewInq: 450, totalContacted: 320, totalPending: 130, totalEnrolled: 85,
-                staffBreakdown: [
-                    { name: 'Chamindu', assigned: 150, contacted: 120, pending: 30, enrolled: 45 },
-                    { name: 'Kasun', assigned: 150, contacted: 100, pending: 50, enrolled: 20 },
-                    { name: 'Nimal', assigned: 150, contacted: 100, pending: 50, enrolled: 20 }
-                ]
+                totalNewInq: 0, totalContacted: 0, totalPending: 0, totalEnrolled: 0,
+                staffBreakdown: []
             });
+        } finally {
+            setLoading(false); 
         }
-        setLoading(false);
     };
+
+    // 🔥 DATE FILTER HANDLERS (උදේ 8 ඉඳන් රෑ 8 වෙනකන්) 🔥
+    const handleDailyClick = () => {
+        const todayDate = new Date();
+        const localDateStr = new Date(todayDate.getTime() - (todayDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+        
+        // හරියටම උදේ 8 සහ රෑ 8 (20:00) සෙට් කිරීම
+        setStartDate(`${localDateStr}T08:00`);
+        setEndDate(`${localDateStr}T20:00`);
+    };
+
+    const handleClearDates = () => {
+        setStartDate('');
+        setEndDate('');
+    };
+
+    if (!filters?.selectedBusiness) {
+        return <div className="flex justify-center items-center h-[400px] text-slate-500 font-sans tracking-wide">Please select a Campaign/Business to view analytics.</div>;
+    }
 
     if (loading) return <div className="flex justify-center items-center h-[400px] text-slate-500 animate-pulse font-sans tracking-wide">Loading Direct Inquiries Analytics...</div>;
 
@@ -51,6 +79,58 @@ export default function NewInquiriesPerformance({ filters }) {
     return (
         <div className="flex flex-col gap-6 font-sans text-slate-200">
             
+            {/* 🔥 DATE FILTERS ROW 🔥 */}
+            <div className="flex flex-col md:flex-row justify-between items-center bg-[#141a23] p-4 rounded-2xl border border-slate-800 shadow-md gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-lg">
+                        <FaCalendarAlt size={18}/>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Campaign Stats Filter</h3>
+                        <p className="text-[10px] text-slate-400">Filter by specific dates or view today's performance</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* DAILY BUTTON */}
+                    <button 
+                        onClick={handleDailyClick}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-all"
+                    >
+                        Today (Daily)
+                    </button>
+
+                    {/* DATE RANGE PICKER (Changed to datetime-local) */}
+                    <div className="flex items-center gap-2 bg-[#0b0e14] border border-slate-700 p-1.5 rounded-lg">
+                        <input 
+                            type="datetime-local" 
+                            value={startDate} 
+                            onChange={(e) => setStartDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                        <span className="text-slate-500 text-xs">to</span>
+                        <input 
+                            type="datetime-local" 
+                            value={endDate} 
+                            onChange={(e) => setEndDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                    </div>
+
+                    {/* CLEAR FILTER */}
+                    {(startDate || endDate) && (
+                        <button 
+                            onClick={handleClearDates}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider rounded-lg transition-all"
+                        >
+                            Clear
+                        </button>
+                    )}
+                </div>
+            </div>
+
             {/* TOP SUMMARY CARDS */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white/[0.02] backdrop-blur-md p-5 rounded-2xl border border-white/5 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all">
@@ -82,22 +162,27 @@ export default function NewInquiriesPerformance({ filters }) {
             {/* CHARTS & DETAILS ROW */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {/* STAFF PERFORMANCE CHART */}
+                {/* STAFF PERFORMANCE CHART (Vertical Layout) */}
                 <div className="bg-white/[0.02] backdrop-blur-lg p-5 rounded-2xl border border-white/5 shadow-xl flex flex-col">
                     <h3 className="text-xs font-semibold text-slate-300 mb-6 uppercase tracking-widest flex items-center gap-2"><FaChartBar className="text-pink-400"/> Staff Conversion Chart</h3>
-                    <div className="flex-1 min-h-[250px]">
+                    
+                    {/* 🔥 Vertical Chart Container 🔥 */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-[350px] max-h-[500px]">
                         {stats.staffBreakdown.length === 0 ? <div className="flex h-full items-center justify-center text-slate-500 text-sm">No data available.</div> : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={stats.staffBreakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                    <RechartsTooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px'}} />
-                                    <Legend verticalAlign="bottom" wrapperStyle={{fontSize: '11px', paddingTop: '10px'}} />
-                                    <Bar dataKey="contacted" name="Handled Leads" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
-                                    <Bar dataKey="enrolled" name="Enrolled" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            <div style={{ height: `${Math.max(stats.staffBreakdown.length * 50, 300)}px` }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    {/* Layout changed to vertical */}
+                                    <BarChart data={stats.staffBreakdown} layout="vertical" margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={true} vertical={false} />
+                                        <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                        <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={110} />
+                                        <RechartsTooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px', color: '#fff'}} />
+                                        <Legend verticalAlign="top" wrapperStyle={{fontSize: '11px', paddingBottom: '10px'}} />
+                                        <Bar dataKey="contacted" name="Contacted" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={12} />
+                                        <Bar dataKey="enrolled" name="Enrolled" fill="#10b981" radius={[0, 4, 4, 0]} barSize={12} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         )}
                     </div>
                 </div>

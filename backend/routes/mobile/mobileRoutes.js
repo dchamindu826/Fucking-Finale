@@ -68,6 +68,6 @@ router.post('/profile/password', verifyToken, mobileStudentController.updateMobi
 // 🔥 NEW: Profile Update Route (Image Upload එකත් එක්ක)
 router.post('/profile/update', verifyToken, upload.single('image'), mobileStudentController.updateMobileProfile);
 
-router.get('/getVideoStream/:videoId', verifyToken, mobileStudentController.getVideoStream);
+router.get('/yt-redirect', mobileStudentController.ytRedirect);
 
 module.exports = router;

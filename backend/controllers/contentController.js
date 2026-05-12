@@ -188,6 +188,15 @@ exports.createSubject = async (req, res) => {
             });
         }
 
+        // 🔥 NEW FIX: Tute Cover එකයි Name එකයි අනිත් Groups වලටත් Share කරනවා (Monthly/Full දෙකටම)
+        const commonCover = parsedPrices.find(gp => gp.tuteCover)?.tuteCover;
+        const commonTuteName = parsedPrices.find(gp => gp.tuteName)?.tuteName;
+
+        parsedPrices.forEach(gp => {
+            if (!gp.tuteCover && commonCover) gp.tuteCover = commonCover;
+            if (!gp.tuteName && commonTuteName) gp.tuteName = commonTuteName;
+        });
+
         const coursePromises = parsedPrices.map(gp => {
             if (lecturerImage) gp.lecturerImage = lecturerImage;
             gp.deliverTute = gp.deliverTute === true || gp.deliverTute === 'true';
@@ -266,6 +275,15 @@ exports.updateSubject = async (req, res) => {
             gp.deliverTute = gp.deliverTute === true || gp.deliverTute === 'true';
             gp._existingCourse = existingCourse;
         }
+
+        // 🔥 NEW FIX: Update කරද්දීත් Tute Cover එකයි Name එකයි Share කරනවා
+        const commonCover = parsedPrices.find(gp => gp.tuteCover)?.tuteCover;
+        const commonTuteName = parsedPrices.find(gp => gp.tuteName)?.tuteName;
+
+        parsedPrices.forEach(gp => {
+            if (!gp.tuteCover && commonCover) gp.tuteCover = commonCover;
+            if (!gp.tuteName && commonTuteName) gp.tuteName = commonTuteName;
+        });
 
         const finalGroupPricesStr = JSON.stringify(parsedPrices.map(gp => {
             const { _existingCourse, ...cleanGp } = gp;

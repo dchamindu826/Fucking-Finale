@@ -1,105 +1,139 @@
 import React, { useState, useEffect } from 'react';
 import axios from '../../../api/axios';
-import { FaUsers, FaUserTie, FaPhoneVolume, FaCheckCircle, FaExclamationCircle, FaChartBar, FaPlay, FaPause, FaExclamationTriangle } from 'react-icons/fa';
+import { FaUsers, FaUserTie, FaPhoneVolume, FaCheckCircle, FaExclamationCircle, FaChartBar, FaExclamationTriangle, FaCalendarAlt } from 'react-icons/fa';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend } from 'recharts';
 import toast from 'react-hot-toast';
 
 export default function OpenSeminarControls({ filters }) {
     const [loading, setLoading] = useState(true);
     
-    // 🔥 MANAGER ROUND CONTROLS STATE 🔥
-    const [roundStatuses, setRoundStatuses] = useState({ 1: 'active', 2: 'paused', 3: 'paused' });
+    // 🔥 Date Range States 🔥
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
 
     const [stats, setStats] = useState({
         totalOpenSem: 0,
         totalContacted: 0,
         totalPending: 0,
-        totalDelayed: 0, // 🔥 NEW: KPI for delayed calls
+        totalDelayed: 0,
         totalEnrolled: 0,
         staffBreakdown: []
     });
 
     useEffect(() => {
         fetchOpenSemStats();
-    }, [filters?.selectedBusiness, filters?.selectedBatch]);
+    }, [filters?.selectedBusiness, filters?.selectedBatch, startDate, endDate]);
 
     const fetchOpenSemStats = async () => {
+        if (!filters?.selectedBusiness) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
             const res = await axios.get('/after-seminar-crm/stats/open-seminar', {
                 headers: { Authorization: `Bearer ${token}` },
                 params: { 
-                    businessId: filters?.selectedBusiness || '', 
-                    batchId: filters?.selectedBatch || '' 
+                    businessId: filters.selectedBusiness, 
+                    batchId: filters.selectedBatch || 'ALL', 
+                    startDate: startDate || undefined,
+                    endDate: endDate || undefined
                 }
             });
             if (res.data) setStats(res.data);
         } catch (error) {
             console.error("Failed to fetch Open Sem Stats", error);
-            // ⚠️ MOCK DATA (Backend eken totalDelayed ekai staff ge delayed ekai enakan penna)
             setStats({
-                totalOpenSem: 600, totalContacted: 450, totalPending: 105, totalDelayed: 45, totalEnrolled: 120,
-                staffBreakdown: [
-                    { name: 'Chamindu', assigned: 200, contacted: 180, pending: 15, delayed: 5, enrolled: 60 },
-                    { name: 'Kasun', assigned: 200, contacted: 150, pending: 30, delayed: 20, enrolled: 40 },
-                    { name: 'Nimal', assigned: 200, contacted: 120, pending: 60, delayed: 20, enrolled: 20 }
-                ]
+                totalOpenSem: 0, totalContacted: 0, totalPending: 0, totalDelayed: 0, totalEnrolled: 0,
+                staffBreakdown: []
             });
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
-    // 🔥 TOGGLE ROUND FUNCTION 🔥
-    const handleToggleRound = (roundNum) => {
-        const current = roundStatuses[roundNum];
-        const nextStatus = current === 'active' ? 'paused' : 'active';
-        setRoundStatuses(prev => ({ ...prev, [roundNum]: nextStatus }));
-        toast.success(`Round ${roundNum} is now ${nextStatus.toUpperCase()} for all coordinators!`);
+    // 🔥 DATE FILTER HANDLERS (උදේ 8 ඉඳන් රෑ 8 වෙනකන්) 🔥
+    const handleDailyClick = () => {
+        const todayDate = new Date();
+        // Get local date string format YYYY-MM-DD
+        const localDateStr = new Date(todayDate.getTime() - (todayDate.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
         
-        // TODO: Methana backend API eka call karanna round status eka DB eke save karanna
-        // axios.post('/admin/campaign/toggle-round', { round: roundNum, status: nextStatus })
+        // හරියටම උදේ 8 සහ රෑ 8 (20:00) සෙට් කිරීම
+        setStartDate(`${localDateStr}T08:00`);
+        setEndDate(`${localDateStr}T20:00`);
     };
 
-    if (loading) return <div className="flex justify-center items-center h-[400px] text-slate-500 animate-pulse font-sans tracking-wide">Loading Open Seminar Analytics...</div>;
+    const handleClearDates = () => {
+        setStartDate('');
+        setEndDate('');
+    };
+
+    if (!filters?.selectedBusiness) {
+        return <div className="flex justify-center items-center h-[400px] text-slate-500 font-sans tracking-wide">Please select a Campaign/Business to view analytics.</div>;
+    }
+
+    if (loading && !stats.totalOpenSem) return <div className="flex justify-center items-center h-[400px] text-slate-500 animate-pulse font-sans tracking-wide">Loading Open Seminar Analytics...</div>;
 
     const conversionRate = stats.totalContacted > 0 ? Math.round((stats.totalEnrolled / stats.totalContacted) * 100) : 0;
 
     return (
-        <div className="flex flex-col gap-6 font-sans text-slate-200 animate-fade-in">
+        <div className="flex flex-col gap-6 font-sans text-slate-200 animate-fade-in p-2 rounded-lg" style={{ background: '#0f151c' }}>
             
-            {/* 🔥 MANAGER ROUND CONTROLS (NEW) 🔥 */}
-            <div className="bg-gradient-to-r from-[#141a23] to-[#0f151c] p-5 rounded-2xl border border-slate-800 shadow-md flex flex-col md:flex-row justify-between items-center gap-4">
-                <div>
-                    <h3 className="text-white font-bold text-sm uppercase tracking-widest flex items-center gap-2">
-                        <FaChartBar className="text-blue-500"/> Global Campaign Controls
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">Start or Pause calling rounds for all coordinators.</p>
+            {/* 🔥 DATE FILTERS ROW 🔥 */}
+            <div className="flex flex-col md:flex-row justify-between items-center bg-[#141a23] p-4 rounded-2xl border border-slate-800 shadow-md gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-blue-500/10 text-blue-400 rounded-lg">
+                        <FaCalendarAlt size={18}/>
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-white uppercase tracking-wider">Campaign Stats Filter</h3>
+                        <p className="text-[10px] text-slate-400">Filter by specific dates or view today's performance</p>
+                    </div>
                 </div>
-                <div className="flex gap-3 bg-[#0b0e14] p-2 rounded-xl border border-slate-800/80">
-                    {[
-                        { num: 1, label: 'Confirmation Call' },
-                        { num: 2, label: '1st Round' },
-                        { num: 3, label: '2nd Round' }
-                    ].map(round => (
-                        <div key={round.num} className="flex items-center group bg-[#1a2332] rounded-lg border border-slate-700/50 overflow-hidden">
-                            <div className={`px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider ${roundStatuses[round.num] === 'active' ? 'text-white' : 'text-slate-500'}`}>
-                                {round.label}
-                            </div>
-                            <button 
-                                onClick={() => handleToggleRound(round.num)} 
-                                className={`px-4 py-2.5 transition-all flex items-center justify-center border-l border-slate-700/50
-                                    ${roundStatuses[round.num] === 'active' ? 'bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-400' : 'bg-amber-500/10 hover:bg-amber-500/30 text-amber-500'}
-                                `}
-                            >
-                                {roundStatuses[round.num] === 'active' ? <FaPlay size={10}/> : <FaPause size={10}/>}
-                            </button>
-                        </div>
-                    ))}
+
+                <div className="flex items-center gap-3 flex-wrap">
+                    {/* DAILY BUTTON */}
+                    <button 
+                        onClick={handleDailyClick}
+                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg shadow-md transition-all"
+                    >
+                        Today (Daily)
+                    </button>
+
+                    {/* DATE RANGE PICKER (Changed to datetime-local) */}
+                    <div className="flex items-center gap-2 bg-[#0b0e14] border border-slate-700 p-1.5 rounded-lg">
+                        <input 
+                            type="datetime-local" 
+                            value={startDate} 
+                            onChange={(e) => setStartDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                        <span className="text-slate-500 text-xs">to</span>
+                        <input 
+                            type="datetime-local" 
+                            value={endDate} 
+                            onChange={(e) => setEndDate(e.target.value)} 
+                            className="bg-transparent text-slate-300 text-xs font-semibold outline-none px-2 cursor-pointer"
+                            style={{colorScheme: 'dark'}}
+                        />
+                    </div>
+
+                    {/* CLEAR FILTER */}
+                    {(startDate || endDate) && (
+                        <button 
+                            onClick={handleClearDates}
+                            className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-wider rounded-lg transition-all"
+                        >
+                            Clear
+                        </button>
+                    )}
                 </div>
             </div>
 
-            {/* TOP SUMMARY CARDS (Now 5 columns to include DELAYED KPI) */}
+            {/* TOP SUMMARY CARDS */}
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <div className="bg-white/[0.02] backdrop-blur-md p-5 rounded-2xl border border-white/5 shadow-lg flex flex-col justify-center hover:bg-white/[0.05] transition-all">
                     <div className="flex items-center gap-3 mb-2">
@@ -125,7 +159,6 @@ export default function OpenSeminarControls({ filters }) {
                     <h2 className="text-2xl font-semibold text-slate-300">{stats.totalPending}</h2>
                 </div>
 
-                {/* 🔥 RED ALERT: DELAYED CALLS KPI 🔥 */}
                 <div className="bg-red-500/5 backdrop-blur-md p-5 rounded-2xl border border-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.1)] flex flex-col justify-center relative overflow-hidden">
                     <div className="absolute -right-4 -top-4 w-16 h-16 bg-red-500/10 rounded-full blur-xl animate-pulse"></div>
                     <div className="flex items-center gap-3 mb-2 relative z-10">
@@ -151,23 +184,28 @@ export default function OpenSeminarControls({ filters }) {
             {/* CHARTS & DETAILS ROW */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                {/* STAFF PERFORMANCE CHART */}
+                {/* STAFF PERFORMANCE CHART (Vertical Layout) */}
                 <div className="bg-white/[0.02] backdrop-blur-lg p-5 rounded-2xl border border-white/5 shadow-xl flex flex-col">
                     <h3 className="text-xs font-semibold text-slate-300 mb-6 uppercase tracking-widest flex items-center gap-2"><FaChartBar className="text-indigo-400"/> Staff Conversion Chart</h3>
-                    <div className="flex-1 min-h-[250px]">
+                    
+                    {/* 🔥 Vertical Chart Container 🔥 */}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-[350px] max-h-[500px]">
                         {stats.staffBreakdown.length === 0 ? <div className="flex h-full items-center justify-center text-slate-500 text-sm">No data available.</div> : (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={stats.staffBreakdown} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                                    <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                    <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                    <RechartsTooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px'}} />
-                                    <Legend verticalAlign="bottom" wrapperStyle={{fontSize: '11px', paddingTop: '10px'}} />
-                                    <Bar dataKey="contacted" name="Contacted" fill="#6366f1" radius={[4, 4, 0, 0]} barSize={15} />
-                                    <Bar dataKey="delayed" name="Delayed (KPI)" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={15} />
-                                    <Bar dataKey="enrolled" name="Enrolled" fill="#10b981" radius={[4, 4, 0, 0]} barSize={15} />
-                                </BarChart>
-                            </ResponsiveContainer>
+                            <div style={{ height: `${Math.max(stats.staffBreakdown.length * 60, 300)}px` }}>
+                                <ResponsiveContainer width="100%" height="100%">
+                                    {/* Layout changed to vertical */}
+                                    <BarChart data={stats.staffBreakdown} layout="vertical" margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" horizontal={true} vertical={false} />
+                                        <XAxis type="number" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                        <YAxis type="category" dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={110} />
+                                        <RechartsTooltip cursor={{fill: '#ffffff05'}} contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px', fontSize:'12px', color: '#fff'}} />
+                                        <Legend verticalAlign="top" wrapperStyle={{fontSize: '11px', paddingBottom: '10px'}} />
+                                        <Bar dataKey="contacted" name="Contacted" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={10} />
+                                        <Bar dataKey="delayed" name="Delayed (KPI)" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={10} />
+                                        <Bar dataKey="enrolled" name="Enrolled" fill="#10b981" radius={[0, 4, 4, 0]} barSize={10} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -192,7 +230,6 @@ export default function OpenSeminarControls({ filters }) {
                                         <th className="py-3 text-center font-semibold">Assigned</th>
                                         <th className="py-3 text-center font-semibold text-amber-400">Contacted</th>
                                         <th className="py-3 text-center font-semibold text-slate-400">Pending</th>
-                                        {/* 🔥 DELAYED COLUMN (RED MARK) 🔥 */}
                                         <th className="py-3 text-center font-bold text-red-500 bg-red-500/10">Delayed (KPI)</th>
                                         <th className="py-3 text-center font-semibold text-emerald-400">Enrolled</th>
                                         <th className="py-3 px-2 text-right font-semibold rounded-tr-lg">Conversion</th>
@@ -201,7 +238,7 @@ export default function OpenSeminarControls({ filters }) {
                                 <tbody className="divide-y divide-white/5">
                                     {stats.staffBreakdown.map((staff, idx) => {
                                         const rate = staff.contacted > 0 ? Math.round((staff.enrolled / staff.contacted) * 100) : 0;
-                                        const isHighDelay = staff.delayed > 10; // Simple rule to highlight severe delays
+                                        const isHighDelay = staff.delayed > 10;
                                         return (
                                             <tr key={idx} className="hover:bg-white/[0.03] transition-colors">
                                                 <td className="py-3 px-2 font-medium text-slate-200">{staff.name}</td>
@@ -209,7 +246,6 @@ export default function OpenSeminarControls({ filters }) {
                                                 <td className="py-3 text-center font-semibold text-amber-400">{staff.contacted}</td>
                                                 <td className="py-3 text-center font-semibold text-slate-400">{staff.pending}</td>
                                                 
-                                                {/* KPI DELAY CELL */}
                                                 <td className={`py-3 text-center font-bold ${isHighDelay ? 'text-white bg-red-600 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]' : 'text-red-400 bg-red-500/5'} border-l border-r border-red-500/20`}>
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         {isHighDelay && <FaExclamationTriangle className="animate-pulse"/>}

@@ -193,7 +193,11 @@ export default function AfterSeminarDashboard() {
            onRedirectToCampaign={handleRedirectToCampaign} 
            />
           {selectedLead ? (
-            <><AfterSeminarChatArea selectedLead={selectedLead} /><AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} /></>
+            <>
+    {/* මෙතනට businessId={activeBusinessId} එකතු කරන්න */}
+    <AfterSeminarChatArea selectedLead={selectedLead} businessId={activeBusinessId} />
+    <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
+  </>
           ) : (
             <div className="flex-1 bg-[#23303f] rounded-2xl flex flex-col items-center justify-center text-slate-500 shadow-xl border border-white/5">
               <FaWhatsapp className="text-6xl text-slate-600 mb-4 opacity-50" />
@@ -236,9 +240,10 @@ export default function AfterSeminarDashboard() {
                 </div>
 
                 <div className="flex-1 flex gap-4 p-4 h-[calc(100%-70px)] bg-[#0b141a]">
-                    <AfterSeminarChatArea selectedLead={selectedLead} />
-                    <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
-                </div>
+    {/* මෙතනටත් businessId={activeBusinessId} එකතු කරන්න */}
+    <AfterSeminarChatArea selectedLead={selectedLead} businessId={activeBusinessId} />
+    <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
+</div>
             </div>
         </div>
       )}

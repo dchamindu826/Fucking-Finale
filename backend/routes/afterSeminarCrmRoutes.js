@@ -41,6 +41,7 @@ router.post('/leads/revert-round', afterSeminarInquiryController.revertDeletedRo
 
 // Webhook
 router.post('/webhook', afterSeminarInquiryController.receiveMessage);
+router.get('/meta-templates', afterSeminarInquiryController.getMetaTemplates);
 
 // Chat Messages & Broadcast
 router.get('/messages/:leadId', afterSeminarInquiryController.getMessages);

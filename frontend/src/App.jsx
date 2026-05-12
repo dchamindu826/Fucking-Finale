@@ -10,6 +10,7 @@ import PrivacyPolicy from './pages/web/pages/PrivacyPolicy';
 import Terms from './pages/web/pages/Terms'; 
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import GhostAuth from './pages/auth/GhostAuth'; // 🔥 NEW: Ghost Auth Import
 import MainLayout from "./components/layouts/MainLayout";
 import CallCampaignModule from './components/CoordinatorCRM/CallCampaignModule';
 
@@ -23,6 +24,8 @@ import ClassTimetable from './components/common/ClassTimetable';
 import TaskCenter from './components/common/TaskCenter';
 import AfterSeminarDashboard from './components/AfterSeminarCRM/AfterSeminarDashboard';
 
+import ThemeShowcase from './components/ThemeShowcase';
+
 // System Admin CRM Setup
 import CrmManagement from './components/admin/CrmManagement';
 import DatabaseManager from './components/admin/DatabaseManager';
@@ -34,12 +37,48 @@ import CoordinatorDashboard from './pages/ClassCoordinator/CoordinatorDashboard'
 import ManagerDashboard from './pages/class_coordinator/manager/ManagerDashboard';
 import DeliveryDashboard from './pages/delivery/DeliveryDashboard'; 
 
-// 🔥 NEW: Finance Dashboard Import 🔥
+// Finance Dashboard Import
 import FinanceOverview from './pages/finance/FinanceOverview';
 
 // Student
 import StudentDashboard from './pages/student/StudentDashboard';
 import StudentDeliveryHub from './pages/student/components/DeliveryHub'; 
+
+// 🔥 GHOST MODE BANNER COMPONENT 🔥
+const GhostModeBanner = () => {
+  const isAdminGhosting = localStorage.getItem('admin_token');
+
+  if (!isAdminGhosting) return null;
+
+  const handleExitGhostMode = () => {
+      // 1. ආයෙත් Admin ගේ දේවල් Restore කරනවා
+      localStorage.setItem('token', localStorage.getItem('admin_token'));
+      localStorage.setItem('user', localStorage.getItem('admin_user'));
+
+      // 2. හංගපු දේවල් අයින් කරනවා
+      localStorage.removeItem('admin_token');
+      localStorage.removeItem('admin_user');
+
+      // 3. 🔥 මෙතන '/' වෙනුවට '/login' දැම්මා. 
+      // එතකොට ඔයාගේ App එකේ logic එකෙන් කෙලින්ම Dashboard එකට Navigate කරයි.
+      window.location.href = '/login';
+  };
+
+  return (
+      <div className="fixed top-0 left-0 w-full z-[9999] bg-red-600/90 backdrop-blur-md border-b border-red-500 text-white py-2 px-6 flex justify-between items-center shadow-2xl">
+          <div className="font-bold text-sm flex items-center gap-2">
+              <span className="animate-pulse">🔴</span> 
+              You are currently in GHOST MODE (Viewing as a staff member)
+          </div>
+          <button 
+              onClick={handleExitGhostMode} 
+              className="bg-white text-red-600 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-gray-200 transition-colors shadow-sm"
+          >
+              Return to Admin
+          </button>
+      </div>
+  );
+};
 
 export default function App() {
   const [loggedInUser, setLoggedInUser] = useState(null);
@@ -88,17 +127,20 @@ export default function App() {
   return (
     <BrowserRouter>
       <Toaster position="top-right" /> 
+      
+      <GhostModeBanner />
 
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home loggedInUser={loggedInUser} />} />
-        
         <Route path="/about-us" element={<AboutUs />} />
         <Route path="/contact-us" element={<ContactUs />} />
         <Route path="/privacy-policy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<Terms />} />
-
         <Route path="/register" element={<Register />} />
+        
+        {/* 🔥 NEW: Ghost Login Route 🔥 */}
+        <Route path="/ghost-auth" element={<GhostAuth />} />
         
         <Route 
           path="/login" 
@@ -107,21 +149,16 @@ export default function App() {
 
         {/* ✅ ADMIN & STAFF ROUTES ✅ */}
         <Route element={loggedInUser && loggedInUser.role.toUpperCase() !== 'STUDENT' && loggedInUser.role.toUpperCase() !== 'USER' ? <MainLayout loggedInUser={loggedInUser} handleLogout={handleLogout} /> : <Navigate to="/login" />}>
-            
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            
             <Route path="/manager/dashboard" element={<ManagerDashboard />} /> 
             <Route path="/coordinator/dashboard" element={<ManagerDashboard />} /> 
-            
-            {/* 🔥 FIX: Changed to load the actual Finance Overview component 🔥 */}
             <Route path="/finance/dashboard" element={<FinanceOverview />} /> 
-            
             <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
             <Route path="/technical/dashboard" element={<ManagerDashboard />} />
             <Route path="/workspace/call-campaign" element={<CallCampaignModule loggedInUser={loggedInUser} />} />
-            
-            {/* Delivery Dashboard Route */}
             <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
+
+            <Route path="/theme-showcase" element={<ThemeShowcase />} />
 
             {/* Common Panels */}
             <Route path="/admin/content-hub" element={<ContentHub loggedInUser={loggedInUser} />} />
@@ -134,11 +171,11 @@ export default function App() {
             {/* System Admin CRM Configuration */}
             <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
             <Route path="/admin/database" element={<DatabaseManager />} />
+            <Route path="/theme-showcase" element={<ThemeShowcase />} />
 
             {/* Active CRM Interface for Staff & Managers */}
             <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
             <Route path="/workspace/after-seminar-crm" element={<AfterSeminarDashboard loggedInUser={loggedInUser} />} />
-
         </Route>
 
         {/* ✅ STUDENT ROUTES ✅ */}
@@ -146,14 +183,14 @@ export default function App() {
           path="/student/dashboard" 
           element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDashboard /> : <Navigate to="/login" />} 
         />
-        
         <Route 
           path="/student/delivery" 
           element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDeliveryHub /> : <Navigate to="/login" />} 
         />
 
-        <Route path="*" element={<Navigate to="/" />} />
 
+
+        <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
   );

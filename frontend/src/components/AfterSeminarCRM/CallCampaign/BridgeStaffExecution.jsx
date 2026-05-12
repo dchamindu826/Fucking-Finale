@@ -13,7 +13,7 @@ export default function BridgeStaffExecution({ filters, setChatModalLead, extern
     const [searchQuery, setSearchQuery] = useState('');
     const [activePhase, setActivePhase] = useState(1);
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 50; // 🔥 Changed to 50
 
     const [sessionEnrolled, setSessionEnrolled] = useState({ total: 0, full: 0, monthly: 0, installment: 0 });
 

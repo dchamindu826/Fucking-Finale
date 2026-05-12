@@ -3,10 +3,13 @@ const prisma = new PrismaClient();
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken'); // 🔥 FIX: Ghost login error fix
 const bcrypt = require('bcrypt');
+const axios = require('axios');
+const streamCache = {};
 
 // 🔥 NEW: BigInt convert karana helper function eka meka hama thanatama pawichi karanawa
 const safeJson = (data) => JSON.parse(JSON.stringify(data, (key, value) => typeof value === 'bigint' ? value.toString() : value));
 
+// 1. Dashboard
 // 1. Dashboard
 exports.getStudentDashboard = async (req, res) => {
     try {
@@ -69,21 +72,50 @@ exports.getStudentDashboard = async (req, res) => {
 
         let unlockedVideos = 0;
         let studyMaterials = 0;
+        let upcomingLive = null; // 🔥 NEW: Live Class Variable
+
         if (enrolledSubjectIds.size > 0) {
             const courseIds = Array.from(enrolledSubjectIds).map(id => BigInt(id));
             const linkedContents = await prisma.contentCourse.findMany({ where: { course_id: { in: courseIds } } });
+            
             if (linkedContents.length > 0) {
                 const contentIds = linkedContents.map(lc => lc.content_id);
                 const allContents = await prisma.content.findMany({ where: { id: { in: contentIds } } });
+                
                 unlockedVideos = allContents.filter(c => ['live', 'recording', '1', '2'].includes(c.contentType)).length;
                 studyMaterials = allContents.filter(c => ['document', 'paper', 'sPaper', '3', '4', '5'].includes(c.contentType)).length;
+
+                // 🔥 NEW LOGIC: හොයනවා අද දවසේ හෝ ඉස්සරහට තියෙන ළඟම Live Class එක
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0); // අද දවසේ පටන් ගැන්ම
+
+                const liveClasses = allContents
+                    .filter(c => ['live', '1'].includes(c.contentType) && c.date && new Date(c.date) >= startOfToday)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date)); // දවස අනුව පිළිවෙලකට හදනවා
+
+                if (liveClasses.length > 0) {
+                    const nearestClass = liveClasses[0]; // ළඟම class එක ගන්නවා
+                    
+                    // ඒකට අදාල Subject එකේ නම හොයනවා
+                    const courseLink = linkedContents.find(lc => lc.content_id === nearestClass.id);
+                    const courseDetails = courseLink ? await prisma.course.findUnique({ where: { id: Number(courseLink.course_id) } }) : null;
+
+                    upcomingLive = {
+                        id: nearestClass.id,
+                        title: nearestClass.title,
+                        link: nearestClass.link,
+                        date: nearestClass.date,
+                        startTime: nearestClass.startTime,
+                        endTime: nearestClass.endTime,
+                        courseName: courseDetails?.name || 'Live Class'
+                    };
+                }
             }
         }
 
-        // 🔥 FIX: Dashboard data eka yawanakota safeJson walin watalai yawanne
         res.status(200).json(safeJson({
             enrolledCount: enrolledSubjectIds.size, 
-            upcomingLive: null,
+            upcomingLive: upcomingLive, // 🔥 FIX: දැන් null නෙමෙයි, හරියටම live class data එක යවනවා
             posts: posts,
             alerts: alerts,
             duePayments: duePaymentsList,
@@ -133,14 +165,23 @@ exports.getAvailableEnrollments = async (req, res) => {
 exports.getMyEnrolledSubjects = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id;
+        
+        // Status 0 (Pending), 1 (Approved), 4 (PostPay) ඔක්කොම ගන්නවා
         const validPayments = await prisma.payment.findMany({
-            where: { studentId: parseInt(studentId), status: { in: [0, 1, 4] } } // Pending + Approved
+            where: { studentId: parseInt(studentId), status: { in: [0, 1, 4] } } 
         });
 
         let enrolled = [];
         validPayments.forEach(p => {
             if (p.subjects) {
-                try { enrolled.push(...JSON.parse(p.subjects).map(Number)); } catch(e){}
+                try { 
+                    const parsed = JSON.parse(p.subjects);
+                    // 🔥 MAGIC FIX: App එකේ Data Type අවුලක් ආවත් match වෙන්න, Number සහ String දෙකම Array එකට දානවා
+                    enrolled.push(...parsed.map(Number)); 
+                    enrolled.push(...parsed.map(String)); 
+                } catch(e) {
+                    console.error("Subject Parse Error:", e);
+                }
             }
         });
 
@@ -217,7 +258,7 @@ exports.payhereNotify = async (req, res) => {
                 const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
 
                 if (courses.length > 0) {
-                    const paymentTypeStr = updatedPayment.payment_type === 1 ? 'Monthly' : (updatedPayment.payment_type === 2 ? 'Installment' : 'Full');
+                    const paymentTypeStr = parseInt(updatedPayment.payment_type) === 1 ? 'Monthly' : (parseInt(updatedPayment.payment_type) === 2 ? 'Installment' : 'Full');
 
                     await prisma.delivery.create({
                         data: {
@@ -248,35 +289,101 @@ exports.payhereNotify = async (req, res) => {
     }
 };
 
+
 // 4. Enrollment එක Save කිරීම (Direct Checkout with Multiple Slips & Remark)
 exports.enrollStudent = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id;
         const { businessId, batchId, groupId, subjects, paymentMethodChosen, method, orderId, amount, remark } = req.body;
         
-        // Slips ගොඩක් එනවා නම් ඒවා කමා (,) දාලා string එකක් කරනවා DB එකට දාන්න
         const slipFileNames = req.files && req.files.length > 0 
             ? req.files.map(f => f.filename).join(',') 
             : null;
 
-        await prisma.payment.create({
+        let parsedPaymentType = 1; // Default Monthly (1)
+        
+        if (paymentMethodChosen) {
+            const methodStr = String(paymentMethodChosen).toLowerCase().trim();
+            if (methodStr === 'installment' || methodStr === '2') {
+                parsedPaymentType = 2; // Installment
+            } else if (methodStr === 'full' || methodStr === '3') {
+                parsedPaymentType = 3; // Full
+            } else if (methodStr === 'monthly' || methodStr === '1') {
+                parsedPaymentType = 1; // Monthly
+            }
+        }
+
+        // 🔥 SECURITY FIX: Frontend eken ena de wiswasa karanne nathuwa DB eke Group Type eka balala hari eka danna
+        if (groupId) {
+            const groupData = await prisma.group.findUnique({ where: { id: parseInt(groupId) } });
+            if (groupData) {
+                if (groupData.type === 1) {
+                    // Group eka Monthly nam, payment_type eka aniwaryayen 1 (Monthly) wenna onamaයි
+                    parsedPaymentType = 1; 
+                } else if (groupData.type === 2) {
+                    // Group eka Full/Installment nam, payment_type eka 2 hari 3 hari wenna ona
+                    // Frontend eken waradila 1 awith thibboth eka 3 (Full) widihata hadanawa
+                    if (parsedPaymentType === 1) {
+                        parsedPaymentType = 3; 
+                    }
+                }
+            }
+        }
+
+        // 🔥 FIX: Simple/Capital අවුල නැති වෙන්න method එක lowercase කරනවා
+        const safeMethod = String(method || '').toLowerCase().trim();
+        const initialStatus = safeMethod === 'payhere' ? 1 : 0; 
+
+        const newPayment = await prisma.payment.create({
             data: {
                 studentId: parseInt(studentId),
                 businessId: parseInt(businessId),
                 batchId: parseInt(batchId),
                 groupId: groupId ? parseInt(groupId) : null,
                 subjects: typeof subjects === 'string' ? subjects : JSON.stringify(subjects || []),
-                payment_type: paymentMethodChosen === 'installment' ? 2 : (paymentMethodChosen === 'full' ? 3 : 1),
-                method: method === 'slip' ? 'Slip' : 'PayHere',
-                status: method === 'slip' ? 0 : 1, 
+                payment_type: parsedPaymentType,
+                method: safeMethod === 'slip' ? 'Slip' : 'PayHere',
+                status: initialStatus, // 🔥 දැන් මෙතනින් 100% ක් Auto Approve වෙනවා
                 slip_image: slipFileNames,
-                // 🔥 FIX: 57999.9999 වගේ save වෙන එක නවත්තන්න parseFloat කරලා .toFixed(2) දාලා තියෙන්නේ
                 amount: amount ? parseFloat(parseFloat(amount).toFixed(2)) : 0,
                 remark: remark || null 
             }
         });
 
-        res.status(200).json({ message: "Enrolled Successfully" });
+        // 🔥 NEW: PayHere වලින් ආවොත් කෙලින්ම Delivery එකත් Auto හැදෙන්න ඕනේ
+        if (safeMethod === 'payhere' && newPayment.subjects) {
+            try {
+                const subIds = JSON.parse(newPayment.subjects).map(id => parseInt(id));
+                const courses = await prisma.course.findMany({ where: { id: { in: subIds } } });
+
+                if (courses.length > 0) {
+                    const paymentTypeStr = parsedPaymentType === 1 ? 'Monthly' : (parsedPaymentType === 2 ? 'Installment' : 'Full');
+
+                    await prisma.delivery.create({
+                        data: {
+                            paymentId: newPayment.id,
+                            studentId: newPayment.studentId.toString(),
+                            businessId: newPayment.businessId,
+                            paymentType: paymentTypeStr,
+                            status: 'Pending', // Delivery Hub එකට Pending කියලා වැටෙනවා
+                            items: {
+                                create: courses.map(c => ({
+                                    courseId: c.id,
+                                    tuteName: c.name || "Tute",
+                                    quantity: 1
+                                }))
+                            }
+                        }
+                    });
+                    console.log(`🚚 Auto-Delivery created for Instant PayHere Payment ID: ${newPayment.id}`);
+                }
+            } catch (err) {
+                console.error("Auto Delivery Error:", err);
+            }
+        }
+
+        // දැන් Postman එකේ 'Payment Approved & Enrolled' කියලා එයි!
+        res.status(200).json({ message: safeMethod === 'payhere' ? "Payment Approved & Enrolled" : "Enrolled Successfully" });
     } catch (error) {
         console.error("Enrollment Save Error:", error);
         res.status(500).json({ error: "Enrollment failed" });
@@ -295,7 +402,7 @@ exports.getStudentClassroom = async (req, res) => {
         if (validPayments.length === 0) return res.status(200).json({ businesses: [] });
 
         const validBatchIds = [...new Set(validPayments.map(p => p.batchId).filter(Boolean))];
-        const validGroupIds = [...new Set(validPayments.filter(p => p.payment_type === 1).map(p => p.groupId).filter(Boolean))];
+        const validGroupIds = [...new Set(validPayments.map(p => p.groupId).filter(Boolean))];
 
         let allowedSubjectIds = [];
         validPayments.forEach(p => {
@@ -698,4 +805,31 @@ exports.confirmDelivery = async (req, res) => {
         console.error("Confirm Delivery Error:", error);
         res.status(500).json({ error: "Failed to update delivery status." });
     }
+};
+
+// 🔥 PERMANENT YOUTUBE IFRAME FIX (NO EXTRACTION) 🔥
+exports.getVideoStream = async (req, res) => {
+    try {
+        const videoId = req.params.videoId;
+        
+        console.log(`🎬 YouTube Iframe request for ID: ${videoId}`);
+
+        if (!videoId) {
+            return res.status(400).json({ error: 'Invalid YouTube ID' });
+        }
+
+        // Piped සහ Cobalt APIs ඔක්කොම අයින් කළා (YouTube එකෙන් බ්ලොක් කරලා නිසා).
+        // දැන් සර්වර් එක හිර වෙන්නේ නෑ. කෙලින්ම YouTube Embed ලින්ක් එක Frontend එකට යවනවා.
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`;
+
+        res.status(200).json({ 
+            stream_url: embedUrl,
+            is_youtube_embed: true, // Frontend එකට අඳුරගන්න ලේසි වෙන්න මේක යවනවා
+            yt_id: videoId
+        });
+
+    } catch (error) {
+        console.error("❌ Stream Error:", error.message);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
 };

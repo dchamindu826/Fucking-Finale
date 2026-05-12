@@ -1,6 +1,29 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
+// 🔥 HELPER FUNCTION (උඩටම ගත්තා හැමතැනම පාවිච්චි කරන්න ලේසි වෙන්න)
+const buildStatsWhereClause = (businessId, batchId, startDate, endDate, baseConditions = {}) => {
+    let whereClause = { ...baseConditions };
+
+    if (batchId && batchId !== '' && batchId !== 'ALL') {
+        whereClause.batchId = parseInt(batchId);
+    } else if (businessId && businessId !== '' && businessId !== 'ALL') {
+        whereClause.OR = [
+            { phone: { endsWith: `_BIZ_${businessId}` } },
+            { phone: { endsWith: `_BIZ_${businessId}_AS` } },
+            { phone: { contains: `_BIZ_${businessId}_BATCH_` } }
+        ];
+    }
+
+    if (startDate && endDate) {
+        whereClause.updatedAt = {
+            gte: new Date(`${startDate}T00:00:00.000Z`),
+            lte: new Date(`${endDate}T23:59:59.999Z`)
+        };
+    }
+    return whereClause;
+};
+
 // ============================================================================
 // 1. GET RETENTION DASHBOARD STATS (Cards 4ට සහ Chart එකට Data යැවීම)
 // ============================================================================
@@ -8,16 +31,10 @@ exports.getRetentionDashboardStats = async (req, res) => {
     try {
         const { businessId, batchId } = req.query;
 
-        let whereClause = { campaignType: 'AFTER_SEMINAR' };
-        if (batchId && batchId !== '') {
-            whereClause.batchId = parseInt(batchId);
-        } else if (businessId && businessId !== '') {
-            whereClause.OR = [
-    { phone: { endsWith: `BIZ_${businessId}` } },
-    { phone: { endsWith: `BIZ_${businessId}_AS` } },
-    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
-];
-        }
+        // Helper එක පාවිච්චි කරලා filter කිරීම
+        let whereClause = buildStatsWhereClause(businessId, batchId, null, null, { 
+            campaignType: 'AFTER_SEMINAR' 
+        });
 
         // 1. දැනට ඉන්න ළමයින්ගේ ගණන් ගැනීම (Top Cards 4 සඳහා)
         const leads = await prisma.lead.findMany({
@@ -44,9 +61,9 @@ exports.getRetentionDashboardStats = async (req, res) => {
 
         // 2. මාසික Chart එකට Data ගැනීම (අපි අලුතෙන් හැදූ BatchMonthlyStats ටේබල් එකෙන්)
         let chartWhere = {};
-        if (batchId && batchId !== '') chartWhere.batchId = parseInt(batchId);
-        // Business ID එකෙන් Batch හොයාගෙන Chart එකට දෙනවා
-        else if (businessId && businessId !== '') {
+        if (batchId && batchId !== '' && batchId !== 'ALL') {
+            chartWhere.batchId = parseInt(batchId);
+        } else if (businessId && businessId !== '' && businessId !== 'ALL') {
             const bizBatches = await prisma.batch.findMany({ where: { businessId: parseInt(businessId) }});
             chartWhere.batchId = { in: bizBatches.map(b => b.id) };
         }
@@ -75,25 +92,18 @@ exports.getRetentionLeads = async (req, res) => {
     try {
         const { businessId, batchId, tab } = req.query; // tab = 'FULL' | 'MONTHLY' | 'INSTALLMENT' | 'NON_ENROLLED'
 
-        let whereClause = { campaignType: 'AFTER_SEMINAR' };
+        // Helper එක පාවිච්චි කරලා filter කිරීම
+        let baseConditions = { campaignType: 'AFTER_SEMINAR' };
         
-        if (batchId && batchId !== '') {
-            whereClause.batchId = parseInt(batchId);
-        } else if (businessId && businessId !== '') {
-            whereClause.OR = [
-    { phone: { endsWith: `BIZ_${businessId}` } },
-    { phone: { endsWith: `BIZ_${businessId}_AS` } },
-    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
-];
-        }
-
         // Tab එක අනුව Filter කිරීම
         if (tab === 'NON_ENROLLED') {
-            whereClause.enrollmentStatus = 'NON_ENROLLED';
+            baseConditions.enrollmentStatus = 'NON_ENROLLED';
         } else {
-            whereClause.enrollmentStatus = 'ENROLLED';
-            whereClause.paymentIntention = tab; // FULL, MONTHLY, or INSTALLMENT
+            baseConditions.enrollmentStatus = 'ENROLLED';
+            baseConditions.paymentIntention = tab; // FULL, MONTHLY, or INSTALLMENT
         }
+
+        let whereClause = buildStatsWhereClause(businessId, batchId, null, null, baseConditions);
 
         const leads = await prisma.lead.findMany({
             where: whereClause,
@@ -158,7 +168,7 @@ exports.runMonthlyRetentionReset = async () => {
                     fullCount: fullLeadsCount,
                     monthlyCount: monthlyCount,
                     installCount: installCount,
-                    droppedCount: 0, // මේක පස්සේ ලොජික් එකකින් calculate කරන්න පුළුවන් (lastPaidMonth බලලා)
+                    droppedCount: 0, 
                     upgradedCount: 0 
                 }
             });
@@ -186,52 +196,36 @@ exports.runMonthlyRetentionReset = async () => {
     }
 };
 
-// ඔයාට ඕනේ නම් මේක Button එකකින් Manual Test කරන්න (Postman එකෙන් ගහලා බලන්න)
 exports.manualTriggerMonthlyReset = async (req, res) => {
     await exports.runMonthlyRetentionReset();
     res.status(200).json({ message: "Monthly reset triggered successfully!" });
 };
 
+// ============================================================================
+// 4. STATS DATA FETCHING FUNCTION
+// ============================================================================
 exports.getRetentionCampaignData = async (req, res) => {
     try {
-        const { businessId, batchId, month } = req.query;
-        const targetMonth = parseInt(month) || new Date().getMonth() + 1;
+        const { businessId, batchId, month, startDate, endDate } = req.query;
 
-        // 1. Where clause for Leads
-        let whereClause = { campaignType: 'AFTER_SEMINAR' };
-        
-        if (batchId && batchId !== '') {
-            whereClause.batchId = parseInt(batchId);
-        } else if (businessId && businessId !== '') {
-            whereClause.OR = [
-    { phone: { endsWith: `BIZ_${businessId}` } },
-    { phone: { endsWith: `BIZ_${businessId}_AS` } },
-    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
-];
-        }
+        // 1. Strict Business ID & Date Range Filter eka apply karanawa
+        let whereClause = buildStatsWhereClause(businessId, batchId, startDate, endDate, { 
+            campaignType: 'AFTER_SEMINAR' 
+        });
 
-        // 2. Fetch Leads
+        // 2. Fetch Leads with strictly filtered where clause
         const leads = await prisma.lead.findMany({
-            where: whereClause
+            where: whereClause,
+            include: { assignedUser: { select: { firstName: true, lastName: true } } }
         });
 
         // 3. Calculate Retention Stats
-        // Logic: 
-        // We find students for this business/batch.
-        // Check their payments for TargetMonth vs TargetMonth-1.
-        
         let prevMonthEnrolled = 0;
         let thisMonthRenewed = 0;
-
-        // Note: Real system ekedi payments/enrollment history table eken meka accurately ganna ona.
-        // Meka basic logic ekak leads based karagena. (Assuming l.lastPaidMonth wage column ekak nathnam)
         
         leads.forEach(l => {
-            // Assume we can check if they were enrolled last month vs this month.
-            // If you have a real payment history array on the lead/student, calculate it here.
-            // For now, based on current status for the demo:
             if (l.paymentIntention !== 'NOT_DECIDED') {
-                prevMonthEnrolled++; // Dummy increment logic
+                prevMonthEnrolled++;
                 if (l.enrollmentStatus === 'ENROLLED') {
                     thisMonthRenewed++;
                 }

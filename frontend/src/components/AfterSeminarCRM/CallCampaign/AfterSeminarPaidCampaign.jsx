@@ -26,6 +26,33 @@ export default function AfterSeminarPaidCampaign({ filters, setChatModalLead, ex
     const [activeRound, setActiveRound] = useState(1); 
     const [activePhase, setActivePhase] = useState(1);
 
+    const [searchQuery, setSearchQuery] = useState('');
+    const [lastSearched, setLastSearched] = useState(null);
+
+    // 🔥 Auto Redirect & Auto Tab Switch 🔥
+    useEffect(() => {
+        if (externalSearch && externalSearch !== lastSearched && leads.length > 0) {
+            const query = typeof externalSearch === 'object' ? externalSearch.phone : externalSearch;
+            setSearchQuery(query);
+
+            const targetLead = leads.find(l => l.phone === query || String(l.id) === String(query));
+            if (targetLead) {
+                // ළමයා ඉන්න තැනට Tabs ටික Auto මාරු කරනවා
+                if (['FULL', 'MONTHLY', 'INSTALLMENT'].includes(targetLead.paymentIntention)) {
+                    setActiveMainTab(targetLead.paymentIntention);
+                }
+                if (targetLead.enrollmentStatus && targetLead.paymentIntention !== 'FULL') {
+                    setActiveSubTab(targetLead.enrollmentStatus);
+                }
+                if (targetLead.coordinationRound) setActiveRound(targetLead.coordinationRound);
+                if (targetLead.phase) setActivePhase(targetLead.phase);
+                
+                setCurrentPage(1);
+                setLastSearched(externalSearch);
+            }
+        }
+    }, [externalSearch, leads, lastSearched]);
+
     // 🔥 PAGINATION STATES 🔥
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 50;
@@ -140,9 +167,12 @@ export default function AfterSeminarPaidCampaign({ filters, setChatModalLead, ex
             const matchStatus = activeMainTab === 'FULL' ? true : l.enrollmentStatus === activeSubTab;
             const matchRound = (l.coordinationRound || 1) === activeRound;
             const matchPhase = (l.phase || 1) === activePhase;
-            return matchIntention && matchStatus && matchRound && matchPhase;
+            // අලුතෙන් දැම්මේ මේක
+            const matchSearch = searchQuery ? l.phone.includes(searchQuery) || (l.name && l.name.toLowerCase().includes(searchQuery.toLowerCase())) : true;
+            
+            return matchIntention && matchStatus && matchRound && matchPhase && matchSearch;
         });
-    }, [leads, activeMainTab, activeSubTab, activeRound, activePhase]);
+    }, [leads, activeMainTab, activeSubTab, activeRound, activePhase, searchQuery]);
 
     // 🔥 PAGINATION LOGIC 🔥
     const totalPages = Math.ceil(displayLeads.length / itemsPerPage);
@@ -210,7 +240,7 @@ export default function AfterSeminarPaidCampaign({ filters, setChatModalLead, ex
                     </div>
                 )}
 
-                <div className="flex justify-between items-center bg-[#0f172a] p-2 rounded-lg border border-slate-700">
+                <div className="flex justify-between items-center bg-[#0f172a] p-2 rounded-lg border border-slate-700 flex-wrap gap-3">
                     <div className="flex gap-2">
                         <button onClick={() => setActiveRound(1)} className={`px-4 py-1.5 rounded text-xs font-medium transition-all ${activeRound === 1 ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}>Round 1</button>
                         {(activeMainTab !== 'FULL' && activeSubTab === 'NON_ENROLLED') && (
@@ -222,6 +252,17 @@ export default function AfterSeminarPaidCampaign({ filters, setChatModalLead, ex
                         {[1, 2, 3].map(p => (
                             <button key={p} onClick={() => setActivePhase(p)} className={`w-8 h-7 rounded text-xs font-semibold transition-all ${activePhase === p ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>P{p}</button>
                         ))}
+                    </div>
+
+                    {/* 🔥 ALUTH SEARCH BOX EKA 🔥 */}
+                    <div className="flex-1 min-w-[200px] ml-auto">
+                        <input 
+                            type="text" 
+                            placeholder="Search number..." 
+                            value={searchQuery} 
+                            onChange={(e) => {setSearchQuery(e.target.value); setCurrentPage(1);}} 
+                            className="w-full bg-[#1e293b] border border-slate-600 rounded-lg py-1.5 px-3 text-xs text-white outline-none focus:border-indigo-500" 
+                        />
                     </div>
                 </div>
             </div>

@@ -4,6 +4,7 @@ const studentController = require('../controllers/studentController'); // 🔥 �
 const multer = require('multer');
 const path = require('path');
 
+
 // 🔥 1. Middleware එක import කරගන්න (එක පාරක් පමණයි!)
 const verifyToken = require('../middlewares/authMiddleware');
 
@@ -37,6 +38,8 @@ router.post('/upload-due-slip', verifyToken, uploadDocument.array('slipImages', 
 router.get('/classroom', verifyToken, studentController.getStudentClassroom);
 router.get('/module/:id', verifyToken, studentController.getCourseModules);
 router.get('/my-payments', verifyToken, studentController.getMyPayments);
+
+router.get('/getVideoStream/:videoId', verifyToken, studentController.getVideoStream);
 
 router.post('/profile/update', verifyToken, uploadImage.single('image'), studentController.updateProfile);
 router.post('/profile/password', verifyToken, studentController.updatePassword);

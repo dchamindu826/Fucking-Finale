@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from '../../../api/axios'; 
 import { FaSearch, FaUserCircle, FaUserPlus, FaFileImport, FaTimes, FaCheckSquare, FaEnvelopeOpenText, FaEnvelope, FaUserMinus, FaLock, FaBullhorn, FaCommentDots, FaPaperPlane, FaUserCheck, FaHeadset, FaClock } from 'react-icons/fa';
 import toast from 'react-hot-toast';
@@ -29,18 +29,25 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
   const [statusFilter, setStatusFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // 🔥 LOAD MORE STATE 🔥
+  const [visibleCount, setVisibleCount] = useState(50);
+
   const [subTabStats, setSubTabStats] = useState({
       OPEN_SEMINAR: { total: 0, unread: 0 },
       NEW_INQ: { total: 0, unread: 0 }
   });
 
-  // 🔥 ඔටෝ රිෆ්‍රෙෂ් වෙන්න State එකක් (කාඩ් වල පාට වෙලාවත් එක්කම මාරු වෙන්න)
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-      const timer = setInterval(() => setCurrentTime(new Date()), 60000); // හැම විනාඩියකට සැරයක්ම වෙලාව අප්ඩේට් කරනවා
+      const timer = setInterval(() => setCurrentTime(new Date()), 60000); 
       return () => clearInterval(timer);
   }, []);
+
+  // 🔥 Reset visible count when tab or search changes 🔥
+  useEffect(() => {
+      setVisibleCount(50);
+  }, [activeTab, newSubTab, searchQuery]);
 
   const fetchLeads = async (showLoading = true) => {
     if (showLoading) setLoading(true);
@@ -182,13 +189,16 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       }
   };
 
-  const filteredLeads = leads.filter(lead => {
-      if (!searchQuery) return true;
+  // 🔥 OPTIMIZATION: useMemo එකක් දැම්මා search එක fast වෙන්න 🔥
+  const filteredLeads = useMemo(() => {
+      if (!searchQuery) return leads;
       const q = String(searchQuery).toLowerCase().trim();
-      const phoneMatch = lead.phone ? String(lead.phone).toLowerCase().includes(q) : false;
-      const nameMatch = lead.name ? String(lead.name).toLowerCase().includes(q) : false;
-      return phoneMatch || nameMatch;
-  });
+      return leads.filter(lead => {
+          const phoneMatch = lead.phone ? String(lead.phone).toLowerCase().includes(q) : false;
+          const nameMatch = lead.name ? String(lead.name).toLowerCase().includes(q) : false;
+          return phoneMatch || nameMatch;
+      });
+  }, [leads, searchQuery]);
 
   const getAssignedStats = () => {
       if (activeTab === 'ASSIGNED' && staffFilter) {
@@ -207,6 +217,9 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
     { id: 'ASSIGNED', label: 'Assigned', total: assignedStats.total, unread: assignedStats.unread },
     { id: 'ALL', label: 'All', total: tabCounts.ALL, unread: unreadCounts.ALL }
   ];
+
+  // 🔥 LOAD MORE LOGIC 🔥
+  const displayedLeads = filteredLeads.slice(0, visibleCount);
 
   return (
     <div className="w-[350px] xl:w-[400px] bg-[#1a2430] rounded-2xl flex flex-col overflow-hidden shrink-0 border border-white/10 shadow-xl relative">
@@ -238,11 +251,10 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
           <div className="flex justify-between items-center mb-5">
             <h3 className="text-lg font-black text-slate-200 tracking-wider uppercase flex items-center gap-2">Contacts</h3>
             <div className="flex gap-2">
+                <button onClick={() => setShowImportModal(true)} className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg border border-blue-500/30 transition-all"><FaFileImport size={16}/></button>
+              
               {isManager && (
-                  <>
-                    <button onClick={() => setShowImportModal(true)} className="p-2.5 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded-lg border border-blue-500/30 transition-all"><FaFileImport size={16}/></button>
-                    <button onClick={() => setShowAssignModal(true)} className="p-2.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-500/30 transition-all"><FaUserPlus size={16}/></button>
-                  </>
+                 <button onClick={() => setShowAssignModal(true)} className="p-2.5 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-500/30 transition-all"><FaUserPlus size={16}/></button>
               )}
             </div>
           </div>
@@ -313,95 +325,111 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       <div className="flex-1 overflow-y-auto custom-scrollbar p-3 bg-[#1a2430]">
         {loading && leads.length === 0 ? ( <div className="flex justify-center mt-10"><div className="animate-spin h-8 w-8 border-4 border-emerald-600 border-t-transparent rounded-full"></div></div> ) 
         : filteredLeads.length === 0 ? ( <div className="text-center text-slate-600 text-sm mt-10 font-medium">No contacts found.</div> ) : (
-          filteredLeads.map(lead => {
-              
-            // 🔥 24-Hour Active Window Logic 🔥
-            const leadTime = new Date(lead.updatedAt || lead.createdAt);
-            const hoursPassed = (currentTime - leadTime) / (1000 * 60 * 60);
+          <>
+            {displayedLeads.map(lead => {
+                
+              const leadTime = new Date(lead.updatedAt || lead.createdAt);
+              const hoursPassed = (currentTime.getTime() - leadTime.getTime()) / (1000 * 60 * 60);
 
-            let overlayClass = 'bg-[#121a24] border-transparent hover:border-white/10'; // Default
-            let timeIcon = null;
+              let overlayClass = ''; 
+              let timeIcon = null;
 
-            if (hoursPassed >= 24) {
-                overlayClass = 'bg-red-900/20 border-red-500/30 hover:border-red-500/50'; // 24 පැය පැනලා (Expired)
-                timeIcon = <span className="text-[9px] text-red-400 font-bold flex items-center gap-1"><FaClock/> Expired</span>;
-            } else if (hoursPassed >= 20) {
-                overlayClass = 'bg-yellow-900/20 border-yellow-500/30 hover:border-yellow-500/50'; // පැය 4කට අඩුවෙන් තියෙන්නේ
-                timeIcon = <span className="text-[9px] text-yellow-400 font-bold flex items-center gap-1"><FaClock/> Expiring Soon</span>;
-            } else {
-                overlayClass = 'bg-emerald-900/20 border-emerald-500/30 hover:border-emerald-500/50'; // තාම ඇක්ටිව් (Green)
-                timeIcon = <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1"><FaCheckSquare/> Active Window</span>;
-            }
+              if (hoursPassed >= 24) {
+                  overlayClass = 'bg-red-900/20 border-red-500/30 hover:border-red-500/50'; 
+                  timeIcon = <span className="text-[9px] text-red-400 font-bold flex items-center gap-1"><FaClock/> Expired</span>;
+              } else if (hoursPassed >= 20) {
+                  overlayClass = 'bg-yellow-900/20 border-yellow-500/30 hover:border-yellow-500/50'; 
+                  timeIcon = <span className="text-[9px] text-yellow-400 font-bold flex items-center gap-1"><FaClock/> Expiring Soon</span>;
+              } else {
+                  overlayClass = 'bg-emerald-900/20 border-emerald-500/30 hover:border-emerald-500/50'; 
+                  timeIcon = <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1"><FaCheckSquare/> Active Window</span>;
+              }
 
-            // තෝරලා තියෙන කාඩ් එකේ පාට
-            if (selectedLead?.id === lead.id) {
-                overlayClass = 'bg-[#0f172a] border-blue-500 shadow-md shadow-blue-500/20';
-            }
+              if (selectedLead?.id === lead.id) {
+                  overlayClass = 'bg-[#0f172a] border-blue-500 shadow-md shadow-blue-500/20';
+              }
 
-            return (
-            <div key={lead.id} className={`p-3 rounded-2xl mb-2 transition-all flex gap-3 items-center border ${overlayClass}`}>
-              <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-                 <input type="checkbox" checked={checkedLeads.includes(lead.id)} onChange={(e) => { if (e.target.checked) setCheckedLeads([...checkedLeads, lead.id]); else setCheckedLeads(checkedLeads.filter(id => id !== lead.id)); }} className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" />
-              </div>
+              return (
+              <div key={lead.id} className={`p-3 rounded-2xl mb-2 transition-all flex gap-3 items-center border ${overlayClass}`}>
+                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                   <input type="checkbox" checked={checkedLeads.includes(lead.id)} onChange={(e) => { if (e.target.checked) setCheckedLeads([...checkedLeads, lead.id]); else setCheckedLeads(checkedLeads.filter(id => id !== lead.id)); }} className="w-4 h-4 accent-emerald-600 rounded cursor-pointer" />
+                </div>
 
-              <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => handleLeadClick(lead)}>
-                <FaUserCircle className="text-3xl text-slate-500 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1">
-                    
-                    {/* 🔥 FIX: Spacing adu karala okkoma eka lnga thibba 🔥 */}
-                    <div className="flex flex-col gap-0.5">
-                        <h4 className="font-bold text-[15px] text-slate-200 leading-none">{lead.phone}</h4>
-                        
-                        {lead.assignedUser ? (
-                            <span className="text-[10px] text-blue-400 font-semibold mt-0.5">👤 {lead.assignedUser.firstName} {lead.assignedUser.lastName}</span>
-                        ) : (
-                            (!lead.assignedTo && (
-                                <button onClick={(e) => { e.stopPropagation(); handleBulkAction('ASSIGN', currentUserId, [lead.id]); }} className="text-[9px] w-max bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-md flex items-center gap-1 transition-all mt-1">
-                                   <FaUserCheck size={10}/> Assign to me
-                                </button>
-                            ))
-                        )}
+                <div className="flex-1 min-w-0 flex items-center gap-3 cursor-pointer" onClick={() => handleLeadClick(lead)}>
+                  <FaUserCircle className="text-3xl text-slate-500 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                      
+                      <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-[15px] text-slate-200 leading-none">{lead.phone}</h4>
+                              {lead.unreadCount > 0 && (
+                                  <span className="flex items-center justify-center bg-red-500 text-white text-[10px] font-black h-[18px] min-w-[18px] px-1 rounded-full shadow-md shadow-red-500/40">
+                                      {lead.unreadCount}
+                                  </span>
+                              )}
+                          </div>
+                          
+                          {lead.assignedUser ? (
+                              <span className="text-[10px] text-blue-400 font-semibold mt-0.5">👤 {lead.assignedUser.firstName} {lead.assignedUser.lastName}</span>
+                          ) : (
+                              (!lead.assignedTo && (
+                                  <button onClick={(e) => { e.stopPropagation(); handleBulkAction('ASSIGN', currentUserId, [lead.id]); }} className="text-[9px] w-max bg-emerald-600/80 hover:bg-emerald-500 text-white px-2 py-1 rounded shadow-md flex items-center gap-1 transition-all mt-1">
+                                     <FaUserCheck size={10}/> Assign to me
+                                  </button>
+                              ))
+                          )}
+                      </div>
+                      
+                      <div className="flex flex-col items-end shrink-0 ml-2 gap-1.5">
+                          <div className="text-right">
+                              <span className="text-[10px] text-slate-400 font-bold block mb-0.5">{new Date(lead.updatedAt).toLocaleDateString('en-GB')}</span>
+                              <span className="text-[9px] text-slate-500 block">{new Date(lead.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          </div>
+                          
+                          {(String(lead.assignedTo) === String(currentUserId) || isManager) && (
+                              <button 
+                                  onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      if (onRedirectToCampaign) onRedirectToCampaign(lead);
+                                      else toast.error("Campaign router is missing!");
+                                  }} 
+                                  title="Open in Call Campaign"
+                                  className="w-7 h-7 rounded-full bg-indigo-600/20 hover:bg-indigo-500 text-indigo-400 hover:text-white flex items-center justify-center transition-all shadow-md border border-indigo-500/30"
+                              >
+                                  <FaHeadset size={12} />
+                              </button>
+                          )}
+                      </div>
                     </div>
                     
-                    <div className="flex flex-col items-end shrink-0 ml-2 gap-1.5">
-                        <div className="text-right">
-                            <span className="text-[10px] text-slate-400 font-bold block mb-0.5">{new Date(lead.updatedAt).toLocaleDateString('en-GB')}</span>
-                            <span className="text-[9px] text-slate-500 block">{new Date(lead.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                        
-                        {(String(lead.assignedTo) === String(currentUserId) || isManager) && (
-                            <button 
-                                onClick={(e) => { 
-                                    e.stopPropagation(); 
-                                    if (onRedirectToCampaign) onRedirectToCampaign(lead);
-                                    else toast.error("Campaign router is missing!");
-                                }} 
-                                title="Open in Call Campaign"
-                                className="w-7 h-7 rounded-full bg-indigo-600/20 hover:bg-indigo-500 text-indigo-400 hover:text-white flex items-center justify-center transition-all shadow-md border border-indigo-500/30"
-                            >
-                                <FaHeadset size={12} />
-                            </button>
-                        )}
-                    </div>
-                  </div>
-                  
-                  {lead.inquiryType === 'NEW_INQ' && lead.isLocked && (
-                     <div className="text-[9px] text-red-400 font-black mt-1 mb-1 flex items-center gap-1 bg-red-500/10 w-max px-2 py-0.5 rounded"><FaLock/> 24H LOCKED</div>
-                  )}
+                    {lead.inquiryType === 'NEW_INQ' && lead.isLocked && (
+                       <div className="text-[9px] text-red-400 font-black mt-1 mb-1 flex items-center gap-1 bg-red-500/10 w-max px-2 py-0.5 rounded"><FaLock/> 24H LOCKED</div>
+                    )}
 
-                  <div className="flex justify-between items-end mt-1">
-                    <p className="text-[11px] font-medium text-slate-500 truncate w-[60%]">{lead.lastMessage || 'No messages'}</p>
-                    <div className="flex flex-col items-end gap-1">
-                        {lead.unreadCount > 0 && <span className="bg-emerald-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-lg">{lead.unreadCount} NEW</span>}
-                        {/* 🔥 24 Hour Indicator Text 🔥 */}
-                        {timeIcon}
+                    <div className="flex justify-between items-end mt-1">
+                      <p className="text-[11px] font-medium text-slate-500 truncate w-[60%]">{lead.lastMessage || 'No messages'}</p>
+                      <div className="flex flex-col items-end gap-1">
+                          {timeIcon}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )})
+            )})}
+
+            {/* 🔥 LOAD MORE BUTTON 🔥 */}
+            {filteredLeads.length > visibleCount && (
+                <div className="flex justify-center mt-4 mb-2">
+                    <button 
+                        onClick={() => setVisibleCount(prev => prev + 50)} 
+                        className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-bold py-2 px-6 rounded-full transition-colors shadow-lg"
+                    >
+                        Load More Leads
+                    </button>
+                </div>
+            )}
+          </>
         )}
       </div>
 
@@ -438,7 +466,7 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       )}
 
       {/* IMPORT MODAL */}
-      {showImportModal && isManager && (
+      {showImportModal && (
          <div className="absolute inset-0 z-50 bg-[#0f172a]/90 backdrop-blur-sm flex items-center justify-center p-4">
              <div className="bg-[#1a2430] border border-slate-700 rounded-2xl p-5 w-full shadow-2xl">
                <div className="flex justify-between items-center mb-4">

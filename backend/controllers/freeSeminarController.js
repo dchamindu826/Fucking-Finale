@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs'); 
 const path = require('path');
 const pdfParse = require('pdf-parse'); 
+const ffmpeg = require('fluent-ffmpeg');
 
 // ==========================================
 // 1. SETTINGS: CrmSettings
@@ -508,7 +509,7 @@ exports.receiveMessage = async (req, res) => {
                 if (parsedBatchId) dbPhone += `_BATCH_${parsedBatchId}`;
 
                 const msgLower = messageText.toLowerCase().trim();
-                const isRestartCommand = ['hi', 'hello', 'hey', 'menu', 'start'].includes(msgLower);
+                const isRestartCommand = /^(hi|hello|hey|menu|start|0|1|details|wistara|wisthara|help)(\s|$)/i.test(msgLower);
 
                 // ========================================================
                 // 🟢 AFTER SEMINAR LOGIC
@@ -712,40 +713,56 @@ exports.getMessages = async (req, res) => {
 };
 
 // ==========================================
-// DEBUG VERSION: SEND MESSAGE
+// DEBUG VERSION: SEND MESSAGE (🔥 FIXED VOICE NOTES - OGG/OPUS CONVERSION)
 // ==========================================
 exports.sendMessage = async (req, res) => {
-    console.log("\n🚀 ================= SEND MESSAGE TRIGGERED =================");
     try {
         const { leadId, message, senderName, replyToMetaId, localUIMessage } = req.body; 
-        console.log("📥 [DEBUG 1] Request Body:", { leadId, message, senderName });
 
         const lead = await prisma.lead.findUnique({ where: { id: parseInt(leadId) } });
-        if (!lead) {
-            console.log("❌ [DEBUG 2] Error: Lead not found in DB");
-            return res.status(404).json({ error: "Lead not found" });
-        }
-        console.log("✅ [DEBUG 3] Lead found:", lead.phone);
+        if (!lead) return res.status(404).json({ error: "Lead not found" });
         
         let formattedPhone = lead.phone.split('_')[0].replace(/[^0-9]/g, ''); 
         if (formattedPhone.startsWith('0')) formattedPhone = '94' + formattedPhone.substring(1);
-        console.log(`📱 [DEBUG 4] Formatted Phone Number: ${formattedPhone}`);
 
         let mediaUrl = null; let mediaType = null;
+        
         if (req.file) { 
             mediaUrl = `/storage/documents/${req.file.filename}`; 
             mediaType = req.file.mimetype; 
-            console.log("📎 [DEBUG 5] Attached Media:", mediaUrl);
+
+            // 🔥 AUDIO CONVERSION: WebM -> OGG/Opus (Meta API එකට ගැලපෙන්න හදනවා)
+            const isWebmAudio = mediaType.includes('audio') || mediaType.includes('webm') || req.file.originalname.endsWith('.webm') || req.file.originalname.endsWith('.ogg');
+            
+            if (isWebmAudio) {
+                const inputPath = path.join(process.cwd(), 'storage/documents', req.file.filename);
+                const outputFilename = `VN_CONVERTED_${Date.now()}.ogg`;
+                const outputPath = path.join(process.cwd(), 'storage/documents', outputFilename);
+                
+                try {
+                    await new Promise((resolve, reject) => {
+                        ffmpeg(inputPath)
+                            .audioCodec('libopus')
+                            .toFormat('ogg')
+                            .on('end', () => resolve())
+                            .on('error', (err) => reject(err))
+                            .save(outputPath);
+                    });
+                    
+                    mediaUrl = `/storage/documents/${outputFilename}`;
+                    mediaType = 'audio/ogg; codecs=opus';
+                } catch (error) {
+                    console.error("Audio conversion failed:", error);
+                }
+            }
         }
 
-        console.log("💾 [DEBUG 6] Saving message to Database...");
         const newMsg = await prisma.chatMessage.create({
             data: {
                 leadId: parseInt(leadId), message: localUIMessage || message || '', mediaUrl, mediaType,
                 direction: 'outbound', senderType: 'STAFF', senderId: req.user?.id || null, senderName: senderName || req.user?.firstName || 'Staff'
             }
         });
-        console.log("✅ [DEBUG 7] Message saved to DB with ID:", newMsg.id);
 
         await prisma.lead.update({
             where: { id: parseInt(leadId) },
@@ -753,11 +770,9 @@ exports.sendMessage = async (req, res) => {
         });
 
         try {
-            console.log("⚙️ [DEBUG 8] Fetching CRM Settings...");
             let settings = null;
             const bizMatch = lead.phone.match(/_BIZ_(\d+)/);
             const parsedBizId = bizMatch ? parseInt(bizMatch[1]) : null;
-            console.log(`🏢 [DEBUG 9] Extracted Business ID from Phone: ${parsedBizId}`);
 
             if (lead.batchId) {
                 const batchRecord = await prisma.batch.findUnique({ where: { id: lead.batchId } });
@@ -774,14 +789,10 @@ exports.sendMessage = async (req, res) => {
                 });
             }
 
-            if (!settings && parsedBizId) {
-                settings = await prisma.crmSettings.findFirst({ where: { businessId: parsedBizId } });
-            }
-
+            if (!settings && parsedBizId) settings = await prisma.crmSettings.findFirst({ where: { businessId: parsedBizId } });
             if (!settings) settings = await prisma.crmSettings.findFirst(); 
 
             if (settings && settings.metaApiKey && settings.waNumId) {
-                console.log(`✅ [DEBUG 10] Using Meta Settings -> WA Num ID: ${settings.waNumId}, Campaign: ${settings.campaignType}`);
                 
                 let metaPayload = { messaging_product: "whatsapp", recipient_type: "individual", to: formattedPhone };
                 if (replyToMetaId && replyToMetaId !== 'null' && replyToMetaId !== 'undefined') metaPayload.context = { message_id: replyToMetaId };
@@ -790,40 +801,49 @@ exports.sendMessage = async (req, res) => {
                     metaPayload.type = "text"; metaPayload.text = { preview_url: false, body: message };
                 } else if (mediaUrl) {
                     const liveMediaUrl = `https://imacampus.online${mediaUrl}`; 
-                    const isAudio = mediaType.includes('audio') || mediaUrl.toLowerCase().endsWith('.mp3') || mediaUrl.toLowerCase().endsWith('.ogg') || mediaUrl.toLowerCase().endsWith('.wav');
+                    
+                    const isAudio = mediaType.includes('audio') || 
+                                    mediaType.includes('ogg') || 
+                                    mediaUrl.toLowerCase().endsWith('.ogg') || 
+                                    mediaUrl.toLowerCase().endsWith('.mp3');
 
-                    if (mediaType.includes('image') && !isAudio) { 
-                        metaPayload.type = "image"; metaPayload.image = { link: liveMediaUrl, caption: message || "" };
-                    } else if (isAudio) { 
-                        metaPayload.type = "audio"; metaPayload.audio = { link: liveMediaUrl };
-                    } else if (mediaType.includes('video')) { 
-                        metaPayload.type = "video"; metaPayload.video = { link: liveMediaUrl, caption: message || "" };
-                    } else { 
-                        metaPayload.type = "document"; metaPayload.document = { link: liveMediaUrl, caption: message || "", filename: req.file ? req.file.originalname : "document.pdf" };
+                    if (isAudio) { 
+                        // 🔥 Document එකක් විදියට නෙවෙයි, කෙලින්ම Playable Voice Note එකක් (Audio) විදියට යවනවා
+                        metaPayload.type = "audio";
+                        metaPayload.audio = { link: liveMediaUrl };
+                    } 
+                    else if (mediaType.includes('image')) { 
+                        metaPayload.type = "image";
+                        metaPayload.image = { link: liveMediaUrl, caption: message || "" };
+                    } 
+                    else if (mediaType.includes('video')) { 
+                        metaPayload.type = "video";
+                        metaPayload.video = { link: liveMediaUrl, caption: message || "" };
+                    } 
+                    else { 
+                        metaPayload.type = "document";
+                        metaPayload.document = { 
+                            link: liveMediaUrl, 
+                            caption: message || "", 
+                            filename: req.file ? req.file.originalname : "Document.pdf" 
+                        };
                     }
                 }
 
-                console.log("📦 [DEBUG 11] Meta Payload ready, sending to Facebook API...");
-
-                const axios = require('axios');
                 const metaRes = await axios.post(`https://graph.facebook.com/v19.0/${settings.waNumId}/messages`, metaPayload, { 
                     headers: { 'Authorization': `Bearer ${settings.metaApiKey}`, 'Content-Type': 'application/json' } 
                 });
                 
-                console.log(`🚀 [DEBUG 12] Meta API Success! Message ID: ${metaRes.data?.messages?.[0]?.id}`);
-                
                 if (metaRes.data?.messages?.[0]?.id) {
                     await prisma.chatMessage.update({ where: { id: newMsg.id }, data: { metaMessageId: metaRes.data.messages[0].id } });
                 }
-            } else {
-                console.error("🚨 [DEBUG 13] Error: No Meta API Key or waNumId found in Database for this setting!", settings);
             }
         } catch (metaError) { 
-            console.error("🚨 [DEBUG 14] META API ERROR DETAILS:", metaError.response?.data || metaError.message);
+            console.error("META API ERROR:", metaError.response?.data || metaError.message);
         }
         res.status(201).json(newMsg);
     } catch (error) { 
-        console.error("🚨 [DEBUG 15] Server Catch Error:", error);
+        console.error("Server Error:", error);
         res.status(500).json({ error: "Failed to send message" }); 
     }
 };

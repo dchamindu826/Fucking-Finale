@@ -112,3 +112,59 @@ res.status(200).json({
     res.status(500).json({ error: "Server error during login." });
   }
 };
+
+// authController.js
+exports.ghostLogin = async (req, res) => {
+  try {
+    console.log("=== GHOST LOGIN INITIATED ===");
+    console.log("Raw ID from params:", req.params.id);
+
+    // අනිවාර්යයෙන්ම parseInt කරන්න ඕනේ
+    const staffId = parseInt(req.params.id, 10);
+    console.log("Parsed ID:", staffId);
+
+    // ID එක ඉලක්කමක් නෙවෙයි නම් (NaN) එතනින්ම නවත්තනවා
+    if (isNaN(staffId)) {
+        console.log("Error: Invalid ID format");
+        return res.status(400).json({ error: "Invalid ID format" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id: staffId } });
+    console.log("Found User in DB:", user ? user.firstName : "User Not Found!");
+
+    if (!user) return res.status(404).json({ error: "User not found!" });
+
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    await prisma.user.update({
+        where: { id: user.id },
+        data: { session_id: sessionId }
+    });
+
+    console.log("Session updated successfully, generating token...");
+
+    const token = jwt.sign(
+      { 
+          userId: user.id, 
+          role: user.role, 
+          department: user.department, 
+          businessType: user.businessType,
+          sessionId: sessionId 
+      },
+      process.env.JWT_SECRET, 
+      { expiresIn: '1h' }
+    );
+
+    console.log("Ghost login completely successful, sending response to frontend.");
+
+    res.status(200).json({
+      message: "Ghost login successful",
+      token,
+      user
+    });
+
+  } catch (error) {
+    console.error("=== GHOST LOGIN ERROR ===");
+    console.error(error);
+    res.status(500).json({ error: "Server error during ghost login." });
+  }
+};

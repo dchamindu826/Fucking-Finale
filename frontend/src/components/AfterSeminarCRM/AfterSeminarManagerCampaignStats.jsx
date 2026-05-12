@@ -46,11 +46,16 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
             if (res.data) {
                 setStats({
                     ...res.data,
+                    staffAllocation: res.data.staffAllocation || [],
+                    subjectEnrollments: res.data.subjectEnrollments || [],
                     mixerData: res.data.mixerData || [] 
                 });
             }
-        } catch (error) { console.error("Failed to load manager stats", error); }
-        setLoading(false);
+        } catch (error) { 
+            console.error("Failed to load manager stats", error); 
+        } finally {
+            setLoading(false);
+        }
     };
 
     // 🔥 FETCH MASTER LEADS FOR MODAL 🔥
@@ -66,10 +71,10 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
         } catch (err) {
             console.error("Master Directory Fetch Error:", err);
             toast.error("Failed to load Master Directory. Check Backend API.");
-            // 🔥 Mock data ain kara! Dan real data nathnam his list ekak pennai.
             setMasterLeads([]); 
+        } finally {
+            setMasterLoading(false);
         }
-        setMasterLoading(false);
     };
 
     useEffect(() => {
@@ -78,23 +83,26 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
         }
     }, [showMasterModal]);
 
+    // 🔥 FIX: Added (masterLeads || []) to prevent undefined .filter errors 🔥
     const filteredMaster = useMemo(() => {
-        return masterLeads.filter(l => {
+        return (masterLeads || []).filter(l => {
             const matchSearch = l.phone.includes(masterSearch) || (l.name || '').toLowerCase().includes(masterSearch.toLowerCase());
             const matchBatch = masterBatchFilter === 'ALL' || String(l.batchId) === String(masterBatchFilter);
             return matchSearch && matchBatch;
         });
     }, [masterLeads, masterSearch, masterBatchFilter]);
 
+    // 🔥 FIX: Added (filteredMaster || []) to prevent undefined .filter errors 🔥
     const mStats = useMemo(() => {
+        const safeFiltered = filteredMaster || [];
         return {
-            total: filteredMaster.length,
-            enrolled: filteredMaster.filter(l => l.enrollmentStatus === 'ENROLLED').length,
-            nonEnrolled: filteredMaster.filter(l => l.enrollmentStatus !== 'ENROLLED').length,
-            full: filteredMaster.filter(l => l.paymentIntention === 'FULL').length,
-            monthly: filteredMaster.filter(l => l.paymentIntention === 'MONTHLY').length,
-            installment: filteredMaster.filter(l => l.paymentIntention === 'INSTALLMENT').length,
-            notDecided: filteredMaster.filter(l => !l.paymentIntention || l.paymentIntention === 'NOT_DECIDED').length,
+            total: safeFiltered.length,
+            enrolled: safeFiltered.filter(l => l.enrollmentStatus === 'ENROLLED').length,
+            nonEnrolled: safeFiltered.filter(l => l.enrollmentStatus !== 'ENROLLED').length,
+            full: safeFiltered.filter(l => l.paymentIntention === 'FULL').length,
+            monthly: safeFiltered.filter(l => l.paymentIntention === 'MONTHLY').length,
+            installment: safeFiltered.filter(l => l.paymentIntention === 'INSTALLMENT').length,
+            notDecided: safeFiltered.filter(l => !l.paymentIntention || l.paymentIntention === 'NOT_DECIDED').length,
         };
     }, [filteredMaster]);
 
@@ -105,14 +113,17 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
     }
 
     const LEAD_COLORS = ['#ec4899', '#3b82f6'];
-    const leadTypeData = [ { name: 'Open Seminar', value: stats.openSemLeads }, { name: 'New Inquiries', value: stats.newInqLeads } ];
+    const leadTypeData = [ 
+        { name: 'Open Seminar', value: stats.openSemLeads || 0 }, 
+        { name: 'New Inquiries', value: stats.newInqLeads || 0 } 
+    ];
 
     return (
         <div className="flex flex-col h-full overflow-hidden font-sans antialiased text-slate-200 bg-[#0f151c] relative">
             
             {/* TOP NAVIGATION */}
             <div className="px-6 py-4 border-b border-white/5 bg-white/[0.02] backdrop-blur-xl shrink-0 flex items-center justify-between">
-                <div className="flex gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5 shadow-inner">
+                <div className="flex gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5 shadow-inner flex-wrap">
                     {[
                         { id: 'OVERALL', label: 'Overall Progress' },
                         { id: 'OPEN_SEM', label: 'Open Seminar' },
@@ -139,7 +150,7 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                     <div className="space-y-6 animate-fade-in-up">
                         
                         {/* 🔥 MASTER DIRECTORY BUTTON 🔥 */}
-                        <div className="flex justify-between items-center bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl">
+                        <div className="flex justify-between items-center bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl flex-col sm:flex-row gap-4">
                             <div>
                                 <h3 className="text-indigo-400 font-bold text-sm tracking-wide">Complete Lead Directory</h3>
                                 <p className="text-slate-400 text-xs mt-1">View, search, and analyze all leads across Open Seminar, New Inquiries, etc.</p>
@@ -156,26 +167,26 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                             <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all">
                                 <div className="p-3 bg-blue-500/10 text-blue-400 rounded-xl"><FaUsers size={20}/></div>
-                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Total Leads</p><h2 className="text-2xl font-semibold text-white mt-1">{stats.totalLeads}</h2></div>
+                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Total Leads</p><h2 className="text-2xl font-semibold text-white mt-1">{stats.totalLeads || 0}</h2></div>
                             </div>
                             <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all relative overflow-hidden">
                                 <div className="absolute -right-6 -top-6 w-20 h-20 bg-emerald-500/10 rounded-full blur-2xl"></div>
                                 <div className="p-3 bg-emerald-500/10 text-emerald-400 rounded-xl"><FaUserCheck size={20}/></div>
-                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Assigned</p><h2 className="text-2xl font-semibold text-emerald-400 mt-1">{stats.assignedLeads}</h2></div>
+                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Assigned</p><h2 className="text-2xl font-semibold text-emerald-400 mt-1">{stats.assignedLeads || 0}</h2></div>
                             </div>
                             <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex items-center gap-4 hover:bg-white/[0.05] transition-all">
                                 <div className="p-3 bg-red-500/10 text-red-400 rounded-xl"><FaUserClock size={20}/></div>
-                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Unassigned</p><h2 className="text-2xl font-semibold text-red-400 mt-1">{stats.unassignedLeads}</h2></div>
+                                <div><p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest">Unassigned</p><h2 className="text-2xl font-semibold text-red-400 mt-1">{stats.unassignedLeads || 0}</h2></div>
                             </div>
                             <div className="bg-white/[0.03] backdrop-blur-md p-5 rounded-2xl border border-white/10 shadow-lg flex flex-col justify-center hover:bg-white/[0.05] transition-all">
                                 <p className="text-[10px] text-slate-400 font-medium uppercase tracking-widest mb-3">Assigned Breakdown</p>
                                 <div className="flex justify-between items-center text-xs font-semibold mb-2">
-                                    <span className="text-blue-400">Open Sem: {stats.openSemLeads}</span>
-                                    <span className="text-pink-400">New Inq: {stats.newInqLeads}</span>
+                                    <span className="text-blue-400">Open Sem: {stats.openSemLeads || 0}</span>
+                                    <span className="text-pink-400">New Inq: {stats.newInqLeads || 0}</span>
                                 </div>
                                 <div className="w-full h-1.5 bg-black/40 rounded-full flex overflow-hidden shadow-inner border border-white/5">
-                                    <div style={{width: `${(stats.openSemLeads / (stats.assignedLeads || 1)) * 100}%`}} className="bg-blue-500 h-full"></div>
-                                    <div style={{width: `${(stats.newInqLeads / (stats.assignedLeads || 1)) * 100}%`}} className="bg-pink-500 h-full"></div>
+                                    <div style={{width: `${((stats.openSemLeads || 0) / (stats.assignedLeads || 1)) * 100}%`}} className="bg-blue-500 h-full"></div>
+                                    <div style={{width: `${((stats.newInqLeads || 0) / (stats.assignedLeads || 1)) * 100}%`}} className="bg-pink-500 h-full"></div>
                                 </div>
                             </div>
                         </div>
@@ -185,7 +196,7 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                             <div className="bg-white/[0.02] backdrop-blur-lg p-5 rounded-2xl border border-white/5 shadow-xl lg:col-span-2">
                                 <h3 className="text-xs font-semibold text-slate-300 mb-6 uppercase tracking-widest flex items-center gap-2"><FaChartBar className="text-blue-400"/> Staff Workload</h3>
                                 <div className="h-[250px]">
-                                    {stats.staffAllocation.length === 0 ? <div className="flex h-full items-center justify-center text-slate-500 text-sm">No data available.</div> : (
+                                    {(!stats.staffAllocation || stats.staffAllocation.length === 0) ? <div className="flex h-full items-center justify-center text-slate-500 text-sm">No data available.</div> : (
                                         <ResponsiveContainer width="100%" height="100%">
                                             <BarChart data={stats.staffAllocation} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
@@ -215,7 +226,7 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                             </div>
                         </div>
 
-                        <SubjectEnrollmentStats rawSubjects={stats.subjectEnrollments} mixerData={stats.mixerData} />
+                        <SubjectEnrollmentStats rawSubjects={stats.subjectEnrollments || []} mixerData={stats.mixerData || []} />
                     </div>
                 )}
 
@@ -228,11 +239,8 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
 
             {/* 🔥 FULL SCREEN MODAL: MASTER LEAD DIRECTORY 🔥 */}
             {showMasterModal && (
-                // 👇 Methana pl-[260px] or pl-[300px] damma sidebar eken wamata thallu karanna
-                // w-full h-full dala screen eka purawata aran thiyenne
                 <div className="fixed inset-0 z-[200] bg-[#020617]/95 backdrop-blur-md flex items-center justify-center p-4 pl-[260px] lg:pl-[280px] xl:pl-[300px] w-full h-full animate-fade-in">
                     
-                    {/* 👇 max-w-full dila margin nathi kara */}
                     <div className="bg-[#1a2430] w-full h-full rounded-3xl flex flex-col overflow-hidden border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
                         
                         {/* Modal Header */}
@@ -259,15 +267,15 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                                     <div className="grid grid-cols-2 gap-4 xl:col-span-1">
                                         <div className="bg-[#1e293b] p-5 rounded-2xl border border-slate-700 flex flex-col justify-center shadow-lg">
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Filtered</p>
-                                            <h2 className="text-3xl font-black text-white mt-1">{mStats.total}</h2>
+                                            <h2 className="text-3xl font-black text-white mt-1">{mStats.total || 0}</h2>
                                         </div>
                                         <div className="bg-emerald-500/10 p-5 rounded-2xl border border-emerald-500/20 flex flex-col justify-center shadow-lg">
                                             <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest">Enrolled</p>
-                                            <h2 className="text-3xl font-black text-emerald-400 mt-1">{mStats.enrolled}</h2>
+                                            <h2 className="text-3xl font-black text-emerald-400 mt-1">{mStats.enrolled || 0}</h2>
                                         </div>
                                         <div className="bg-red-500/10 p-5 rounded-2xl border border-red-500/20 flex flex-col justify-center shadow-lg">
                                             <p className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Non-Enrolled</p>
-                                            <h2 className="text-3xl font-black text-red-400 mt-1">{mStats.nonEnrolled}</h2>
+                                            <h2 className="text-3xl font-black text-red-400 mt-1">{mStats.nonEnrolled || 0}</h2>
                                         </div>
                                         <div className="bg-[#1e293b] p-5 rounded-2xl border border-slate-700 flex flex-col justify-center shadow-lg">
                                             <p className="text-[10px] text-amber-400 font-bold uppercase tracking-widest">Conversion</p>
@@ -280,14 +288,13 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                                     <div className="bg-[#1e293b] p-5 rounded-2xl border border-slate-700 shadow-lg xl:col-span-2">
                                         <h3 className="text-xs font-semibold text-slate-300 mb-4 uppercase tracking-widest flex items-center gap-2"><FaMoneyBillWave className="text-emerald-400"/> Intention vs Enrollment</h3>
                                         
-                                        {/* 👇 WARNING FIX: w-full and min-h added to the chart wrapper */}
                                         <div className="w-full h-[150px] min-h-[150px]">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={[
-                                                    { name: 'Full Pay', count: mStats.full },
-                                                    { name: 'Monthly', count: mStats.monthly },
-                                                    { name: 'Installment', count: mStats.installment },
-                                                    { name: 'Not Decided', count: mStats.notDecided }
+                                                    { name: 'Full Pay', count: mStats.full || 0 },
+                                                    { name: 'Monthly', count: mStats.monthly || 0 },
+                                                    { name: 'Installment', count: mStats.installment || 0 },
+                                                    { name: 'Not Decided', count: mStats.notDecided || 0 }
                                                 ]} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                                                     <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
@@ -310,7 +317,7 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                                             className="bg-[#0f172a] border border-slate-600 text-slate-200 text-xs font-bold rounded-lg px-4 py-2.5 outline-none focus:border-indigo-500"
                                         >
                                             <option value="ALL">All Batches</option>
-                                            {allBatches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                            {(allBatches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="relative w-full md:w-96">
@@ -338,7 +345,7 @@ export default function AfterSeminarManagerCampaignStats({ filters, allBatches }
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-700/50">
-                                                {filteredMaster.length === 0 ? (
+                                                {(!filteredMaster || filteredMaster.length === 0) ? (
                                                     <tr><td colSpan="4" className="text-center py-10 text-slate-500 font-medium">No leads match your search criteria.</td></tr>
                                                 ) : (
                                                     filteredMaster.map((l, i) => (

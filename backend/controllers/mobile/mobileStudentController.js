@@ -1,6 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const bcrypt = require('bcryptjs');
+const axios = require('axios');
 
 // ytdl-core අයින් කරලා මේ දෙක දාගන්න (yt-dlp පාවිච්චි කරන නිසා)
 const { execSync } = require('child_process');
@@ -219,14 +220,55 @@ exports.getCourseModules = async (req, res) => {
              orderBy: { itemOrder: 'asc' }
         });
 
+        // 🔥 ලින්ක් එක අපේ සර්වර් එකේ Redirect ලින්ක් එකට හරවන Function එක
+        const modifyLinks = (items) => {
+            return items.map(item => {
+                let newLink = item.link;
+                if (newLink && (newLink.includes('youtube.com') || newLink.includes('youtu.be'))) {
+                    const match = newLink.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/|shorts\/))([\w-]{11})/);
+                    if (match && match[1]) {
+                        // "youtube" කෑල්ල අයින් කරලා අපේ සර්වර් එකේ ලින්ක් එක දෙනවා.
+                        newLink = `https://imacampus.online/api/student/yt-redirect?v=${match[1]}`;
+                    }
+                }
+                return { ...item, link: newLink, isRedirectLink: newLink !== item.link };
+            });
+        };
+
+        // පරණ විදියටම ගන්නවා
         const liveClasses = contents.filter(c => c.contentType === 'live' || c.contentType === '1');
         const recordings = contents.filter(c => c.contentType === 'recording' || c.contentType === '2');
         const documents = contents.filter(c => c.contentType === 'document' || c.contentType === '3');
         const sPapers = contents.filter(c => c.contentType === 'sPaper' || c.contentType === '4');
         const papers = contents.filter(c => c.contentType === 'paper' || c.contentType === '5');
 
+        // 🔥 THE MAGIC TRICK 🔥
+        // ඔයාගේ App එකේ 'CourseContentScreen.jsx' එකේ මෙහෙම කෑල්ලක් තිබ්බා නේද:
+        // if (item.isYouTube || url.includes('youtube.com') || url.includes('youtu.be'))
+        // අපි දැන් Backend එකෙන් යවන්නේ YouTube ලින්ක් එකක් නෙමෙයි, සාමාන්‍ය Web ලින්ක් එකක් විදියට හැඩගහපු ලින්ක් එකක්!
+        // එතකොට App එක හිතන්නේ මේක සාමාන්‍ය Web Link එකක් කියලා WebView එකේ ඕපන් කරනවා.
+        // ඒ ඕපන් කරන Web Page එක ඇතුළේ තමයි අපි YouTube App එක Auto ඕපන් කරන්නේ!
+
+        const formatForWebView = (items) => {
+            return items.map(item => {
+                let url = item.link;
+                if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+                    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/|shorts\/))([\w-]{11})/);
+                    if (match && match[1]) {
+                        // 🔥 මෙන්න මේකයි වෙනස් වුණේ! api/student වෙනුවට api/mobile දැම්මා.
+                        url = `https://imacampus.online/api/mobile/yt-redirect?v=${match[1]}`;
+                    }
+                }
+                return { ...item, link: url, isYouTube: false }; 
+            });
+        };
+
         const safeData = JSON.parse(JSON.stringify({ 
-            lessonGroups, contents, liveClasses, recordings, documents, sPapers, papers,
+            lessonGroups, 
+            contents: formatForWebView(contents),
+            liveClasses: formatForWebView(liveClasses), 
+            recordings: formatForWebView(recordings), 
+            documents, sPapers, papers,
             paidStatus: paidStatus 
         }, (k, v) => typeof v === 'bigint' ? v.toString() : v));
         
@@ -409,55 +451,40 @@ exports.updateMobileProfile = async (req, res) => {
     }
 };
 
-exports.getVideoStream = async (req, res) => {
-    try {
-        const videoId = req.params.videoId;
-        // req.query.download කියලා ආවොත්, අපිට ඕනේ .m3u8 නෙමෙයි .mp4 එක.
-        const isDownloadRequest = req.query.download === 'true'; 
-        
-        console.log(`🎬 Extraction started for ID: ${videoId} (Download: ${isDownloadRequest})`);
+// 🔥 YOUTUBE NATIVE APP REDIRECTOR (BUTTON CLICK) 🔥
+exports.ytRedirect = (req, res) => {
+    const ytId = req.query.v;
+    
+    if (!ytId) return res.status(400).send("Invalid Video ID");
 
-        if (!videoId) {
-            return res.status(400).json({ error: 'Invalid YouTube ID' });
-        }
-
-        // Cache Key එක (Play කරන්න එකයි, Download කරන්න එකයි දෙකක්)
-        const cacheKey = `${videoId}_${isDownloadRequest ? 'download' : 'stream'}`;
-
-        // 1. කලින් හොයාගත්තු URL එක Cache එකේ තියෙනවද බලනවා
-        if (streamCache[cacheKey] && streamCache[cacheKey].expires > Date.now()) {
-            console.log("⚡ Serving from Cache! (Instant load)");
-            return res.status(200).json({ stream_url: streamCache[cacheKey].url });
-        }
-
-        const url = `https://www.youtube.com/watch?v=${videoId}`;
-        const cookiesPath = path.resolve(__dirname, '../yt_cookies.txt');
-
-        // 2. yt-dlp Command එක.
-        // Download කරනවා නම් .mp4 format එක ගන්න ඕනේ (best[ext=mp4]). 
-        // නිකන් Play කරනවා නම් .m3u8 ගන්න එක තමයි (best) හොඳ.
-        let formatStr = isDownloadRequest ? "best[ext=mp4][height<=720]" : "best";
-
-        const command = `yt-dlp -f "${formatStr}" --cookies "${cookiesPath}" --js-runtimes node --no-playlist --no-warnings --no-write-subs --no-write-info-json --get-url "${url}"`;
-
-        const output = execSync(command, { timeout: 60000 }).toString().trim();
-
-        if (!output || !output.startsWith('http')) {
-            return res.status(404).json({ error: 'Stream URL not found' });
-        }
-
-        console.log("✅ Stream URL extracted successfully");
-
-        // 3. අලුත් URL එක පැය 10ක් Cache එකේ save කරනවා
-        streamCache[cacheKey] = {
-            url: output,
-            expires: Date.now() + (10 * 60 * 60 * 1000) // පැය 10යි (10 hours)
-        };
-
-        res.status(200).json({ stream_url: output });
-
-    } catch (error) {
-        console.error("❌ yt-dlp Error:", error.message);
-        res.status(500).json({ error: 'Failed to extract video stream', details: error.message });
-    }
+    const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <title>Secure Stream</title>
+            <style>
+                body { background-color: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; text-align: center; }
+                .yt-icon { width: 60px; height: 60px; margin-bottom: 15px; fill: #dc2626; }
+                .btn { background-color: #dc2626; color: white; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 16px; margin-top: 15px; box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4); display: inline-block; }
+                .text { color: #94a3b8; font-size: 13px; margin-top: 15px; padding: 0 30px; line-height: 1.5; }
+            </style>
+        </head>
+        <body>
+            <svg class="yt-icon" viewBox="0 0 24 24">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z"/>
+                <path fill="#0f172a" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+            <h2 style="margin:0; font-size: 20px;">Secure Video Stream</h2>
+            <p class="text">Click the button below to open this video safely in your YouTube App.</p>
+            
+            <a href="https://www.youtube.com/watch?v=${ytId}" target="_blank" class="btn">
+                Open in YouTube App
+            </a>
+        </body>
+        </html>
+    `;
+    
+    res.send(html);
 };
