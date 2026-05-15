@@ -58,7 +58,9 @@ export default function CrmManagement() {
     const fetchSettings = async () => {
         setLoading(true);
         try {
-            const res = await axios.get(`/admin/crm/settings/${selectedBusiness}/${activeTab}`);
+            // 🔥 UPDATE: අගට ?t=${new Date().getTime()} එකතු කරලා තියෙනවා පරණ ඩේටා cache වෙන එක නවත්තන්න.
+            const res = await axios.get(`/admin/crm/settings/${selectedBusiness}/${activeTab}?t=${new Date().getTime()}`);
+            
             if (res.data && res.data.id) {
                 setMetaKey(res.data.metaApiKey || '');
                 setWaId(res.data.waId || '');

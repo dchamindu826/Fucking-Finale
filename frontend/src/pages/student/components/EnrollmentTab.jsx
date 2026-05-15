@@ -132,7 +132,6 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
           : calculateTotal();
   };
 
-  // 🔥 FIX: ළමයා සබ්ජෙක්ට් තෝරලා නැත්නම් 0යි පෙන්නන්නේ, due එක පෙන්නන්නේ නෑ
   const getFinalPayable = () => {
       if (selectedSubjects.length === 0) return 0; 
       const base = getBasePayable();
@@ -185,6 +184,9 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
   };
 
   const handleFinalSubmit = async () => {
+    // 🔥 FIX 1: Loading වෙන ගමන් ආයෙත් එබුවොත් මෙතනින්ම නවත්තනවා (Double Click Prevention)
+    if (isSubmitting) return; 
+
     if (paymentMethod === 'slip' && slipFiles.length === 0) return toast.error("Please upload your bank slip(s).");
     
     try {
@@ -258,7 +260,6 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
         finalRemark = finalRemark ? `${finalRemark}\n\n[SYSTEM]: ${walletNote}` : `[SYSTEM]: ${walletNote}`;
     }
 
-    // 🔥 FIX: Backend එක බලාපොරොත්තු වෙන හරියටම වචනේ (monthly/full/installment) යවනවා
     let pMethodChosen = 'monthly';
     if (paymentPlan === 'full') {
         pMethodChosen = finalPaymentType === 'installment' ? 'installment' : 'full';
@@ -269,7 +270,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
     formData.append('batchId', selectedBatch.id);
     formData.append('groupId', selectedGroup.id);
     formData.append('subjects', JSON.stringify(selectedSubjects));
-    formData.append('paymentMethodChosen', pMethodChosen); // 🔥 මේක තමයි හැදුවේ
+    formData.append('paymentMethodChosen', pMethodChosen); 
     formData.append('method', method);
     formData.append('amount', amountToPay); 
     if (finalRemark) formData.append('remark', finalRemark);
@@ -289,8 +290,13 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
             }).catch(e=>{});
             setActiveTab('history'); 
         }
-    } catch (error) { toast.error("Failed to save enrollment."); } 
-    finally { setIsSubmitting(false); }
+    } catch (error) { 
+        // 🔥 FIX 2: Backend එකෙන් එවන Error මැසේජ් එක (Duplicate Error) ලස්සනට Toast එකේ පෙන්නනවා
+        toast.error(error.response?.data?.error || "Failed to save enrollment."); 
+    } 
+    finally { 
+        setIsSubmitting(false); 
+    }
   };
 
   const handleBackNavigation = () => {
@@ -307,7 +313,6 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
   const availableStreams = [...actualStreams, 'All'];
 
   return (
-    // 🔥 FIX: Added classes to hide visual scrollbar but keep scroll functionality
     <div className="w-full h-full relative text-white pb-[100px] lg:pb-0 overflow-x-hidden overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"> 
         <div className="w-full mx-auto pb-6 md:pt-4">
             {selectionLevel > 0 && (
@@ -327,9 +332,9 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {businesses.map(business => (
                           <div key={business.id} onClick={() => { setSelectedBusiness(business); setSelectionLevel(1); }}
-                            className="cursor-pointer rounded-[2rem] overflow-hidden glass-card hover:border-red-400/50 transition-colors w-full flex flex-col group">
-                            <div className="h-48 w-full relative border-b border-white/10 p-6 bg-black/20 flex items-center justify-center">
-                               <img src={getImageUrl(business.logo)} alt="" className="max-w-full max-h-full object-contain" />
+                            className="cursor-pointer rounded-[2rem] overflow-hidden bg-white/5 border border-white/10 hover:bg-white/10 hover:border-red-500/50 backdrop-blur-md shadow-xl transition-all duration-300 w-full flex flex-col group">
+                            <div className="h-48 w-full relative border-b border-white/10 p-6 bg-black/40 flex items-center justify-center">
+                               <img src={getImageUrl(business.logo)} alt="" className="max-w-full max-h-full object-contain drop-shadow-lg" />
                             </div>
                             <div className="p-6 flex-1 flex items-center justify-center">
                               <h3 className="font-bold text-lg text-white text-center group-hover:text-red-400 transition-colors">{business.name}</h3>
@@ -347,9 +352,9 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {getFilteredBatches().map(batch => (
                           <div key={batch.id} onClick={() => { setSelectedBatch(batch); setSelectionLevel(2); }}
-                            className="cursor-pointer rounded-[2rem] glass-card hover:border-red-500/50 transition-colors flex flex-col sm:flex-row items-center p-4 md:p-6 group">
-                            <div className="h-20 w-20 sm:h-28 sm:w-28 shrink-0 bg-white/5 rounded-2xl p-3 flex justify-center items-center border border-white/10 mx-auto sm:mx-0 mb-4 sm:mb-0">
-                              <img src={getImageUrl(batch.logo || selectedBusiness.logo)} className="max-w-full max-h-full object-contain" alt="" />
+                            className="cursor-pointer rounded-[2rem] bg-white/5 border border-white/10 hover:bg-white/10 hover:border-red-500/50 backdrop-blur-md shadow-xl transition-all duration-300 flex flex-col sm:flex-row items-center p-4 md:p-6 group">
+                            <div className="h-20 w-20 sm:h-28 sm:w-28 shrink-0 bg-white/10 rounded-2xl p-3 flex justify-center items-center border border-white/10 mx-auto sm:mx-0 mb-4 sm:mb-0">
+                              <img src={getImageUrl(batch.logo || selectedBusiness.logo)} className="max-w-full max-h-full object-contain drop-shadow-md" alt="" />
                             </div>
                             <div className="p-2 sm:p-6 flex-1 flex flex-col justify-center items-center sm:items-start text-center sm:text-left">
                               <h4 className="font-bold text-white text-lg md:text-2xl group-hover:text-red-400 transition-colors">{batch.name}</h4>
@@ -390,7 +395,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                 {selectionLevel === 3 && (
                     <div className="w-full animate-fade-in relative flex flex-col lg:flex-row gap-6 items-start">
                       
-                      <div className="flex-1 glass-card rounded-[2rem] p-4 md:p-8 w-full border-white/10 overflow-hidden">
+                      <div className="flex-1 bg-white/5 border border-white/10 backdrop-blur-md shadow-xl rounded-[2rem] p-4 md:p-8 w-full overflow-hidden">
                           <div className="flex items-center space-x-3 mb-6 bg-white/5 p-3 rounded-2xl w-max border border-white/10 max-w-full">
                               <div className="w-10 h-10 rounded-xl bg-white/10 text-red-500 flex items-center justify-center shrink-0">
                                 {paymentPlan === 'monthly' ? <CreditCard size={20} /> : <Wallet size={20} />}
@@ -685,7 +690,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                             <ul className="text-xs md:text-sm text-slate-300 list-disc pl-4 md:pl-5 space-y-1 md:space-y-2 leading-relaxed mb-4">
                                 <li>ස්ලිප් පතෙහි <strong className="text-white">මුලු 4ම (4 corners)</strong> පැහැදිලිව පෙනෙන සේ ඡායාරූපය ගන්න.</li>
                                 <li>ඡායාරූපය <strong className="text-white">බොඳ නොවී ඉතා පැහැදිලිව</strong> තිබිය යුතුය.</li>
-                                <li><strong className="text-white">Reference Number, දිනය සහ වේලාව</strong> හොඳින් කියවිය හැකි විය্বা.</li>
+                                <li><strong className="text-white">Reference Number, දිනය සහ වේලාව</strong> හොඳින් කියවිය හැකි විය යුතුය.</li>
                             </ul>
                             <div className="flex gap-2 md:gap-4">
                                 <div className="flex-1 bg-white/5 border border-green-500/50 rounded-xl p-2 md:p-3 text-center flex flex-col justify-between">
@@ -702,7 +707,7 @@ const EnrollmentTab = ({ businesses, setActiveTab }) => {
                             <h4 className="text-blue-400 font-bold mb-2 md:mb-3 flex items-center gap-2 text-sm md:text-base"><MonitorPlay size={16}/> Bank Slip or e-Receipts</h4>
                             <ul className="text-xs md:text-sm text-slate-300 list-disc pl-4 md:pl-5 space-y-1 md:space-y-2 leading-relaxed mb-4">
                                 <li><strong className="text-white">Reference Number, දිනය සහ වේලාව</strong> අනිවාර්යයෙන්ම දිස්විය යුතුය.</li>
-                                <li>Screesnshot එක හෝ Slip එක කපා-කොටා (crop) නොමැතිව <strong className="text-white">සම්පූර්ණයෙන්ම</strong> උඩුගත කරන්න.</li>
+                                <li>Screenshot එක හෝ Slip එක කපා-කොටා (crop) නොමැතිව <strong className="text-white">සම්පූර්ණයෙන්ම</strong> උඩුගත කරන්න.</li>
                             </ul>
                              <div className="flex gap-2 md:gap-4">
                                 <div className="flex-1 bg-white/5 border border-green-500/50 rounded-xl p-2 md:p-3 text-center flex flex-col justify-between">

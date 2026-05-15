@@ -97,7 +97,7 @@ const StudentDashboard = () => {
       {/* Dark overlay for the background wallpaper */}
       <div className="absolute inset-0 bg-black/60 z-0"></div>
 
-      <div className="glass-container w-full max-w-[1600px] h-[98vh] md:h-[92vh] rounded-3xl md:rounded-[2.5rem] flex overflow-hidden relative z-10">
+      <div className="glass-container w-full max-w-[1600px] h-[98vh] md:h-[92vh] rounded-3xl md:rounded-[2.5rem] flex overflow-hidden relative z-10 transition-all duration-500 bg-black/35 backdrop-blur-3xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.8)]">
           
           <Sidebar 
             activeTab={activeTab} 

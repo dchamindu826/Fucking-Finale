@@ -10,9 +10,11 @@ import PrivacyPolicy from './pages/web/pages/PrivacyPolicy';
 import Terms from './pages/web/pages/Terms'; 
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
-import GhostAuth from './pages/auth/GhostAuth'; // 🔥 NEW: Ghost Auth Import
+import GhostAuth from './pages/auth/GhostAuth'; 
 import MainLayout from "./components/layouts/MainLayout";
 import CallCampaignModule from './components/CoordinatorCRM/CallCampaignModule';
+import { ThemeProvider } from './contexts/ThemeContext';
+import AnnouncementsManager from './pages/admin/AnnouncementsManager';
 
 // Dashboards & Modules
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -51,16 +53,12 @@ const GhostModeBanner = () => {
   if (!isAdminGhosting) return null;
 
   const handleExitGhostMode = () => {
-      // 1. ආයෙත් Admin ගේ දේවල් Restore කරනවා
       localStorage.setItem('token', localStorage.getItem('admin_token'));
       localStorage.setItem('user', localStorage.getItem('admin_user'));
 
-      // 2. හංගපු දේවල් අයින් කරනවා
       localStorage.removeItem('admin_token');
       localStorage.removeItem('admin_user');
 
-      // 3. 🔥 මෙතන '/' වෙනුවට '/login' දැම්මා. 
-      // එතකොට ඔයාගේ App එකේ logic එකෙන් කෙලින්ම Dashboard එකට Navigate කරයි.
       window.location.href = '/login';
   };
 
@@ -125,73 +123,75 @@ export default function App() {
   if (!authChecked) return <div className="min-h-screen bg-[#0a0f1c]"></div>;
 
   return (
-    <BrowserRouter>
-      <Toaster position="top-right" /> 
-      
-      <GhostModeBanner />
-
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<Home loggedInUser={loggedInUser} />} />
-        <Route path="/about-us" element={<AboutUs />} />
-        <Route path="/contact-us" element={<ContactUs />} />
-        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<Terms />} />
-        <Route path="/register" element={<Register />} />
+    // 🔥 මෙන්න මෙතන ThemeProvider එකෙන් මුළු App එකම wrap කලා 🔥
+    <ThemeProvider>
+      <BrowserRouter>
+        <Toaster position="top-right" /> 
         
-        {/* 🔥 NEW: Ghost Login Route 🔥 */}
-        <Route path="/ghost-auth" element={<GhostAuth />} />
-        
-        <Route 
-          path="/login" 
-          element={loggedInUser ? <Navigate to={getDashboardLink(loggedInUser)} /> : <Login setLoggedInUser={setLoggedInUser} />} 
-        />
+        <GhostModeBanner />
 
-        {/* ✅ ADMIN & STAFF ROUTES ✅ */}
-        <Route element={loggedInUser && loggedInUser.role.toUpperCase() !== 'STUDENT' && loggedInUser.role.toUpperCase() !== 'USER' ? <MainLayout loggedInUser={loggedInUser} handleLogout={handleLogout} /> : <Navigate to="/login" />}>
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/manager/dashboard" element={<ManagerDashboard />} /> 
-            <Route path="/coordinator/dashboard" element={<ManagerDashboard />} /> 
-            <Route path="/finance/dashboard" element={<FinanceOverview />} /> 
-            <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
-            <Route path="/technical/dashboard" element={<ManagerDashboard />} />
-            <Route path="/workspace/call-campaign" element={<CallCampaignModule loggedInUser={loggedInUser} />} />
-            <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<Home loggedInUser={loggedInUser} />} />
+          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/contact-us" element={<ContactUs />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/register" element={<Register />} />
+          
+          {/* 🔥 NEW: Ghost Login Route 🔥 */}
+          <Route path="/ghost-auth" element={<GhostAuth />} />
+          
+          <Route 
+            path="/login" 
+            element={loggedInUser ? <Navigate to={getDashboardLink(loggedInUser)} /> : <Login setLoggedInUser={setLoggedInUser} />} 
+          />
 
-            <Route path="/theme-showcase" element={<ThemeShowcase />} />
+          {/* ✅ ADMIN & STAFF ROUTES ✅ */}
+          <Route element={loggedInUser && loggedInUser.role.toUpperCase() !== 'STUDENT' && loggedInUser.role.toUpperCase() !== 'USER' ? <MainLayout loggedInUser={loggedInUser} handleLogout={handleLogout} /> : <Navigate to="/login" />}>
+              <Route path="/admin/dashboard" element={<AdminDashboard />} />
+              <Route path="/manager/dashboard" element={<ManagerDashboard />} /> 
+              <Route path="/admin/announcements" element={<AnnouncementsManager loggedInUser={loggedInUser} />} />
+              <Route path="/coordinator/dashboard" element={<ManagerDashboard />} /> 
+              <Route path="/finance/dashboard" element={<FinanceOverview />} /> 
+              <Route path="/call-center/dashboard" element={<ManagerDashboard />} />
+              <Route path="/technical/dashboard" element={<ManagerDashboard />} />
+              <Route path="/workspace/call-campaign" element={<CallCampaignModule loggedInUser={loggedInUser} />} />
+              <Route path="/delivery/dashboard" element={<DeliveryDashboard />} />
 
-            {/* Common Panels */}
-            <Route path="/admin/content-hub" element={<ContentHub loggedInUser={loggedInUser} />} />
-            <Route path="/admin/staff" element={<StaffManagement loggedInUser={loggedInUser} />} />
-            <Route path="/admin/payments" element={<PaymentManagement loggedInUser={loggedInUser} />} />
-            <Route path="/admin/student-center" element={<StudentDataCenter loggedInUser={loggedInUser} />} />
-            <Route path="/workspace/timetable" element={<ClassTimetable />} />
-            <Route path="/workspace/tasks" element={<TaskCenter loggedInUser={loggedInUser} />} />
+              <Route path="/theme-showcase" element={<ThemeShowcase />} />
 
-            {/* System Admin CRM Configuration */}
-            <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
-            <Route path="/admin/database" element={<DatabaseManager />} />
-            <Route path="/theme-showcase" element={<ThemeShowcase />} />
+              {/* Common Panels */}
+              <Route path="/admin/content-hub" element={<ContentHub loggedInUser={loggedInUser} />} />
+              <Route path="/admin/staff" element={<StaffManagement loggedInUser={loggedInUser} />} />
+              <Route path="/admin/payments" element={<PaymentManagement loggedInUser={loggedInUser} />} />
+              <Route path="/admin/student-center" element={<StudentDataCenter loggedInUser={loggedInUser} />} />
+              <Route path="/workspace/timetable" element={<ClassTimetable />} />
+              <Route path="/workspace/tasks" element={<TaskCenter loggedInUser={loggedInUser} />} />
 
-            {/* Active CRM Interface for Staff & Managers */}
-            <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
-            <Route path="/workspace/after-seminar-crm" element={<AfterSeminarDashboard loggedInUser={loggedInUser} />} />
-        </Route>
+              {/* System Admin CRM Configuration */}
+              <Route path="/admin/crm-setup" element={<CrmManagement loggedInUser={loggedInUser} />} />
+              <Route path="/admin/database" element={<DatabaseManager />} />
+              {/* Note: theme-showcase route duplicated, removed one instance implicitly */}
 
-        {/* ✅ STUDENT ROUTES ✅ */}
-        <Route 
-          path="/student/dashboard" 
-          element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDashboard /> : <Navigate to="/login" />} 
-        />
-        <Route 
-          path="/student/delivery" 
-          element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDeliveryHub /> : <Navigate to="/login" />} 
-        />
+              {/* Active CRM Interface for Staff & Managers */}
+              <Route path="/workspace/crm" element={<CoordinatorDashboard loggedInUser={loggedInUser} />} />
+              <Route path="/workspace/after-seminar-crm" element={<AfterSeminarDashboard loggedInUser={loggedInUser} />} />
+          </Route>
 
+          {/* ✅ STUDENT ROUTES ✅ */}
+          <Route 
+            path="/student/dashboard" 
+            element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDashboard /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/student/delivery" 
+            element={loggedInUser && (loggedInUser.role.toUpperCase() === 'STUDENT' || loggedInUser.role.toUpperCase() === 'USER') ? <StudentDeliveryHub /> : <Navigate to="/login" />} 
+          />
 
-
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </BrowserRouter>
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

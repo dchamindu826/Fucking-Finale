@@ -29,8 +29,15 @@ const uploadPost = multer({ storage: postStorage });
 // Content Hub
 router.post('/admin/manager/content-group/add', controller.addContentGroup);
 router.delete('/admin/content-group/delete', controller.deleteContentGroup);
-router.post('/admin/manager/contents/mass-assign', uploadDoc.single('file'), controller.addContentMassAssign);
-router.put('/admin/manager/contents/update', uploadDoc.single('file'), controller.updateContentMassAssign);
+router.post('/admin/manager/contents/mass-assign', uploadDoc.fields([
+    { name: 'file', maxCount: 1 }, 
+    { name: 'thumbnail', maxCount: 1 }
+]), controller.addContentMassAssign);
+
+router.put('/admin/manager/contents/update', uploadDoc.fields([
+    { name: 'file', maxCount: 1 }, 
+    { name: 'thumbnail', maxCount: 1 }
+]), controller.updateContentMassAssign);
 router.delete('/admin/content/delete', controller.deleteContent);
 router.get('/admin/manager/get-contents', controller.getContents); 
 
@@ -88,5 +95,11 @@ router.delete('/course-setup/installment', controller.deleteInstallment);
 // Update these paths based on your actual route file structure
 router.put('/course-setup/business/toggle-status', controller.toggleBusinessStatus);
 router.put('/course-setup/batch/toggle-status', controller.toggleBatchStatus);
+
+
+// ================= ZOOM DYNAMIC DOWNLOAD ROUTE =================
+// 🔥 NEW: Zoom API එක හරහා fresh MP4 ලින්ක් එකක් අරන් App එකට දෙන Route එක 🔥
+router.get('/mobile/zoom-download/:meetingId', controller.getZoomDownloadRedirect);
+
 
 module.exports = router;

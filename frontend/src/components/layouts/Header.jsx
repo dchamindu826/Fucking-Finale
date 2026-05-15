@@ -1,4 +1,4 @@
-// We moved everything to the Sidebar, so Header is no longer used.
+// Header eka ain karanna kiwwa nisa Sidebar ekata okkoma details damma.
 export default function Header() {
   return null;
 }

@@ -248,21 +248,31 @@ exports.getCustomTaskTemplates = async (req, res) => {
     }
 };
 
+// taskController.js eke athule thiyena:
+
 exports.saveCustomTaskTemplate = async (req, res) => {
     try {
-        const { id, businessId, title, description, dayOfMonth, startTime, endTime, allocationType, autoAssignTo, subTasks } = req.body;
+        const { id, businessId, title, description, dayOfMonth, allocationType, autoAssignTo, subTasks } = req.body;
         
         const data = {
-            businessId: parseInt(businessId),
+            business: { connect: { id: parseInt(businessId) } },
             title,
             description,
             dayOfMonth: dayOfMonth ? parseInt(dayOfMonth) : null,
-            startTime,
-            endTime,
+            startTime: "", 
+            endTime: "",   
             allocationType: allocationType || 'MANUAL',
-            autoAssignTo: autoAssignTo ? parseInt(autoAssignTo) : null,
-            subTasks: subTasks && subTasks.length > 0 ? subTasks : null
+            subTasks: subTasks && subTasks.length > 0 ? JSON.stringify(subTasks) : null
         };
+
+        // 👇 autoAssignTo eka relation eken connect kireema 👇
+        if (autoAssignTo) {
+            data.assignedUser = { connect: { id: parseInt(autoAssignTo) } };
+        } else if (id) {
+            // Update ekedi user assign nokara thiyanawanam (remove karanna oni nam)
+            data.assignedUser = { disconnect: true };
+        }
+        // 👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆👆
 
         let template;
         if (id) {

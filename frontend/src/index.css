@@ -1,79 +1,150 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
+/* 🔥 FIX: Tailwind v4 Class-based Dark Mode 🔥 */
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-accent: var(--theme-color);
+  --color-brand-accentHover: var(--theme-hover);
+  --color-brand-accentLight: var(--theme-light);
+  --color-brand-darkBg: #090E17;
+  --color-brand-darkCard: #111827;
+  --color-brand-darkBorder: rgba(255, 255, 255, 0.08);
+  --color-brand-darkHover: #1F2937;
+  --color-brand-darkTextMuted: #94A3B8;
+  --font-sans: 'Inter', sans-serif;
+}
+
+:root {
+  --theme-color: #E11D48;
+  --theme-hover: #BE123C;
+  --theme-light: rgba(225, 29, 72, 0.1);
+}
+
 body {
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Inter', sans-serif;
   margin: 0;
-  color: #ffffff;
   -webkit-font-smoothing: antialiased;
-  background-color: #0a0f1c; 
+  background-color: #000;
 }
 
-/* Fixed backgrounds on body cause lag. We use a fixed pseudo-element instead. */
-body::before {
-  content: "";
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: url('/glass.jpg') no-repeat center center;
-  background-size: cover;
-  z-index: -1;
-  transform: translateZ(0); 
-  will-change: transform;
-}
-
-.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px;}
+/* Custom Scrollbars */
+.custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 10px; }
-.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(239, 68, 68, 0.8); }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 10px; }
+.dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-.animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+* { transition: background-color 0.4s ease, border-color 0.4s ease, color 0.4s ease; }
 
-/* 🚀 FIX: Lag Free Glassmorphism 🚀 */
-.glass-container {
-  background: rgba(10, 15, 30, 0.65);
-  backdrop-filter: blur(20px); 
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  transform: translateZ(0); 
-}
-
-.glass-card {
-  background: rgba(255, 255, 255, 0.05); 
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-  transform: translateZ(0); 
-  will-change: transform;
-}
-
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(239, 68, 68, 0.4); 
-}
-
-/* 🔥 FIX: Auto-Scale UI for 125% Windows Display Scale & Laptops 🔥 */
-@media (max-width: 1536px), (max-height: 900px) {
-  html {
-    font-size: 14px; /* Default is 16px. This shrinks the entire UI by ~12.5% */
-  }
-}
-
-@media (max-width: 1280px), (max-height: 768px) {
-  html {
-    font-size: 12px; /* Further shrinks on very small screens */
-  }
-}
-
-/* 🔥 FIX: Global Modal Scroll - Prevents modals from bleeding out 🔥 */
+/* Modal fix */
 .modal-content, [role="dialog"] > div, .fixed.inset-0 > div > div {
   max-height: 90vh !important;
   overflow-y: auto !important;
+}
+
+/* ==========================================================
+   ✨ CUSTOM ANIMATIONS FOR BACKGROUND THEMES ✨
+   ========================================================== */
+
+/* 1. Aurora Background Animation */
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.bg-anim-aurora {
+    background: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #121212);
+    background-size: 400% 400%;
+    animation: gradientMove 15s ease infinite;
+}
+
+/* 2. Galaxy Stars Background Animation (🔥 UPDATED to Deep Navy Blue 🔥) */
+@keyframes moveStars {
+    from { background-position: 0 0; }
+    to { background-position: -10000px 5000px; }
+}
+
+.bg-anim-stars {
+    /* වෙනස් කලේ මෙතන: තද කළු (#050505) අයින් කරලා ලස්සන Deep Space Blue (#0B101E) දැම්මා */
+    background-color: #0B101E; 
+    background-image: 
+        radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 4px),
+        radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+        radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px);
+    background-size: 550px 550px, 350px 350px, 250px 250px;
+    background-position: 0 0, 40px 60px, 130px 270px;
+    animation: moveStars 200s linear infinite;
+}
+
+/* කලින් තිබ්බ index.css එකේ පහලට මේ ටික එකතු කරන්න */
+
+@keyframes float-ball-1 {
+    0% { transform: translate(0, 0); }
+    33% { transform: translate(100vw, 50vh); }
+    66% { transform: translate(50vw, 100vh); }
+    100% { transform: translate(0, 0); }
+}
+
+@keyframes float-ball-2 {
+    0% { transform: translate(100vw, 0); }
+    33% { transform: translate(0, 100vh); }
+    66% { transform: translate(50vw, 0); }
+    100% { transform: translate(100vw, 0); }
+}
+
+@keyframes float-ball-3 {
+    0% { transform: translate(50vw, 100vh); }
+    33% { transform: translate(100vw, 0); }
+    66% { transform: translate(0, 50vh); }
+    100% { transform: translate(50vw, 100vh); }
+}
+
+.animate-float-ball-1 {
+    animation: float-ball-1 25s linear infinite;
+}
+
+.animate-float-ball-2 {
+    animation: float-ball-2 30s linear infinite;
+}
+
+.animate-float-ball-3 {
+    animation: float-ball-3 35s linear infinite;
+}
+
+/* ==========================================================
+   🌈 NEW: SLOW COLOR SHIFT ANIMATION (anim2)
+   ========================================================== */
+@keyframes smoothColorShift {
+    0%   { background-color: #1D4ED8; } /* Blue */
+    20%  { background-color: #B91C1C; } /* Red */
+    40%  { background-color: #15803D; } /* Green */
+    60%  { background-color: #7E22CE; } /* Purple */
+    80%  { background-color: #FEF08A; } /* Light Yellow */
+    100% { background-color: #1D4ED8; } /* Back to Blue smoothly */
+}
+
+.bg-anim-color-shift {
+    /* තත්පර 60ක් තියෙන නිසා පට්ටම slow එකේ මාරු වෙන්නේ */
+    animation: smoothColorShift 60s ease-in-out infinite;
+}
+
+
+/* 🔥 iOS Safari Touch & Click Mismatch Fix 🔥 */
+@supports (-webkit-touch-callout: none) {
+  .h-screen {
+    height: -webkit-fill-available !important;
+  }
+  .min-h-screen {
+    min-height: -webkit-fill-available !important;
+  }
+}
+
+/* Touch events block වෙන එක නවත්තන්න */
+html, body {
+  -webkit-overflow-scrolling: touch;
 }

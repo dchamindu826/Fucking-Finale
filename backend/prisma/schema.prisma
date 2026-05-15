@@ -8,38 +8,38 @@ datasource db {
 }
 
 model User {
-  id             Int     @id @default(autoincrement())
-  firstName      String
-  lastName       String
-  phone          String  @unique
-  whatsapp       String?
-  optionalPhone  String?
-  nic            String?
-  addressHouseNo String?
-  addressStreet  String?
-  city           String?
-  district       String?
-  password       String
-  role           String  @default("Student")
-  department     String?
-  businessType   String?
+  id               Int      @id @default(autoincrement())
+  firstName        String
+  lastName         String
+  phone            String   @unique
+  whatsapp         String?
+  optionalPhone    String?
+  nic              String?
+  addressHouseNo   String?
+  addressStreet    String?
+  city             String?
+  district         String?
+  password         String
+  role             String   @default("Student")
+  department       String?
+  businessType     String?
 
   image String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payments        Payment[]
-  assignedLeads   Lead[]           @relation("AssignedLeads")
-  sentMessages    ChatMessage[]    @relation("SentMessages")
-  autoAssignQuota AutoAssignQuota?
-  session_id      String?
+  payments         Payment[]
+  assignedLeads    Lead[]            @relation("AssignedLeads")
+  sentMessages     ChatMessage[]     @relation("SentMessages")
+  autoAssignQuota  AutoAssignQuota?
+  session_id       String?
 
-  assignedTasks         Task[]               @relation("AssignedTasks")
+  assignedTasks        Task[]                @relation("AssignedTasks")
   autoAssignedTemplates CustomTaskTemplate[] @relation("AutoAssignedUser")
 
   actionedPayments Payment[] @relation("ActionedPayments")
-  walletBalance Float @default(0)
+  walletBalance    Float     @default(0)
 }
 
 model Business {
@@ -63,7 +63,6 @@ model Business {
   autoReplies AutoReply[]
   payments    Payment[]
 
-  // 🔥 FIX: Added reverse relations for Tasks and Templates 🔥
   taskTemplates       TaskTemplate[]
   tasks               Task[]
   customTaskTemplates CustomTaskTemplate[]
@@ -82,15 +81,14 @@ model Batch {
   groups      Group[]
   createdAt   DateTime @default(now())
 
-  payments  Payment[]
-  lecturers String?   @db.Text
+  payments   Payment[]
+  lecturers  String?   @db.Text
 
   leads Lead[]
 
   monthlyStats BatchMonthlyStats[]
   timetables   Timetable[]
 
-  // 🔥 FIX: Added reverse relation for Tasks 🔥
   tasks Task[]
 }
 
@@ -109,16 +107,16 @@ model Group {
 }
 
 model Course {
-  id          Int     @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
   code        String?
   stream      String?
   streams     String?
-  description String? @db.Text
-  itemOrder   Int     @default(1)
-  courseType  Int     @default(1)
-  price       Float   @default(0)
-  groupPrices String? @db.Text
+  description String?  @db.Text
+  itemOrder   Int      @default(1)
+  courseType  Int      @default(1)
+  price       Float    @default(0)
+  groupPrices String?  @db.Text
 
   isDiscountExcluded Boolean @default(false)
   lecturerName       String?
@@ -166,6 +164,7 @@ model Content {
   link           String?
   fileName       String?
   meetingId      String?
+  thumbnail      String?
   date           DateTime?
   startTime      String?
   endTime        String?
@@ -179,7 +178,6 @@ model Content {
   itemOrder      Int           @default(1)
   createdAt      DateTime      @default(now())
 
-  // 🔥 FIX: Added reverse relation for Tasks 🔥
   tasks Task[]
 }
 
@@ -190,16 +188,18 @@ model ContentCourse {
   type       Int
   itemOrder  String   @default("0")
   created_at DateTime @default(now())
+  fileName   String?
+  thumbnail  String?
 }
 
 model Payment {
-  id            Int     @id @default(autoincrement())
-  amount        Float   @default(0)
-  payment_type  Int     @default(1)
-  method        String? @default("Slip")
-  status        Int     @default(0)
+  id            Int       @id @default(autoincrement())
+  amount        Float     @default(0)
+  payment_type  Int       @default(1)
+  method        String?   @default("Slip")
+  status        Int       @default(0)
   slip_image    String?
-  post_pay_days Int?    @default(0)
+  post_pay_days Int?      @default(0)
 
   due_date       DateTime?
   installment_no Int       @default(1)
@@ -220,11 +220,11 @@ model Payment {
   subjects String? @db.Text
   remark   String? @db.Text
 
-  actionedById Int?
-  actionedUser User?     @relation("ActionedPayments", fields: [actionedById], references: [id])
-  delivery     Delivery?
-  excessAmount  Float @default(0) // 🔥 අලුතෙන් (වැඩියෙන් ගෙවපු ගාණ)
-  arrearsAmount Float @default(0)
+  actionedById  Int?
+  actionedUser  User?     @relation("ActionedPayments", fields: [actionedById], references: [id])
+  delivery      Delivery?
+  excessAmount  Float     @default(0)
+  arrearsAmount Float     @default(0)
 }
 
 model CrmSettings {
@@ -287,20 +287,22 @@ model Lead {
 
   messages ChatMessage[]
 
-  phase          Int     @default(1)
-  callMethod     String?
-  callStatus     String  @default("pending")
-  feedback       String?
-  isAutoAssigned Boolean @default(false)
+  // 🔥 Current / Active Round Info 🔥
+  phase            Int      @default(1)
+  callMethod       String?
+  callStatus       String   @default("pending")
+  callAttempt      Int      @default(1)
+  feedback         String?  @db.Text
+  isAutoAssigned   Boolean  @default(false)
 
   autoReplyStep     Int     @default(0)
   sequenceCompleted Boolean @default(false)
   followUpSent      Boolean @default(false)
 
-  paymentIntention String?   @default("NOT_DECIDED")
-  enrollmentStatus String?   @default("NON_ENROLLED")
-  inquiryType      String?   @default("NORMAL")
-  newInqTimestamp  DateTime?
+  paymentIntention  String?   @default("NOT_DECIDED")
+  enrollmentStatus  String?   @default("NON_ENROLLED")
+  inquiryType       String?   @default("NORMAL")
+  newInqTimestamp   DateTime?
 
   coordinationRound Int @default(1)
 
@@ -308,12 +310,35 @@ model Lead {
   isLocked      Boolean   @default(false)
   lastPaidMonth String?
   isDropped     Boolean   @default(false)
+
+  // 🔥 NEW RELATION: To track progress per round independently 🔥
+  roundProgress LeadRoundProgress[]
+}
+
+// 🔥 NEW MODEL: To keep the history and specific data per each round 🔥
+model LeadRoundProgress {
+  id          Int      @id @default(autoincrement())
+  leadId      Int
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  
+  roundNum    Int      @default(1)
+  phase       Int      @default(1)
+  callMethod  String?
+  callStatus  String   @default("pending")
+  callAttempt Int      @default(1)
+  feedback    String?  @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // එක Lead කෙනෙක්ට එක Round එකකට තියෙන්න පුළුවන් එක Progress Record එකක් විතරයි
+  @@unique([leadId, roundNum])
 }
 
 model ChatMessage {
-  id     Int  @id @default(autoincrement())
-  leadId Int
-  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  id       Int  @id @default(autoincrement())
+  leadId   Int
+  lead     Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   message   String  @db.Text
   mediaUrl  String? @db.Text
@@ -384,11 +409,8 @@ model Timetable {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  // 🔥 FIX: Added reverse relation for Tasks 🔥
   tasks Task[]
 }
-
-// ================= TASK MANAGEMENT MODELS =================
 
 model TaskTemplate {
   id            Int      @id @default(autoincrement())
@@ -408,20 +430,17 @@ model Task {
   businessId Int
   business   Business @relation(fields: [businessId], references: [id])
 
-  // Made optional because Custom Tasks might not belong to a specific batch/timetable
   batchId     Int?
   batch       Batch?     @relation(fields: [batchId], references: [id])
   timetableId Int?
   timetable   Timetable? @relation(fields: [timetableId], references: [id], onDelete: Cascade)
 
-  // 🔥 Sub-Task Logic 🔥
   parentId Int?
   parent   Task?  @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
   subTasks Task[] @relation("SubTasks")
 
-  taskType String // "LIVE_LINK", "RECORDING", "NOTES", "MCQ", "STRUCTURED_PAPER", "CUSTOM"
+  taskType String 
 
-  // 🔥 Custom Task Fields 🔥
   customTitle String?
   customDesc  String?   @db.Text
   startDate   DateTime?
@@ -432,7 +451,7 @@ model Task {
   assignedTo   Int?
   assignedUser User? @relation("AssignedTasks", fields: [assignedTo], references: [id])
 
-  deadline    DateTime? // Optional because Parent tasks don't have deadlines, only sub-tasks do
+  deadline    DateTime? 
   completedAt DateTime?
 
   unlockReason String? @db.Text
@@ -442,15 +461,12 @@ model Task {
   contentId Int?
   content   Content? @relation(fields: [contentId], references: [id])
 
-  // 🔥 Proof Uploads 🔥
   proofUrl  String?
-  proofType String? // "image" or "pdf"
+  proofType String? 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
-
-// ================= CUSTOM TASK TEMPLATE MODEL =================
 
 model CustomTaskTemplate {
   id         Int      @id @default(autoincrement())
@@ -460,29 +476,28 @@ model CustomTaskTemplate {
   title       String
   description String? @db.Text
 
-  dayOfMonth Int? // Optional (e.g. 5 for 5th day of the month)
-  startTime  String // Must (e.g. "08:00")
-  endTime    String // Must (e.g. "17:00")
+  dayOfMonth Int? 
+  
+  startTime  String 
+  endTime    String 
 
-  allocationType String @default("MANUAL") // "MANUAL", "DAILY", "CLASS_LINKED"
+  allocationType String @default("MANUAL") 
 
-  autoAssignTo Int? // Auto allocate to a specific staff member
+  autoAssignTo Int? 
   assignedUser User? @relation("AutoAssignedUser", fields: [autoAssignTo], references: [id])
 
-  subTasks Json? // Sub tasks check-list saved as a JSON array
+  subTasks Json? 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-// ================= DELIVERY & STOCK MANAGEMENT =================
-
 model TuteStock {
   id                Int      @id @default(autoincrement())
-  courseId          Int      // Subject එකට ලින්ක් වෙනවා
-  tuteName          String   // ටියුට් එකේ නම
-  tuteImage         String?  // ටියුට් එකේ පින්තූරයක් තියෙනවනම් (Optional)
-  availableQuantity Int      @default(0) // දැනට තියෙන Stock එක
+  courseId          Int      
+  tuteName          String   
+  tuteImage         String?  
+  availableQuantity Int      @default(0) 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -490,41 +505,40 @@ model TuteStock {
 }
 
 model Delivery {
-  id                Int       @id @default(autoincrement())
-  paymentId         Int       @unique // Approved Payment එකට ලින්ක් වෙනවා
-  studentId         String    // ළමයාගේ ID එක
-  businessId        Int       // අදාල Business එක (Cards පෙන්නන්න)
-  paymentType       String    // "Full", "Monthly", "Installment" (Tabs වලට කඩන්න ලේසි වෙන්න)
+  id              Int       @id @default(autoincrement())
+  paymentId       Int       @unique 
+  studentId       String    
+  businessId      Int       
+  paymentType     String    
   
-  trackingNumber    String?   // Barcode Scan කරාම වැටෙන නම්බර් එක
+  trackingNumber  String?   
   
-  // Status: "Pending", "Hold", "Packed", "On the way", "Received", "Not Received"
-  status            String    @default("Pending") 
+  status          String    @default("Pending") 
   
-  holdReason        String?   // Hold කරොත් හේතුව (e.g., "Tute Iwarai")
-  holdRemark        String?   // "Other" දුන්නොත් type කරන හේතුව
+  holdReason      String?   
+  holdRemark      String?   
   
-  packedAt          DateTime? // Pack කරපු වෙලාව (මේකෙන් පැය 10ක් ගණන් කරලා Auto Update කරන්න)
-  onTheWayAt        DateTime? // On the way එකට මාරු උන වෙලාව
-  resolvedAt        DateTime? // ළමයා Received හෝ Not Received Click කරපු වෙලාව
+  packedAt        DateTime? 
+  onTheWayAt      DateTime? 
+  resolvedAt      DateTime? 
   
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  payment           Payment   @relation(fields: [paymentId], references: [id])
-  items             DeliveryItem[]
+  payment         Payment   @relation(fields: [paymentId], references: [id])
+  items           DeliveryItem[]
 }
 
 model DeliveryItem {
-  id          Int      @id @default(autoincrement())
-  deliveryId  Int
-  courseId    Int      // ළමයා Payment කරපු Subject එක
-  tuteName    String   // ඒකට අදාල ටියුට් එකේ නම
-  tuteImage   String?  // ටියුට් එකේ පින්තූරේ
-  quantity    Int      @default(1)
+  id         Int      @id @default(autoincrement())
+  deliveryId Int
+  courseId   Int      
+  tuteName   String   
+  tuteImage  String?  
+  quantity   Int      @default(1)
 
-  delivery    Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
-  course      Course   @relation(fields: [courseId], references: [id])
+  delivery   Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  course     Course   @relation(fields: [courseId], references: [id])
 }
 
 model TuteStockHistory {
@@ -532,7 +546,7 @@ model TuteStockHistory {
   stockId     Int
   courseId    Int?
   tuteName    String
-  action      String   // "ADDED", "REDUCED", "EDITED", "DELETED"
+  action      String   
   oldQuantity Int
   newQuantity Int
   reason      String?

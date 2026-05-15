@@ -63,4 +63,7 @@ router.post('/admin-update', verifyToken, studentController.updateStudentByAdmin
 router.post('/admin-reset-password', verifyToken, studentController.resetStudentPassword);
 router.post('/ghost-login', verifyToken, studentController.ghostLogin);
 
+// 🔥 මේ ලයින් එක හරියටම මේ විදිහටම එකතු කරන්න 🔥
+router.post('/admin-delete', studentController.deleteStudentAccount);
+
 module.exports = router;

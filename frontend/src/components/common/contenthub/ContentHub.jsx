@@ -153,7 +153,6 @@ export default function ContentHub() {
       } catch(e) { console.error(e); }
   };
 
-  // 🔥 FIX: Database එකේ JSON String එකක් විදිහට සේව් වෙලා තියෙන groupPrices parse කරලා Tute විස්තර ගන්නවා
   const extractUniqueSubjects = (batch) => {
       const subs = [];
       batch?.groups?.forEach(g => {
@@ -556,71 +555,64 @@ export default function ContentHub() {
     setShowLecturerModal, handleLecturerSubmit, handleDeleteLecturer
   };
 
-  if (loading) return <div className="flex h-full items-center justify-center"><Loader2 size={50} className="animate-spin text-blue-500" /></div>;
+  if (loading) return <div className="flex h-full items-center justify-center min-h-[60vh]"><Loader2 size={50} className="animate-spin text-brand-accent" /></div>;
 
   return (
-    <div className="w-full text-slate-200 animate-in fade-in duration-500 flex flex-col font-sans pb-4">
-      <div className="mb-8 bg-slate-800/30 backdrop-blur-xl border border-white/10 p-6 md:p-8 rounded-3xl flex flex-col gap-5 shadow-lg shrink-0">
-          <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-400">
-              {viewLevel !== 'businesses' && <button onClick={() => handleBack(viewLevel==='contents' ? 'batch_details' : viewLevel==='batch_details' ? 'batches' : 'businesses')} className="hover:text-blue-400 flex items-center gap-2 bg-white/5 px-4 py-2 rounded-xl transition-colors"><ArrowLeft size={16}/> Back</button>}
-              {isSystemAdmin && <button onClick={() => handleBack('businesses')} className={`hover:text-white transition-colors ${viewLevel==='businesses' ? 'text-white font-bold' : ''}`}>Businesses</button>}
+    <div className="w-full animate-fade-in pb-4 flex flex-col font-sans">
+      
+      {/* 🔥 FIX: Pure Glassmorphism Header Area 🔥 */}
+      <div className="mb-8 bg-white/5 backdrop-blur-xl border border-white/10 p-6 md:p-8 rounded-3xl flex flex-col gap-5 shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] shrink-0 transition-all">
+          
+          <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-gray-400">
+              {viewLevel !== 'businesses' && <button onClick={() => handleBack(viewLevel==='contents' ? 'batch_details' : viewLevel==='batch_details' ? 'batches' : 'businesses')} className="hover:text-white flex items-center gap-2 bg-white/5 hover:bg-white/10 text-gray-300 px-4 py-2 rounded-xl transition-colors border border-white/5 outline-none"><ArrowLeft size={16}/> Back</button>}
+              {isSystemAdmin && <button onClick={() => handleBack('businesses')} className={`hover:text-white transition-colors ${viewLevel==='businesses' ? 'text-white font-extrabold' : ''}`}>Businesses</button>}
               {(viewLevel === 'batches' || viewLevel === 'batch_details' || viewLevel === 'contents') && activeBusiness && (
-                  <><ChevronRight size={16} className="text-slate-600"/> <button onClick={() => handleBack('batches')} className={`hover:text-white transition-colors truncate max-w-[150px] sm:max-w-none ${viewLevel==='batches' ? 'text-white font-bold' : ''}`}>{activeBusiness.name}</button></>
+                  <><ChevronRight size={16} className="text-gray-500"/> <button onClick={() => handleBack('batches')} className={`hover:text-white transition-colors truncate max-w-[150px] sm:max-w-none ${viewLevel==='batches' ? 'text-white font-extrabold' : ''}`}>{activeBusiness.name}</button></>
               )}
               {activeBatch && (viewLevel === 'batch_details' || viewLevel === 'contents') && (
-                  <><ChevronRight size={16} className="text-slate-600"/> <button onClick={() => handleBack('batch_details')} className={`hover:text-white transition-colors truncate max-w-[150px] sm:max-w-none ${viewLevel==='batch_details' ? 'text-white font-bold' : ''}`}>{activeBatch.name}</button></>
+                  <><ChevronRight size={16} className="text-gray-500"/> <button onClick={() => handleBack('batch_details')} className={`hover:text-white transition-colors truncate max-w-[150px] sm:max-w-none ${viewLevel==='batch_details' ? 'text-white font-extrabold' : ''}`}>{activeBatch.name}</button></>
               )}
               {activeSubject && viewLevel === 'contents' && (
-                  <><ChevronRight size={16} className="text-slate-600"/> <span className="text-blue-400 font-bold px-3 py-1 bg-blue-500/10 rounded-lg truncate max-w-[150px] sm:max-w-none">{activeSubject.name}</span></>
+                  <><ChevronRight size={16} className="text-gray-500"/> <span className="text-white font-extrabold px-3 py-1 bg-brand-accent/40 border border-brand-accent/50 rounded-lg truncate max-w-[150px] sm:max-w-none shadow-sm">{activeSubject.name}</span></>
               )}
           </div>
 
           <div className="flex flex-wrap justify-between items-center gap-6">
-              <h2 className="text-3xl font-bold text-white flex items-center gap-4 tracking-tight truncate flex-1">
-                  {viewLevel === 'businesses' && <><Building2 className="text-blue-500 shrink-0" size={32}/> Manage Businesses</>}
-                  {viewLevel === 'batches' && <><Layers className="text-blue-500 shrink-0" size={32}/> <span className="truncate" title={activeBusiness?.name}>{activeBusiness?.name} - Batches</span></>}
-                  {viewLevel === 'batch_details' && <><FolderOpen className="text-blue-500 shrink-0" size={32}/> <span className="truncate" title={activeBatch?.name}>{activeBatch?.name}</span></>}
-                  {viewLevel === 'contents' && <><MonitorPlay className="text-green-500 shrink-0" size={32}/> <span className="truncate" title={activeSubject?.name}>{activeSubject?.name}</span></>}
+              <h2 className="text-2xl md:text-3xl font-extrabold text-white flex items-center gap-4 tracking-tight truncate flex-1 drop-shadow-md">
+                  {viewLevel === 'businesses' && <><Building2 className="text-brand-accent shrink-0 drop-shadow-sm" size={32}/> Manage Businesses</>}
+                  {viewLevel === 'batches' && <><Layers className="text-brand-accent shrink-0 drop-shadow-sm" size={32}/> <span className="truncate" title={activeBusiness?.name}>{activeBusiness?.name} - Batches</span></>}
+                  {viewLevel === 'batch_details' && <><FolderOpen className="text-brand-accent shrink-0 drop-shadow-sm" size={32}/> <span className="truncate" title={activeBatch?.name}>{activeBatch?.name}</span></>}
+                  {viewLevel === 'contents' && <><MonitorPlay className="text-brand-accent shrink-0 drop-shadow-sm" size={32}/> <span className="truncate" title={activeSubject?.name}>{activeSubject?.name}</span></>}
               </h2>
-              <div className="flex flex-wrap gap-4 shrink-0">
-                  {canManageContent && (
-                      <>
-                          <button onClick={() => { fetchPosts(); setShowManagePostsModal(true); }} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors border border-white/10">
-                              <MessageSquare size={20}/> Manage Posts
-                          </button>
-                          <button onClick={openPostModal} className="bg-purple-600 hover:bg-purple-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg shadow-purple-500/20">
-                              <Send size={20}/> Create Post
-                          </button>
-                      </>
-                  )}
-
+              <div className="flex flex-wrap gap-3 shrink-0">
                   {viewLevel === 'businesses' && canManageBusiness && (
-                      <button onClick={() => { setEditMode(false); setSelectedLogoName(""); setShowBusinessModal(true); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg"><Plus size={20}/> New Business</button>
+                      <button onClick={() => { setEditMode(false); setSelectedLogoName(""); setShowBusinessModal(true); }} className="bg-brand-accent/90 hover:bg-brand-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(225,29,72,0.4)] outline-none border border-transparent"><Plus size={18}/> New Business</button>
                   )}
                   {viewLevel === 'batches' && canManageBatches && (
-                      <button onClick={() => { setEditMode(false); setSelectedLogoName(""); setShowBatchModal(true); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg"><Plus size={20}/> New Batch</button>
+                      <button onClick={() => { setEditMode(false); setSelectedLogoName(""); setShowBatchModal(true); }} className="bg-brand-accent/90 hover:bg-brand-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(225,29,72,0.4)] outline-none border border-transparent"><Plus size={18}/> New Batch</button>
                   )}
                   {viewLevel === 'batch_details' && canManageGroupsAndSubjects && (
                       <>
-                          <button onClick={openInstallmentModal} className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg shadow-orange-500/20"><CreditCard size={20}/> Setup Installments</button>
-                          {batchTab === 'groups' && <button onClick={() => { setEditMode(false); setShowGroupModal(true); setDiscountRules([{courseCount:'',pricePerCourse:''}]); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20"><Plus size={20}/> New Group</button>}
-                          {batchTab === 'subjects' && <button onClick={() => { setEditMode(false); setShowCourseModal(true); setSelectedGroupPrices({}); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20"><Plus size={20}/> New Subject</button>}
-                          {batchTab === 'lecturers' && <button onClick={() => { setEditMode(false); setShowLecturerModal(true); }} className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg shadow-blue-500/20"><Plus size={20}/> New Lecturer</button>}
+                          <button onClick={openInstallmentModal} className="bg-orange-500/90 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(249,115,22,0.4)] border border-transparent outline-none"><CreditCard size={18}/> Setup Installments</button>
+                          {batchTab === 'groups' && <button onClick={() => { setEditMode(false); setShowGroupModal(true); setDiscountRules([{courseCount:'',pricePerCourse:''}]); }} className="bg-brand-accent/90 hover:bg-brand-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(225,29,72,0.4)] outline-none border border-transparent"><Plus size={18}/> New Group</button>}
+                          {batchTab === 'subjects' && <button onClick={() => { setEditMode(false); setShowCourseModal(true); setSelectedGroupPrices({}); }} className="bg-brand-accent/90 hover:bg-brand-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(225,29,72,0.4)] outline-none border border-transparent"><Plus size={18}/> New Subject</button>}
+                          {batchTab === 'lecturers' && <button onClick={() => { setEditMode(false); setShowLecturerModal(true); }} className="bg-brand-accent/90 hover:bg-brand-accent text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(225,29,72,0.4)] outline-none border border-transparent"><Plus size={18}/> New Lecturer</button>}
                       </>
                   )}
                   {viewLevel === 'contents' && canManageContent && (
                       <>
-                          <button onClick={() => { setShowLessonGroupModal(true); setEditMode(false); }} className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors border border-white/10"><FolderPlus size={20}/> Add Folder</button>
+                          <button onClick={() => { setShowLessonGroupModal(true); setEditMode(false); }} className="bg-white/5 hover:bg-white/10 text-gray-200 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-colors border border-white/10 shadow-sm outline-none"><FolderPlus size={18}/> Add Folder</button>
                           <button onClick={() => { 
                               setShowContentModal(true); setContentType(''); setPrefilledFolder(''); setEditMode(false); 
                               setSelectedBatchesForContent([activeBatch.id]); 
-                          }} className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-2xl font-semibold text-base flex items-center gap-2 transition-colors shadow-lg shadow-green-500/20"><Plus size={20}/> Add Content</button>
+                          }} className="bg-emerald-600/90 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 transition-all shadow-[0_4px_15px_rgba(5,150,105,0.4)] border border-transparent outline-none"><Plus size={18}/> Add Content</button>
                       </>
                   )}
               </div>
           </div>
       </div>
 
+      {/* Child components inherit the dark styling naturally now */}
       <ContentHubViews state={stateData} actions={actionsData} />
       <ContentHubModals state={stateData} actions={actionsData} />
     </div>

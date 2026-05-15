@@ -18,7 +18,6 @@ export default function PosOrderCard({ order, onRefresh }) {
         if (barcodeInputRef.current) barcodeInputRef.current.focus();
     }, []);
 
-    // ඔයාගේ Print Format එක එහෙම්මම තියෙනවා
     const FONT_SIZE = "9pt";   
     const TOP_MARGIN = "10mm";  
     const LEFT_MARGIN = "05mm"; 
@@ -92,13 +91,11 @@ export default function PosOrderCard({ order, onRefresh }) {
             setTimeout(() => { 
                 windowPrint.print(); 
                 windowPrint.close(); 
-                // Print කරාට පස්සේ ආපහු Barcode එකට focus කරනවා
                 if(barcodeInputRef.current) barcodeInputRef.current.focus();
             }, 500);
         }
     };
 
-    // Scanner එකෙන් අල්ලනකොට Enter එක වැදුනම Auto Pack වෙනවා
     const handleBarcodeScan = async (e) => {
         if (e.key === 'Enter') {
             if (!barcode.trim()) return toast.error("Please scan a valid tracking barcode!");
@@ -107,7 +104,7 @@ export default function PosOrderCard({ order, onRefresh }) {
             try {
                 await axios.post('/admin/delivery/pack', { deliveryId: order.id, trackingNumber: barcode });
                 toast.success("Order Packed & Stock Updated!");
-                onRefresh(); // Refresh the list
+                onRefresh(); 
             } catch (error) {
                 toast.error("Failed to pack the order.");
             } finally {
@@ -131,32 +128,32 @@ export default function PosOrderCard({ order, onRefresh }) {
     };
 
     return (
-        <div className="bg-[#1e2336]/80 border border-white/5 p-5 rounded-2xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all shadow-lg hover:border-white/10">
+        <div className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder p-5 rounded-2xl flex flex-col xl:flex-row items-start justify-between gap-6 transition-all shadow-sm hover:border-brand-accent/30 dark:hover:border-brand-accent/30">
             
             {/* Left: Student & Tute Details */}
             <div className="flex-1 w-full flex gap-4 items-start">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-blue-500/20 bg-blue-500/10 text-blue-400 mt-1">
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-brand-accent/20 bg-brand-accentLight text-brand-accent mt-1 transition-colors">
                     <MapPin size={22} strokeWidth={1.5}/>
                 </div>
                 <div>
-                    <h4 className="font-bold text-lg text-white flex items-center gap-3">
+                    <h4 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-3 transition-colors">
                         {order.payment?.studentName} 
-                        <span className="text-[10px] font-bold text-slate-400 bg-black/40 px-2 py-0.5 rounded border border-white/10 tracking-widest uppercase">{order.paymentType} Payment</span>
+                        <span className="text-[10px] font-bold text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-black/40 px-2 py-0.5 rounded border border-gray-200 dark:border-white/10 tracking-widest uppercase transition-colors">{order.paymentType} Payment</span>
                     </h4>
-                    <p className="text-sm text-slate-400 mt-1">{order.payment?.address} • {order.payment?.phone}</p>
+                    <p className="text-sm text-gray-500 dark:text-slate-400 mt-1 transition-colors">{order.payment?.address} • {order.payment?.phone}</p>
                     
                     {/* Tutes to be sent */}
                     <div className="mt-4 flex flex-col gap-2">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Tutes to Pack:</p>
+                        <p className="text-[10px] font-bold text-gray-500 dark:text-brand-darkTextMuted uppercase tracking-widest transition-colors">Tutes to Pack:</p>
                         <div className="flex flex-wrap gap-3">
                             {order.items?.map((item, idx) => (
-                                <div key={idx} className="flex items-center gap-2 bg-black/40 p-2 rounded-lg border border-white/5 pr-4">
+                                <div key={idx} className="flex items-center gap-2 bg-gray-50 dark:bg-brand-darkBg p-2 rounded-lg border border-gray-200 dark:border-brand-darkBorder pr-4 transition-colors">
                                     {item.tuteImage ? (
-                                        <img src={`https://imacampus.online/storage/tutes/${item.tuteImage}`} className="w-8 h-8 rounded object-cover border border-white/10" alt="tute" />
+                                        <img src={`https://imacampus.online/storage/tutes/${item.tuteImage}`} className="w-8 h-8 rounded object-cover border border-gray-200 dark:border-white/10" alt="tute" />
                                     ) : (
-                                        <div className="w-8 h-8 rounded bg-white/5 flex items-center justify-center text-slate-500"><ImageIcon size={14}/></div>
+                                        <div className="w-8 h-8 rounded bg-gray-200 dark:bg-white/5 flex items-center justify-center text-gray-400 dark:text-slate-500 transition-colors"><ImageIcon size={14}/></div>
                                     )}
-                                    <span className="text-xs font-bold text-emerald-400 uppercase tracking-wide">{item.tuteName} <span className="text-white ml-1">x{item.quantity}</span></span>
+                                    <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide transition-colors">{item.tuteName} <span className="text-gray-900 dark:text-white ml-1">x{item.quantity}</span></span>
                                 </div>
                             ))}
                         </div>
@@ -165,21 +162,21 @@ export default function PosOrderCard({ order, onRefresh }) {
             </div>
             
             {/* Right: POS Action Area */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full xl:w-auto bg-black/20 p-3 rounded-xl border border-white/5 shrink-0">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full xl:w-auto bg-gray-50 dark:bg-brand-darkBg p-3 rounded-xl border border-gray-200 dark:border-brand-darkBorder shrink-0 transition-colors">
                 <div className="flex items-center gap-2">
-                    <button onClick={() => handlePrintSticker(false)} className="bg-white/5 hover:bg-white/10 text-slate-300 font-bold py-3 px-4 rounded-xl transition-all text-xs border border-white/10" title="Preview Sticker">
+                    <button onClick={() => handlePrintSticker(false)} className="bg-white dark:bg-brand-darkHover hover:bg-gray-100 dark:hover:bg-brand-darkBorder text-gray-700 dark:text-slate-300 font-bold py-3 px-4 rounded-xl transition-all text-xs border border-gray-200 dark:border-brand-darkBorder shadow-sm" title="Preview Sticker">
                         <Eye size={16}/>
                     </button>
-                    <button onClick={() => handlePrintSticker(true)} className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg flex items-center gap-2 border border-slate-500">
+                    <button onClick={() => handlePrintSticker(true)} className="bg-gray-800 dark:bg-slate-700 hover:bg-gray-900 dark:hover:bg-slate-600 text-white font-bold py-3 px-6 rounded-xl transition-all text-xs uppercase tracking-widest shadow-md flex items-center gap-2 border border-gray-700 dark:border-slate-500">
                         <Printer size={16}/> Print
                     </button>
                 </div>
 
-                <div className="h-full w-px bg-white/10 hidden sm:block mx-2"></div>
+                <div className="h-full w-px bg-gray-200 dark:bg-white/10 hidden sm:block mx-2 transition-colors"></div>
 
                 <div className="flex items-center gap-2 w-full">
                     <div className="relative flex-1">
-                        <ScanBarcode size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"/>
+                        <ScanBarcode size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500 transition-colors"/>
                         <input 
                             ref={barcodeInputRef}
                             type="text" 
@@ -187,25 +184,25 @@ export default function PosOrderCard({ order, onRefresh }) {
                             value={barcode}
                             onChange={(e) => setBarcode(e.target.value)}
                             onKeyDown={handleBarcodeScan}
-                            className="w-full bg-black/40 border border-blue-500/30 rounded-xl pl-9 pr-3 py-3 text-sm text-blue-400 font-bold outline-none focus:border-blue-500 placeholder:text-slate-600 uppercase tracking-widest"
+                            className="w-full bg-white dark:bg-black/40 border border-blue-400 dark:border-blue-500/30 rounded-xl pl-9 pr-3 py-3 text-sm text-blue-600 dark:text-blue-400 font-bold outline-none focus:border-blue-500 dark:focus:border-blue-500 placeholder-gray-400 dark:placeholder-slate-600 uppercase tracking-widest shadow-sm dark:shadow-inner transition-colors"
                         />
                     </div>
                 </div>
 
-                <button onClick={() => setIsHolding(true)} className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 font-bold py-3 px-4 rounded-xl transition-all text-xs uppercase tracking-widest border border-orange-500/20 shadow-lg shrink-0">
+                <button onClick={() => setIsHolding(true)} className="bg-orange-50 dark:bg-orange-500/10 hover:bg-orange-100 dark:hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 font-bold py-3 px-4 rounded-xl transition-all text-xs uppercase tracking-widest border border-orange-200 dark:border-orange-500/20 shadow-sm shrink-0">
                     Hold
                 </button>
             </div>
 
             {/* Hold Modal */}
             {isHolding && createPortal(
-                <div className="fixed inset-0 z-[9999] bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md">
-                    <div className="bg-[#15192b] border border-orange-500/20 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-                        <h3 className="text-xl font-black text-orange-400 flex items-center gap-2 mb-4"><AlertTriangle size={20}/> Hold Delivery</h3>
-                        <p className="text-sm text-slate-400 mb-6">Student will see this hold status on their dashboard.</p>
+                <div className="fixed inset-0 z-[9999] bg-gray-900/60 dark:bg-[#0a0f1c]/95 flex items-center justify-center p-4 backdrop-blur-md transition-colors">
+                    <div className="bg-white dark:bg-[#15192b] border border-gray-200 dark:border-orange-500/20 rounded-3xl p-6 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 transition-colors">
+                        <h3 className="text-xl font-black text-orange-600 dark:text-orange-400 flex items-center gap-2 mb-4 transition-colors"><AlertTriangle size={20}/> Hold Delivery</h3>
+                        <p className="text-sm text-gray-500 dark:text-slate-400 mb-6 transition-colors">Student will see this hold status on their dashboard.</p>
                         
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Reason</label>
-                        <select value={holdReason} onChange={(e) => setHoldReason(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white mb-4 outline-none focus:border-orange-500 text-sm font-bold cursor-pointer">
+                        <label className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest mb-2 block transition-colors">Reason</label>
+                        <select value={holdReason} onChange={(e) => setHoldReason(e.target.value)} className="w-full bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-3 text-gray-900 dark:text-white mb-4 outline-none focus:border-orange-500 dark:focus:border-orange-500 text-sm font-bold cursor-pointer shadow-sm dark:shadow-inner transition-colors">
                             <option value="Tute Out of Stock">Tute Out of Stock</option>
                             <option value="Address Issue">Address Issue (Invalid/Missing)</option>
                             <option value="Pending Payment Verification">Payment Verification Issue</option>
@@ -218,13 +215,13 @@ export default function PosOrderCard({ order, onRefresh }) {
                                 onChange={(e) => setHoldRemark(e.target.value)} 
                                 placeholder="Type the reason here..." 
                                 rows="3" 
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white outline-none focus:border-orange-500 mb-4 resize-none"
+                                className="w-full bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-3 text-sm text-gray-900 dark:text-white outline-none focus:border-orange-500 dark:focus:border-orange-500 mb-4 resize-none placeholder-gray-400 dark:placeholder-slate-500 shadow-sm dark:shadow-inner transition-colors"
                             ></textarea>
                         )}
 
                         <div className="flex gap-3 mt-2">
-                            <button onClick={() => setIsHolding(false)} className="flex-1 py-3 bg-white/5 hover:bg-white/10 rounded-xl text-slate-300 font-bold transition-all text-sm">Cancel</button>
-                            <button disabled={isProcessing} onClick={submitHold} className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-xl py-3 font-black transition-all shadow-lg shadow-orange-600/20 text-sm flex justify-center items-center gap-2">
+                            <button onClick={() => setIsHolding(false)} className="flex-1 py-3 bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-xl text-gray-600 dark:text-slate-300 font-bold transition-all text-sm border border-gray-200 dark:border-transparent shadow-sm dark:shadow-none">Cancel</button>
+                            <button disabled={isProcessing} onClick={submitHold} className="flex-1 bg-orange-600 hover:bg-orange-500 text-white rounded-xl py-3 font-black transition-all shadow-md shadow-orange-600/20 text-sm flex justify-center items-center gap-2">
                                 {isProcessing ? <Loader2 size={16} className="animate-spin"/> : "Confirm Hold"}
                             </button>
                         </div>

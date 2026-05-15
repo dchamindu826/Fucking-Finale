@@ -71,199 +71,217 @@ exports.toggleFollowUpStatus = async (req, res) => {
 // 2. LEAD FETCHING (WITH AUTO-SYNC ENGINE)
 // ==========================================
 exports.getLeads = async (req, res) => {
-    try {
-        const userId = req.user?.id || req.query.loggedUserId || 1;
-        const userRoleRaw = req.user?.role || req.query.loggedUserRole || 'STAFF'; 
-        const userRole = String(userRoleRaw).toUpperCase().replace(/ /g, '_');
+    try {
+        const userId = req.user?.id || req.query.loggedUserId || 1;
+        const userRoleRaw = req.user?.role || req.query.loggedUserRole || 'STAFF'; 
+        const userRole = String(userRoleRaw).toUpperCase().replace(/ /g, '_');
 
-        const { tab, staffPhase, status, staffId, batchId, businessId, paymentGroup, enrollmentStatus, inquiryType } = req.query; 
-        const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
+        // 🔥 UPDATE: round සහ phase මෙතනට අලුතින් එකතු කළා
+        const { tab, staffPhase, status, staffId, batchId, businessId, paymentGroup, enrollmentStatus, inquiryType, round, phase } = req.query; 
+        const isManager = ['SYSTEM_ADMIN', 'DIRECTOR', 'MANAGER', 'SUPER', 'ASS_MANAGER'].includes(userRole);
 
-        let whereClause = { campaignType: 'AFTER_SEMINAR' };
+        let whereClause = { campaignType: 'AFTER_SEMINAR' };
 
-        if (businessId && businessId !== '') {
+        if (businessId && businessId !== '') {
             whereClause.OR = [
                 { phone: { endsWith: `BIZ_${businessId}` } },
                 { phone: { endsWith: `BIZ_${businessId}_AS` } },
-                { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+                { phone: { contains: `BIZ_${businessId}_BATCH_` } },
+                { phone: { contains: `BIZ_${businessId}_ROUND_` } },
+                { phone: { contains: `BIZ_${businessId}_HISTORY_ROUND_` } }
             ];
         }
-        if (batchId && batchId !== '') whereClause.batchId = parseInt(batchId);
-        if (paymentGroup && paymentGroup !== '') whereClause.paymentIntention = paymentGroup;
-        if (enrollmentStatus && enrollmentStatus !== '') whereClause.enrollmentStatus = enrollmentStatus;
-        if (inquiryType && inquiryType !== '') whereClause.inquiryType = inquiryType; 
+        if (batchId && batchId !== '') whereClause.batchId = parseInt(batchId);
+        if (paymentGroup && paymentGroup !== '') whereClause.paymentIntention = paymentGroup;
+        if (enrollmentStatus && enrollmentStatus !== '') whereClause.enrollmentStatus = enrollmentStatus;
+        if (inquiryType && inquiryType !== '') whereClause.inquiryType = inquiryType; 
 
-        if (tab === 'NEW') {
-            if (isManager) whereClause.assignedTo = null; 
-            else whereClause.assignedTo = parseInt(userId);
-        } else if (tab === 'ASSIGNED') {
-            whereClause.assignedTo = { not: null }; 
-            if (staffId && staffId !== '') whereClause.assignedTo = parseInt(staffId);
-            else if (!isManager) whereClause.assignedTo = parseInt(userId);
-            if (staffPhase && staffPhase !== '') whereClause.phase = parseInt(staffPhase);
-            if (status && status !== '') whereClause.callStatus = status;
-        }
+        if (tab === 'NEW') {
+            if (isManager) whereClause.assignedTo = null; 
+            else whereClause.assignedTo = parseInt(userId);
+        } else if (tab === 'ASSIGNED') {
+            whereClause.assignedTo = { not: null }; 
+            
+            // 1. Staff Filter
+            if (staffId && staffId !== '') whereClause.assignedTo = parseInt(staffId);
+            else if (!isManager) whereClause.assignedTo = parseInt(userId);
+            
+            // 2. Status Filter (Pending, Answered, Reject etc.)
+            if (status && status !== '') whereClause.callStatus = status;
+            
+            // 3. Round Filter (NEW)
+            if (round && round !== '') whereClause.coordinationRound = parseInt(round);
+            
+            // 4. Phase Filter (NEW)
+            if (phase && phase !== '') {
+                whereClause.phase = parseInt(phase);
+            } else if (staffPhase && staffPhase !== '') {
+                whereClause.phase = parseInt(staffPhase);
+            }
+        }
 
-        let leads = await prisma.lead.findMany({
-            where: whereClause, 
-            orderBy: [ { unreadCount: 'desc' }, { updatedAt: 'desc' } ], 
-            include: { assignedUser: { select: { firstName: true, lastName: true } }, batch: { select: { name: true } } }
-        });
+        let leads = await prisma.lead.findMany({
+            where: whereClause, 
+            orderBy: [ { unreadCount: 'desc' }, { updatedAt: 'desc' } ], 
+            include: { assignedUser: { select: { firstName: true, lastName: true } }, batch: { select: { name: true } } }
+        });
 
-        const now = new Date();
+        const now = new Date();
 
-        for (let i = 0; i < leads.length; i++) {
-            let l = leads[i];
+        for (let i = 0; i < leads.length; i++) {
+            let l = leads[i];
 
-            if (['NEW_INQ', 'OPEN_SEMINAR', 'NORMAL'].includes(l.inquiryType)) {
-                const referenceTime = new Date(l.newInqTimestamp || l.updatedAt || l.createdAt);
-                const hoursPassed = (now - referenceTime) / (1000 * 60 * 60);
-                const daysPassed = hoursPassed / 24;
+            if (['NEW_INQ', 'OPEN_SEMINAR', 'NORMAL'].includes(l.inquiryType)) {
+                const referenceTime = new Date(l.newInqTimestamp || l.updatedAt || l.createdAt);
+                const hoursPassed = (now - referenceTime) / (1000 * 60 * 60);
+                const daysPassed = hoursPassed / 24;
 
-                // 24 Hour Delay Check (For pending calls)
-                if (hoursPassed >= 24 && l.phase === 1 && (!l.callStatus || l.callStatus === 'pending')) {
-                    if (l.inquiryType !== 'NEW_INQ') {
-                        leads[i].isLocked = true; 
-                    } else {
-                        leads[i].isLocked = false;
-                    }
-                } else {
-                    leads[i].isLocked = false;
-                }
+                // 24 Hour Delay Check (For pending calls)
+                if (hoursPassed >= 24 && l.phase === 1 && (!l.callStatus || l.callStatus === 'pending')) {
+                    if (l.inquiryType !== 'NEW_INQ') {
+                        leads[i].isLocked = true; 
+                    } else {
+                        leads[i].isLocked = false;
+                    }
+                } else {
+                    leads[i].isLocked = false;
+                }
 
-                // 🔥 2nd Round: 5 Days Delay Check (All leads) 🔥
-                if (daysPassed >= 5) {
-                    leads[i].needs5DayCall = true; 
-                } else {
-                    leads[i].needs5DayCall = false;
-                }
+                // 🔥 2nd Round: 5 Days Delay Check (All leads) 🔥
+                if (daysPassed >= 5) {
+                    leads[i].needs5DayCall = true; 
+                } else {
+                    leads[i].needs5DayCall = false;
+                }
 
-                // 🔥 3rd Round: 10 Days Non-Enrolled Delay Check 🔥
-                if (daysPassed >= 10 && l.enrollmentStatus === 'NON_ENROLLED') {
-                    leads[i].needs10DayCall = true; 
-                } else {
-                    leads[i].needs10DayCall = false;
-                }
-            }
+                // 🔥 3rd Round: 10 Days Non-Enrolled Delay Check 🔥
+                if (daysPassed >= 10 && l.enrollmentStatus === 'NON_ENROLLED') {
+                    leads[i].needs10DayCall = true; 
+                } else {
+                    leads[i].needs10DayCall = false;
+                }
+            }
 
-            // Sync with actual student payments
-            const bizMatch = l.phone ? l.phone.match(/_BIZ_(\d+)/) : null;
-            const extractedBizId = bizMatch ? parseInt(bizMatch[1]) : null;
+            // Sync with actual student payments
+            const bizMatch = l.phone ? l.phone.match(/_BIZ_(\d+)/) : null;
+            const extractedBizId = bizMatch ? parseInt(bizMatch[1]) : null;
 
-            if (extractedBizId) {
-                let rawPhone = l.phone ? l.phone.split('_')[0].replace(/[^0-9]/g, '') : '';
-                if (rawPhone.length >= 9) {
-                    const phoneSuffix = rawPhone.slice(-9); 
-                    
-                    const student = await prisma.user.findFirst({
-                        where: { phone: { endsWith: phoneSuffix } },
-                        include: {
-                            payments: {
-                                where: { 
-                                    businessId: extractedBizId,
-                                    status: { in: [1, 4] } 
-                                },
-                                orderBy: { created_at: 'desc' }
-                            }
-                        }
-                    });
+            if (extractedBizId) {
+                let rawPhone = l.phone ? l.phone.split('_')[0].replace(/[^0-9]/g, '') : '';
+                if (rawPhone.length >= 9) {
+                    const phoneSuffix = rawPhone.slice(-9); 
+                    
+                    const student = await prisma.user.findFirst({
+                        where: { phone: { endsWith: phoneSuffix } },
+                        include: {
+                            payments: {
+                                where: { 
+                                    businessId: extractedBizId,
+                                    status: { in: [1, 4] } 
+                                },
+                                orderBy: { created_at: 'desc' }
+                            }
+                        }
+                    });
 
-                    if (student && student.payments && student.payments.length > 0) {
-                        const latestPayment = student.payments[0];
-                        
-                        let actualIntention = 'NOT_DECIDED';
-                        if (latestPayment.payment_type === 1) actualIntention = 'MONTHLY';
-                        else if (latestPayment.payment_type === 2) actualIntention = 'INSTALLMENT';
-                        else if (latestPayment.payment_type === 3) actualIntention = 'FULL';
+                    if (student && student.payments && student.payments.length > 0) {
+                        const latestPayment = student.payments[0];
+                        
+                        let actualIntention = 'NOT_DECIDED';
+                        if (latestPayment.payment_type === 1) actualIntention = 'MONTHLY';
+                        else if (latestPayment.payment_type === 2) actualIntention = 'INSTALLMENT';
+                        else if (latestPayment.payment_type === 3) actualIntention = 'FULL';
 
-                        let updateData = {};
-                        let needsUpdate = false;
+                        let updateData = {};
+                        let needsUpdate = false;
 
-                        if (l.enrollmentStatus !== 'ENROLLED' || l.paymentIntention !== actualIntention) {
-                            updateData.enrollmentStatus = 'ENROLLED';
-                            updateData.paymentIntention = actualIntention;
-                            updateData.isLocked = false; 
-                            needsUpdate = true;
-                        }
+                        if (l.enrollmentStatus !== 'ENROLLED' || l.paymentIntention !== actualIntention) {
+                            updateData.enrollmentStatus = 'ENROLLED';
+                            updateData.paymentIntention = actualIntention;
+                            updateData.isLocked = false; 
+                            needsUpdate = true;
+                        }
 
-                        if (!l.batchId && latestPayment.batchId) {
-                            updateData.batchId = latestPayment.batchId;
-                            needsUpdate = true;
-                        }
+                        if (!l.batchId && latestPayment.batchId) {
+                            updateData.batchId = latestPayment.batchId;
+                            needsUpdate = true;
+                        }
 
-                        if (needsUpdate) {
-                            await prisma.lead.update({
-                                where: { id: l.id },
-                                data: updateData
-                            });
-                            leads[i] = { ...leads[i], ...updateData };
-                        }
-                    }
-                }
-            }
+                        if (needsUpdate) {
+                            await prisma.lead.update({
+                                where: { id: l.id },
+                                data: updateData
+                            });
+                            leads[i] = { ...leads[i], ...updateData };
+                        }
+                    }
+                }
+            }
 
-            leads[i].phone = l.phone ? l.phone.split('_BIZ')[0] : '';
-        }
+            leads[i].phone = l.phone ? l.phone.split('_BIZ')[0] : '';
+        }
 
-        // --- Calculate Counts ---
-        let countWhere = { campaignType: 'AFTER_SEMINAR' }; 
+        // --- Calculate Counts ---
+        let countWhere = { campaignType: 'AFTER_SEMINAR' }; 
 
-        if (businessId && businessId !== '') {
+        if (businessId && businessId !== '') {
             countWhere.OR = [
                 { phone: { endsWith: `BIZ_${businessId}` } },
                 { phone: { endsWith: `BIZ_${businessId}_AS` } },
-                { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+                { phone: { contains: `BIZ_${businessId}_BATCH_` } },
+                { phone: { contains: `BIZ_${businessId}_ROUND_` } },
+                { phone: { contains: `BIZ_${businessId}_HISTORY_ROUND_` } }
             ];
         }
-        if (batchId && batchId !== '') countWhere.batchId = parseInt(batchId);
+        if (batchId && batchId !== '') countWhere.batchId = parseInt(batchId);
 
-        const allLeadsForCounts = await prisma.lead.findMany({ where: countWhere });
-        
-        let counts = { NEW: 0, ASSIGNED: 0, ALL: 0, FULL: 0, MONTHLY: 0, INSTALLMENT: 0, NOT_DECIDED: 0, NEW_INQ: 0, OPEN_SEMINAR: 0, IMPORTED: 0 };
-        let unreadCounts = { NEW: 0, NEW_INQ: 0, ASSIGNED: 0, ALL: 0, OPEN_SEMINAR: 0, IMPORTED: 0 };
-        let totalUnread = 0;
-        
-        allLeadsForCounts.forEach(l => {
-            if (!isManager && l.assignedTo && l.assignedTo !== parseInt(userId)) return;
+        const allLeadsForCounts = await prisma.lead.findMany({ where: countWhere });
+        
+        let counts = { NEW: 0, ASSIGNED: 0, ALL: 0, FULL: 0, MONTHLY: 0, INSTALLMENT: 0, NOT_DECIDED: 0, NEW_INQ: 0, OPEN_SEMINAR: 0, IMPORTED: 0 };
+        let unreadCounts = { NEW: 0, NEW_INQ: 0, ASSIGNED: 0, ALL: 0, OPEN_SEMINAR: 0, IMPORTED: 0 };
+        let totalUnread = 0;
+        
+        allLeadsForCounts.forEach(l => {
+            if (!isManager && l.assignedTo && l.assignedTo !== parseInt(userId)) return;
 
-            counts.ALL++;
-            if (l.unreadCount > 0) {
-                totalUnread++;
-                unreadCounts.ALL++;
-            }
+            counts.ALL++;
+            if (l.unreadCount > 0) {
+                totalUnread++;
+                unreadCounts.ALL++;
+            }
 
-            if (l.assignedTo) {
-                counts.ASSIGNED++;
-                if (l.unreadCount > 0) unreadCounts.ASSIGNED++;
-            } else {
-                if (l.source === 'import' || l.source === 'bulk_import') {
-                    counts.IMPORTED++;
-                    if (l.unreadCount > 0) unreadCounts.IMPORTED++;
-                } else {
-                    if (l.inquiryType === 'NORMAL') {
-                        counts.NEW++;
-                        if (l.unreadCount > 0) unreadCounts.NEW++;
-                    } else if (l.inquiryType === 'NEW_INQ') {
-                        counts.NEW_INQ++;
-                        if (l.unreadCount > 0) unreadCounts.NEW_INQ++;
-                    } else if (l.inquiryType === 'OPEN_SEMINAR') {
-                        counts.OPEN_SEMINAR++;
-                        if (l.unreadCount > 0) unreadCounts.OPEN_SEMINAR++;
-                    }
-                }
-            }
+            if (l.assignedTo) {
+                counts.ASSIGNED++;
+                if (l.unreadCount > 0) unreadCounts.ASSIGNED++;
+            } else {
+                if (l.source === 'import' || l.source === 'bulk_import') {
+                    counts.IMPORTED++;
+                    if (l.unreadCount > 0) unreadCounts.IMPORTED++;
+                } else {
+                    if (l.inquiryType === 'NORMAL') {
+                        counts.NEW++;
+                        if (l.unreadCount > 0) unreadCounts.NEW++;
+                    } else if (l.inquiryType === 'NEW_INQ') {
+                        counts.NEW_INQ++;
+                        if (l.unreadCount > 0) unreadCounts.NEW_INQ++;
+                    } else if (l.inquiryType === 'OPEN_SEMINAR') {
+                        counts.OPEN_SEMINAR++;
+                        if (l.unreadCount > 0) unreadCounts.OPEN_SEMINAR++;
+                    }
+                }
+            }
 
-            if (l.paymentIntention === 'FULL') counts.FULL++;
-            else if (l.paymentIntention === 'MONTHLY') counts.MONTHLY++;
-            else if (l.paymentIntention === 'INSTALLMENT') counts.INSTALLMENT++;
-            else counts.NOT_DECIDED++;
-        });
+            if (l.paymentIntention === 'FULL') counts.FULL++;
+            else if (l.paymentIntention === 'MONTHLY') counts.MONTHLY++;
+            else if (l.paymentIntention === 'INSTALLMENT') counts.INSTALLMENT++;
+            else counts.NOT_DECIDED++;
+        });
 
-        res.status(200).json({ leads, counts, unreadCounts, totalUnread });
-    } catch (error) { 
-        console.error("Auto Sync Engine Error:", error);
-        res.status(500).json({ error: "Failed to fetch leads" }); 
-    }
+        res.status(200).json({ leads, counts, unreadCounts, totalUnread });
+    } catch (error) { 
+        console.error("Auto Sync Engine Error:", error);
+        res.status(500).json({ error: "Failed to fetch leads" }); 
+    }
 };
 
 // ==========================================
@@ -331,13 +349,67 @@ exports.importLead = async (req, res) => {
 
 exports.bulkActions = async (req, res) => {
     try {
-        const { action, leadIds, staffId } = req.body;
-        if (action === 'MARK_READ') await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { unreadCount: 0 } });
-        else if (action === 'MARK_UNREAD') await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { unreadCount: 1, assignedTo: null, status: 'NEW' } });
-        else if (action === 'ASSIGN') await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { assignedTo: parseInt(staffId), status: 'OPEN', phase: 1, callStatus: 'pending' } });
-        else if (action === 'UNASSIGN') await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { assignedTo: null, status: 'NEW', phase: 1, callStatus: 'pending' } });
+        const { action, leadIds, staffId, targetRound } = req.body;
+
+        if (action === 'MARK_READ') {
+            await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { unreadCount: 0 } });
+        } 
+        else if (action === 'MARK_UNREAD') {
+            await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { unreadCount: 1, assignedTo: null, status: 'NEW' } });
+        } 
+        else if (action === 'ASSIGN') {
+            await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { assignedTo: parseInt(staffId), status: 'OPEN', phase: 1, callStatus: 'pending' } });
+        } 
+        else if (action === 'UNASSIGN') {
+            await prisma.lead.updateMany({ where: { id: { in: leadIds } }, data: { assignedTo: null, status: 'NEW', phase: 1, callStatus: 'pending' } });
+        }
+        // 🔥 CLONE LOGIC: Round එක මාරු කරද්දී Parana row eka ehemma thiyala aluth ekak create karanawa 🔥
+        else if (action === 'CHANGE_ROUND') {
+            for (const leadId of leadIds) {
+                const lead = await prisma.lead.findUnique({ where: { id: parseInt(leadId) } });
+                if (!lead) continue;
+
+                // DB එකේ Phone field එක unique නිසා, අලුත් round එකට යද්දි ඒක duplicate නොවී තියාගන්න 
+                // අපි Phone string එකේ අගට '_ROUND_X' කියලා එකතු කරනවා.
+                const basePhone = lead.phone.split('_ROUND_')[0]; 
+                const newPhoneStr = `${basePhone}_ROUND_${targetRound}`;
+
+                // අලුත් Round එකට අදාලව අලුත් Record එකක් Create කරනවා (Cloning)
+                await prisma.lead.upsert({
+                    where: { phone: newPhoneStr },
+                    update: {}, // දැනටමත් අදාල Round එකට push කරලා තියෙනවා නම් ආයේ මුකුත් කරන්නේ නෑ
+                    create: {
+                        name: lead.name,
+                        phone: newPhoneStr,
+                        source: lead.source,
+                        campaignType: lead.campaignType,
+                        assignedTo: lead.assignedTo, // කලින් හිටපු කෙනාටම Assign වෙනවා
+                        status: 'OPEN',
+                        phase: 1, // Phase එක අලුතෙන් 1 ට රීසෙට් වෙනවා
+                        callStatus: 'pending', // Pending විදිහට අලුතෙන් පටන් ගන්නවා
+                        paymentIntention: lead.paymentIntention,
+                        enrollmentStatus: lead.enrollmentStatus,
+                        inquiryType: lead.inquiryType,
+                        newInqTimestamp: lead.newInqTimestamp,
+                        batchId: lead.batchId,
+                        feedback: lead.feedback, // 🔥 කලින් Round එකේ Remark එක එහෙම්මම අරන් යනවා
+                        coordinationRound: parseInt(targetRound), // අලුත් Target Round එක
+                        callAttempt: 1, // Attempts රීසෙට් කරනවා
+                        callMethod: 'direct', // Method එක රීසෙට් කරනවා
+                        isLocked: false,
+                        unreadCount: 0,
+                        autoReplyStep: lead.autoReplyStep,
+                        sequenceCompleted: lead.sequenceCompleted
+                    }
+                });
+            }
+        }
+
         res.status(200).json({ message: "Action successful" });
-    } catch (error) { res.status(500).json({ error: "Bulk action failed" }); }
+    } catch (error) { 
+        console.error("Bulk action failed:", error);
+        res.status(500).json({ error: "Bulk action failed" }); 
+    }
 };
 
 exports.getAutoAssignQuotas = async (req, res) => {
@@ -354,13 +426,16 @@ exports.assignLeads = async (req, res) => {
         if (type === 'bulk') {
             let whereClause = { assignedTo: null, campaignType: 'AFTER_SEMINAR' };
             
+            // 🔥 3 වෙනි තැන UPDATE කරා 🔥
             if (batchId && batchId !== '') {
                 whereClause.batchId = parseInt(batchId);
             } else if (businessId && businessId !== '') {
                 whereClause.OR = [
                     { phone: { endsWith: `BIZ_${businessId}` } },
                     { phone: { endsWith: `BIZ_${businessId}_AS` } },
-                    { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+                    { phone: { contains: `BIZ_${businessId}_BATCH_` } },
+                    { phone: { contains: `BIZ_${businessId}_ROUND_` } },
+                    { phone: { contains: `BIZ_${businessId}_HISTORY_ROUND_` } }
                 ];
             }
 
@@ -470,13 +545,16 @@ exports.getAllCampaignLeads = async (req, res) => {
         const { businessId, batchId } = req.query;
         let whereClause = { campaignType: 'AFTER_SEMINAR' };
         
+        // 🔥 4 වෙනි තැන UPDATE කරා 🔥
         if (batchId && batchId !== '') {
             whereClause.batchId = parseInt(batchId);
         } else if (businessId && businessId !== '') {
             whereClause.OR = [
                 { phone: { endsWith: `BIZ_${businessId}` } },
                 { phone: { endsWith: `BIZ_${businessId}_AS` } },
-                { phone: { contains: `BIZ_${businessId}_BATCH_` } }
+                { phone: { contains: `BIZ_${businessId}_BATCH_` } },
+                { phone: { contains: `BIZ_${businessId}_ROUND_` } },
+                { phone: { contains: `BIZ_${businessId}_HISTORY_ROUND_` } }
             ];
         }
         

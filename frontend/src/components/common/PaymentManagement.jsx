@@ -5,7 +5,7 @@ import axios from '../../api/axios';
 import toast from 'react-hot-toast';
 import PaymentFilters from './PaymentFilters';
 import StaffPerformanceModal from './StaffPerformanceModal';
-import ExportReportModal from './ExportReportModal'; // 🔥 ALUTHIN ADD KALA: Export Modal Import eka
+import ExportReportModal from './ExportReportModal'; 
 
 export default function PaymentManagement({ loggedInUser }) {
     const isSystemAdmin = loggedInUser?.role?.toUpperCase() === 'SYSTEM_ADMIN' || loggedInUser?.role?.toUpperCase() === 'DIRECTOR';
@@ -43,7 +43,6 @@ export default function PaymentManagement({ loggedInUser }) {
     const [actualAmount, setActualAmount] = useState('');
     const [institutePaymentModal, setInstitutePaymentModal] = useState(null);
     
-    // 🔥 ALUTHIN ADD KALA: Export Modal State eka
     const [showExportModal, setShowExportModal] = useState(false);
 
     const fetchData = async () => {
@@ -191,6 +190,12 @@ export default function PaymentManagement({ loggedInUser }) {
 
     const totalPages = Math.ceil(visibleStudents.length / itemsPerPage) || 1;
     const paginatedStudents = visibleStudents.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    const getDefaultNextDueDate = () => {
+        const nextMonth = new Date();
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        return nextMonth.toISOString().split('T')[0];
+    };
 
     const openApproveModal = (payment, isSelfPicked = false) => {
         if (payment.type === 'Installment' && payment.status !== 'Approved') {
@@ -369,7 +374,6 @@ export default function PaymentManagement({ loggedInUser }) {
         }
     };
 
-    // 🔥 FIX: Modal ඔක්කොම වහලා Pending Tab එකට යනවා
     const refreshAfterAction = async (studentId) => {
         const payRes = await axios.get('/admin/payments');
         setPayments(payRes.data || []);
@@ -467,20 +471,22 @@ export default function PaymentManagement({ loggedInUser }) {
         }
     };
 
+    // 🔥 MODIFIED: Theme Edition Light/Dark Tab Classes 🔥
     const getTabClass = (tabName) => {
-        const base = "px-5 py-2.5 rounded-xl font-medium text-sm transition-all flex items-center gap-2 whitespace-nowrap border backdrop-blur-md";
-        if (activeTab !== tabName) return `${base} bg-slate-800/40 border-white/5 text-slate-400 hover:bg-slate-700/50 hover:text-white hover:border-white/10`;
+        const base = "px-5 py-2.5 rounded-xl font-extrabold text-sm transition-all flex items-center gap-2 whitespace-nowrap border shadow-sm outline-none";
+        if (activeTab !== tabName) return `${base} bg-white dark:bg-brand-darkCard/60 border-gray-200 dark:border-white/5 text-gray-500 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-brand-darkHover hover:text-gray-900 dark:hover:text-white hover:shadow-md`;
+        
         switch (tabName) {
-            case 'Pending': return `${base} bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.2)]`;
-            case 'Approved': return `${base} bg-blue-500/20 text-blue-300 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.2)]`;
-            case 'Free Card': return `${base} bg-yellow-500/20 text-yellow-300 border-yellow-500/40 shadow-[0_0_15px_rgba(234,179,8,0.2)]`;
-            case 'Discount': return `${base} bg-cyan-500/20 text-cyan-300 border-cyan-500/40 shadow-[0_0_15px_rgba(6,182,212,0.2)]`;
-            case 'Rejected': return `${base} bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]`;
-            case 'Upcoming': return `${base} bg-purple-500/20 text-purple-300 border-purple-500/40 shadow-[0_0_15px_rgba(168,85,247,0.2)]`;
-            case 'Non Paid': return `${base} bg-red-500/20 text-red-300 border-red-500/40 shadow-[0_0_15px_rgba(239,68,68,0.2)]`;
-            case 'Post Pay': return `${base} bg-orange-500/20 text-orange-300 border-orange-500/40 shadow-[0_0_15px_rgba(249,115,22,0.2)]`;
-            case 'Trash': return `${base} bg-slate-700/50 text-slate-200 border-slate-600 shadow-lg`;
-            default: return `${base} bg-white/10 text-white border-white/20`;
+            case 'Pending': return `${base} bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30`;
+            case 'Approved': return `${base} bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30`;
+            case 'Free Card': return `${base} bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/30`;
+            case 'Discount': return `${base} bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-200 dark:border-cyan-500/30`;
+            case 'Rejected': return `${base} bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30`;
+            case 'Upcoming': return `${base} bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/30`;
+            case 'Non Paid': return `${base} bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/30`;
+            case 'Post Pay': return `${base} bg-orange-50 dark:bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-500/30`;
+            case 'Trash': return `${base} bg-gray-100 dark:bg-slate-700/50 text-gray-700 dark:text-slate-200 border-gray-300 dark:border-slate-600`;
+            default: return `${base} bg-gray-100 dark:bg-white/10 text-gray-800 dark:text-white border-gray-300 dark:border-white/20`;
         }
     };
 
@@ -495,50 +501,53 @@ export default function PaymentManagement({ loggedInUser }) {
         return `${days}d ${hours}h ${minutes}m left`;
     };
 
+    // 🔥 MODIFIED: Theme Edition Light/Dark Card Styles 🔥
+    // 🔥 MODIFIED: Fixed Price Box squishing & truncating issues 🔥
     const renderPaymentCard = (pay) => (
-        <div key={pay.id} className="bg-slate-800/40 backdrop-blur-xl border border-white/10 hover:border-white/20 rounded-3xl p-6 relative overflow-hidden mb-5 shadow-xl transition-all duration-300 group">
-            <div className={`absolute top-0 left-0 w-1.5 h-full ${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-gradient-to-b from-indigo-400 to-indigo-600' : 'bg-gradient-to-b from-blue-400 to-blue-600'}`}></div>
+        <div key={pay.id} className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder hover:border-gray-300 dark:hover:border-white/20 rounded-[2rem] p-6 relative overflow-hidden mb-5 shadow-sm hover:shadow-lg transition-all duration-300 group">
+            <div className={`absolute top-0 left-0 w-2 h-full ${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-indigo-500 dark:bg-indigo-600' : 'bg-brand-accent dark:bg-blue-600'}`}></div>
 
-            <div className="absolute top-4 right-4 flex gap-2 opacity-80 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-4 right-4 flex gap-2 opacity-100 sm:opacity-80 group-hover:opacity-100 transition-opacity">
                 {pay.status === 'Post Pay' && (
-                    <div className="bg-orange-500/10 border border-orange-500/30 text-orange-400 px-3 py-1.5 rounded-xl text-xs font-semibold uppercase tracking-wider flex items-center gap-2 animate-pulse backdrop-blur-md">
+                    <div className="bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30 text-orange-600 dark:text-orange-400 px-3 py-1.5 rounded-xl text-xs font-extrabold uppercase tracking-wider flex items-center gap-2 animate-pulse shadow-sm">
                         <Unlock size={14} /> {getCountdown(pay.validUntil)}
                     </div>
                 )}
                 {pay.status !== 'Trash' && (
-                    <button onClick={() => handleAction(pay, 'Trash')} className="bg-slate-900/50 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/5 hover:border-red-500/30 p-2.5 rounded-xl transition-all backdrop-blur-md" title="Move to Trash">
+                    <button onClick={() => handleAction(pay, 'Trash')} className="bg-gray-50 dark:bg-black/40 hover:bg-red-50 dark:hover:bg-red-500/20 text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 border border-gray-200 dark:border-white/5 hover:border-red-200 dark:hover:border-red-500/30 p-2.5 rounded-xl transition-all shadow-sm outline-none" title="Move to Trash">
                         <Trash2 size={16} />
                     </button>
                 )}
             </div>
 
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pr-12">
-                <div>
-                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-widest mb-1.5">{pay.date}</p>
-                    <h5 className="text-xl font-bold text-white tracking-tight">{pay.business} <span className="text-slate-500 text-sm font-medium ml-2">{pay.batch}</span></h5>
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 pl-2 pr-12">
+                <div className="flex-1 min-w-0">
+                    <p className="text-[11px] text-gray-500 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-1.5">{pay.date}</p>
+                    <h5 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight truncate max-w-full">{pay.business} <span className="text-gray-500 dark:text-slate-500 text-sm font-bold ml-2">{pay.batch}</span></h5>
                     <div className="flex items-center gap-2 mt-3">
-                        <span className="bg-white/5 text-slate-300 text-[10px] px-2.5 py-1 rounded-md font-semibold uppercase tracking-widest border border-white/10">{pay.type}</span>
+                        <span className="bg-gray-100 dark:bg-white/5 text-gray-600 dark:text-slate-300 text-[10px] px-3 py-1.5 rounded-lg font-extrabold uppercase tracking-widest border border-gray-200 dark:border-white/10">{pay.type}</span>
                         {pay.type === 'Installment' && (
-                            <span className="bg-purple-500/10 text-purple-300 text-[10px] px-2.5 py-1 rounded-md font-semibold uppercase tracking-widest border border-purple-500/20">
+                            <span className="bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 text-[10px] px-3 py-1.5 rounded-lg font-extrabold uppercase tracking-widest border border-purple-200 dark:border-purple-500/20">
                                 Phase {pay.installmentNo} of {Math.max(pay.installmentNo, pay.totalPhases || 1)}
                             </span>
                         )}
                     </div>
                 </div>
-                <div className={`${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-gradient-to-br from-indigo-500/10 to-indigo-500/5 border-indigo-500/20' : 'bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20'} p-4 rounded-2xl border min-w-[150px] text-right md:text-left backdrop-blur-md shadow-inner`}>
-                    <p className={`text-[10px] ${pay.method === 'PayHere' || pay.method === 'Online' ? 'text-indigo-400' : 'text-blue-400'} font-semibold uppercase tracking-widest mb-1`}>Via {pay.method}</p>
-                    <p className="text-3xl font-extrabold text-white tracking-tight"><span className="text-sm font-medium text-slate-400 mr-1">LKR</span>{parseFloat(pay.amount).toLocaleString()}</p>
+                {/* 🔥 Added shrink-0 and whitespace-nowrap here 🔥 */}
+                <div className={`${pay.method === 'PayHere' || pay.method === 'Online' ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-100 dark:border-indigo-500/20' : 'bg-blue-50 dark:bg-blue-500/10 border-blue-100 dark:border-blue-500/20'} p-5 rounded-2xl border min-w-[180px] shrink-0 text-right xl:text-left shadow-sm mt-4 xl:mt-0`}>
+                    <p className={`text-[10px] ${pay.method === 'PayHere' || pay.method === 'Online' ? 'text-indigo-600 dark:text-indigo-400' : 'text-blue-600 dark:text-blue-400'} font-extrabold uppercase tracking-widest mb-1`}>Via {pay.method}</p>
+                    <p className={`text-3xl font-black tracking-tight whitespace-nowrap ${pay.method === 'PayHere' || pay.method === 'Online' ? 'text-indigo-700 dark:text-white' : 'text-blue-700 dark:text-white'}`}><span className={`text-sm font-bold mr-1 ${pay.method === 'PayHere' || pay.method === 'Online' ? 'text-indigo-500 dark:text-slate-400' : 'text-blue-500 dark:text-slate-400'}`}>LKR</span>{parseFloat(pay.amount).toLocaleString()}</p>
                 </div>
             </div>
 
-            <div className="bg-slate-900/50 rounded-2xl border border-white/5 p-5 mb-6 shadow-inner">
-                <div className="flex justify-between items-center mb-4">
-                    <h6 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={16} className="text-emerald-500" /> System Tally</h6>
+            <div className="bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-200 dark:border-white/5 p-5 mb-6 ml-2">
+                <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-white/5 pb-3">
+                    <h6 className="text-xs font-extrabold text-gray-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2"><ShieldCheck size={16} className="text-emerald-500" /> System Tally</h6>
 
                     {(pay.excessAmount > 0 || pay.arrearsAmount > 0) && (
                         <div className="flex gap-2">
-                            {pay.excessAmount > 0 && <span className="text-[11px] text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20">Excess: +LKR {pay.excessAmount}</span>}
-                            {pay.arrearsAmount > 0 && <span className="text-[11px] text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-500/20">Short: -LKR {pay.arrearsAmount}</span>}
+                            {pay.excessAmount > 0 && <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-extrabold bg-emerald-100 dark:bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-200 dark:border-emerald-500/20 shadow-sm whitespace-nowrap">Excess: +LKR {pay.excessAmount}</span>}
+                            {pay.arrearsAmount > 0 && <span className="text-[11px] text-red-700 dark:text-red-400 font-extrabold bg-red-100 dark:bg-red-500/10 px-2.5 py-1 rounded-lg border border-red-200 dark:border-red-500/20 shadow-sm whitespace-nowrap">Short: -LKR {pay.arrearsAmount}</span>}
                         </div>
                     )}
                 </div>
@@ -546,41 +555,41 @@ export default function PaymentManagement({ loggedInUser }) {
                 {pay.subjectsList && pay.subjectsList.length > 0 ? (
                     <div className="space-y-3 mb-4">
                         {pay.subjectsList.map((sub, i) => (
-                            <div key={i} className="flex justify-between items-center text-sm border-b border-white/5 pb-3">
-                                <span className="text-slate-300 font-medium">{sub.name} <span className="text-xs text-slate-500 ml-1">({sub.code})</span></span>
-                                <span className="text-emerald-400 font-semibold">LKR {parseFloat(sub.price).toLocaleString()}</span>
+                            <div key={i} className="flex justify-between items-center text-sm gap-4">
+                                <span className="text-gray-700 dark:text-slate-300 font-bold truncate">{sub.name} <span className="text-xs text-gray-400 dark:text-slate-500 ml-1">({sub.code})</span></span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold whitespace-nowrap">LKR {parseFloat(sub.price).toLocaleString()}</span>
                             </div>
                         ))}
-                        <div className="flex justify-between items-center text-sm pt-2">
-                            <span className="text-slate-300 font-bold">System Expected:</span>
-                            <span className="text-white font-black text-lg">LKR {parseFloat(pay.systemTotal).toLocaleString()}</span>
+                        <div className="flex justify-between items-center text-sm pt-4 border-t border-gray-200 dark:border-white/10 mt-2">
+                            <span className="text-gray-600 dark:text-slate-300 font-extrabold uppercase tracking-wider text-[11px] shrink-0">System Expected:</span>
+                            <span className="text-gray-900 dark:text-white font-black text-lg whitespace-nowrap">LKR {parseFloat(pay.systemTotal).toLocaleString()}</span>
                         </div>
                     </div>
                 ) : (
-                    <p className="text-xs text-slate-500 mb-4 font-medium italic">No specific subjects recognized.</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mb-4 font-bold bg-white dark:bg-white/5 p-3 rounded-xl border border-gray-200 dark:border-white/5">No specific subjects recognized.</p>
                 )}
 
                 {pay.type === 'Installment' ? (
-                    <div className="p-3.5 rounded-xl text-xs font-semibold flex items-center justify-between border bg-purple-500/10 text-purple-300 border-purple-500/20 backdrop-blur-md">
-                        <span>Slip Amount: LKR {parseFloat(pay.amount).toLocaleString()}</span>
-                        <span className="bg-purple-500/20 px-2 py-1 rounded-md">Partial Installment</span>
+                    <div className="p-4 rounded-xl text-xs font-extrabold flex items-center justify-between border bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/20 shadow-sm gap-2">
+                        <span className="whitespace-nowrap">Slip Amount: LKR {parseFloat(pay.amount).toLocaleString()}</span>
+                        <span className="bg-purple-100 dark:bg-purple-500/20 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-transparent whitespace-nowrap">Partial Installment</span>
                     </div>
                 ) : (
-                    <div className={`p-3.5 rounded-xl text-xs font-semibold flex items-center justify-between border backdrop-blur-md ${parseFloat(pay.systemTotal) === parseFloat(pay.amount) ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-red-500/10 text-red-300 border-red-500/20'}`}>
-                        <span>Slip Amount: LKR {parseFloat(pay.amount).toLocaleString()}</span>
-                        {parseFloat(pay.systemTotal) !== parseFloat(pay.amount) ? <span className="bg-red-500/20 px-2 py-1 rounded-md text-red-200">Mismatch Detected</span> : <span className="bg-emerald-500/20 px-2 py-1 rounded-md text-emerald-200">Perfect Match</span>}
+                    <div className={`p-4 rounded-xl text-xs font-extrabold flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between border shadow-sm ${parseFloat(pay.systemTotal) === parseFloat(pay.amount) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/20' : 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/20'}`}>
+                        <span className="whitespace-nowrap">Slip Amount: LKR {parseFloat(pay.amount).toLocaleString()}</span>
+                        {parseFloat(pay.systemTotal) !== parseFloat(pay.amount) ? <span className="bg-red-100 dark:bg-red-500/20 border border-red-200 dark:border-transparent px-3 py-1.5 rounded-lg text-red-700 dark:text-red-200 whitespace-nowrap">Mismatch Detected</span> : <span className="bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-200 dark:border-transparent px-3 py-1.5 rounded-lg text-emerald-700 dark:text-emerald-200 whitespace-nowrap">Perfect Match</span>}
                     </div>
                 )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6 ml-2">
                 <div>
                     <div className="flex items-center justify-between mb-3">
-                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2"><FileImage size={16} /> Slips & Docs</p>
+                        <p className="text-xs font-extrabold text-gray-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2"><FileImage size={16} /> Slips & Docs</p>
                         {pay.slips && pay.slips.length > 0 && (
                             <button
                                 onClick={() => openSlipsInNewTab(pay.slips, studentActionModal?.studentName || pay.studentName, studentActionModal?.studentNo || pay.studentNo, studentActionModal?.phone || pay.phone)}
-                                className="text-[10px] font-bold bg-blue-500/10 text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-500 hover:text-white transition-all border border-blue-500/30 shadow-sm"
+                                className="text-[10px] font-extrabold bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg hover:bg-blue-600 hover:text-white dark:hover:bg-blue-500 dark:hover:text-white transition-all border border-blue-200 dark:border-blue-500/30 shadow-sm outline-none whitespace-nowrap"
                             >
                                 Open Gallery
                             </button>
@@ -594,61 +603,61 @@ export default function PaymentManagement({ loggedInUser }) {
                             const isPdf = imgStr.toLowerCase().endsWith('.pdf');
 
                             return (
-                                <div key={i} onClick={() => openSlipsInNewTab(pay.slips, studentActionModal?.studentName || pay.studentName, studentActionModal?.studentNo || pay.studentNo, studentActionModal?.phone || pay.phone)} className="relative shrink-0 w-24 h-24 border border-white/10 rounded-xl overflow-hidden hover:border-emerald-500/50 hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all cursor-pointer bg-slate-900/50 flex items-center justify-center group" title="Click to view">
+                                <div key={i} onClick={() => openSlipsInNewTab(pay.slips, studentActionModal?.studentName || pay.studentName, studentActionModal?.studentNo || pay.studentNo, studentActionModal?.phone || pay.phone)} className="relative shrink-0 w-28 h-28 border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden hover:border-brand-accent/50 hover:shadow-lg transition-all cursor-pointer bg-gray-50 dark:bg-black/20 flex items-center justify-center group shadow-sm" title="Click to view">
                                     {isPdf ? (
-                                        <div className="flex flex-col items-center text-white/40 text-[10px] font-medium uppercase group-hover:text-white/80 transition-colors"><FileText size={28} className="text-red-400/80 mb-1.5 group-hover:text-red-400 transition-colors" /> PDF</div>
+                                        <div className="flex flex-col items-center text-gray-400 dark:text-white/40 text-[10px] font-extrabold uppercase group-hover:text-gray-600 dark:group-hover:text-white/80 transition-colors"><FileText size={32} className="text-red-500/80 mb-2 group-hover:text-red-500 transition-colors" /> PDF</div>
                                     ) : (
-                                        <img src={fileUrl} alt="slip" className="h-full w-full object-cover opacity-80 group-hover:opacity-100 transition-opacity group-hover:scale-105 duration-500" onError={(e) => { e.target.src = '/logo.png'; }} />
+                                        <img src={fileUrl} alt="slip" className="h-full w-full object-cover opacity-90 group-hover:opacity-100 transition-opacity group-hover:scale-105 duration-500" onError={(e) => { e.target.src = '/logo.png'; }} />
                                     )}
                                 </div>
                             )
-                        }) : <span className="text-xs text-slate-500 font-medium italic bg-slate-900/30 px-3 py-2 rounded-lg border border-white/5 inline-block">No documents attached</span>}
+                        }) : <span className="text-xs text-gray-500 dark:text-slate-500 font-bold bg-gray-50 dark:bg-black/20 px-4 py-3 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm inline-block w-full text-center">No documents attached</span>}
                     </div>
                 </div>
                 <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><MessageSquare size={16} /> Remarks</p>
-                    <div className="bg-slate-900/50 border border-white/5 rounded-xl p-4 text-sm text-slate-300 italic min-h-[96px] whitespace-pre-wrap font-medium shadow-inner">
-                        {pay.remark ? pay.remark : "No system remarks available for this transaction."}
+                    <p className="text-xs font-extrabold text-gray-500 dark:text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2 mt-4 xl:mt-0"><MessageSquare size={16} /> Remarks</p>
+                    <div className="bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/5 rounded-2xl p-5 text-sm text-gray-700 dark:text-slate-300 min-h-[112px] whitespace-pre-wrap font-medium shadow-inner">
+                        {pay.remark ? pay.remark : <span className="italic text-gray-400 dark:text-slate-500">No system remarks available for this transaction.</span>}
                     </div>
                 </div>
             </div>
 
             {/* PROCESS PAYMENT ACTIONS */}
             {['Pending', 'Non Paid', 'Upcoming', 'Rejected', 'Post Pay'].includes(activeTab) && pay.status !== 'Approved' && (
-                <div className="bg-slate-900/60 rounded-2xl border border-white/5 p-5 mt-4 shadow-inner backdrop-blur-sm">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center justify-center gap-2">
-                        <ShieldCheck size={14} /> Action Panel
+                <div className="bg-gray-100 dark:bg-slate-900/60 rounded-[2rem] border border-gray-200 dark:border-white/5 p-6 mt-6 shadow-inner ml-2">
+                    <p className="text-[10px] font-extrabold text-gray-500 dark:text-slate-400 uppercase tracking-widest mb-5 flex items-center justify-center gap-2">
+                        <ShieldCheck size={16} /> Action Panel
                     </p>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleQuickApprove(pay, false)} className="bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg shadow-emerald-500/20 border border-emerald-400/30">
-                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />} Quick Approve
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleQuickApprove(pay, false)} className="bg-emerald-600 hover:bg-emerald-500 text-white py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-lg shadow-emerald-500/20 dark:shadow-none outline-none">
+                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} Quick Approve
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => openApproveModal(pay, false)} className="bg-slate-800 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/30 hover:border-blue-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
-                            <Wallet size={18} /> Adjust Amount
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => openApproveModal(pay, false)} className="bg-white dark:bg-brand-darkCard hover:bg-blue-50 dark:hover:bg-blue-600 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-white border border-gray-200 dark:border-blue-500/30 hover:border-blue-300 dark:hover:border-blue-500 py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-sm hover:shadow-md outline-none">
+                            <Wallet size={20} /> Adjust Amount
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => setInstitutePaymentModal(pay)} className="bg-slate-800 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 hover:border-indigo-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
-                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />} Institute
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => setInstitutePaymentModal(pay)} className="bg-white dark:bg-brand-darkCard hover:bg-indigo-50 dark:hover:bg-indigo-600 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-white border border-gray-200 dark:border-indigo-500/30 hover:border-indigo-300 dark:hover:border-indigo-500 py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-sm hover:shadow-md outline-none">
+                            {actioningPaymentId === pay.id ? <Loader2 className="animate-spin" size={20} /> : <CheckCircle2 size={20} />} Institute
                         </button>
 
                         {activeTab !== 'Post Pay' && (
-                            <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('PostPay', pay)} className="bg-slate-800 hover:bg-orange-600 text-orange-400 hover:text-white border border-orange-500/30 hover:border-orange-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
-                                <Unlock size={18} /> Post Pay
+                            <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('PostPay', pay)} className="bg-white dark:bg-brand-darkCard hover:bg-orange-50 dark:hover:bg-orange-600 text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-white border border-gray-200 dark:border-orange-500/30 hover:border-orange-300 dark:hover:border-orange-500 py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-sm hover:shadow-md outline-none">
+                                <Unlock size={20} /> Post Pay
                             </button>
                         )}
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('FreeCard', pay)} className="bg-slate-800 hover:bg-yellow-600 text-yellow-400 hover:text-white border border-yellow-500/30 hover:border-yellow-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
-                            <Gift size={18} /> Free Card
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('FreeCard', pay)} className="bg-white dark:bg-brand-darkCard hover:bg-yellow-50 dark:hover:bg-yellow-600 text-yellow-600 dark:text-yellow-400 hover:text-yellow-700 dark:hover:text-white border border-gray-200 dark:border-yellow-500/30 hover:border-yellow-300 dark:hover:border-yellow-500 py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-sm hover:shadow-md outline-none">
+                            <Gift size={20} /> Free Card
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('Discount', pay)} className="bg-slate-800 hover:bg-cyan-600 text-cyan-400 hover:text-white border border-cyan-500/30 hover:border-cyan-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg">
-                            <Tag size={18} /> Discount
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => openAdvancedModal('Discount', pay)} className="bg-white dark:bg-brand-darkCard hover:bg-cyan-50 dark:hover:bg-cyan-600 text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-white border border-gray-200 dark:border-cyan-500/30 hover:border-cyan-300 dark:hover:border-cyan-500 py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-sm hover:shadow-md outline-none">
+                            <Tag size={20} /> Discount
                         </button>
 
-                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleAction(pay, 'Reject')} className="bg-slate-800 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 hover:border-red-500 py-3 px-2 rounded-xl transition-all text-[10px] sm:text-xs font-bold uppercase tracking-widest flex flex-col items-center justify-center gap-1.5 text-center shadow-lg lg:col-span-1 col-span-2">
-                            <CloseIcon size={18} /> Reject
+                        <button disabled={actioningPaymentId === pay.id} onClick={() => handleAction(pay, 'Reject')} className="bg-white dark:bg-brand-darkCard hover:bg-red-50 dark:hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-white border border-gray-200 dark:border-red-500/30 hover:border-red-300 dark:hover:border-red-500 py-4 px-3 rounded-2xl transition-all text-xs font-extrabold uppercase tracking-widest flex flex-col items-center justify-center gap-2 text-center shadow-sm hover:shadow-md lg:col-span-1 col-span-2 outline-none">
+                            <CloseIcon size={20} /> Reject
                         </button>
                     </div>
                 </div>
@@ -656,16 +665,16 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* Delivery Hub Button */}
             {['Free Card', 'Discount', 'Approved'].includes(pay.status) && (
-                <div className="mt-4">
+                <div className="mt-6 ml-2">
                     <button
                         disabled={actioningPaymentId === pay.id || !!pay.hasDelivery}
                         onClick={() => handleAction(pay, 'SendToDelivery')}
-                        className={`w-full py-4 rounded-xl transition-all text-xs font-bold uppercase tracking-widest flex justify-center items-center gap-2 shadow-lg backdrop-blur-md ${pay.hasDelivery
-                                ? 'bg-slate-800/50 text-slate-500 border border-white/5 cursor-not-allowed shadow-none'
-                                : 'bg-gradient-to-r from-purple-600/20 to-purple-500/20 hover:from-purple-600 hover:to-purple-500 text-purple-300 hover:text-white border border-purple-500/30 hover:border-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)]'
+                        className={`w-full py-4 rounded-2xl transition-all text-sm font-extrabold uppercase tracking-widest flex justify-center items-center gap-3 shadow-sm outline-none ${pay.hasDelivery
+                                ? 'bg-gray-100 dark:bg-black/30 text-gray-400 dark:text-slate-600 border border-gray-200 dark:border-white/5 cursor-not-allowed shadow-none'
+                                : 'bg-purple-50 dark:bg-purple-600/10 hover:bg-purple-600 text-purple-600 dark:text-purple-400 hover:text-white dark:hover:text-white border border-purple-200 dark:border-purple-500/30 hover:border-transparent dark:hover:bg-purple-600 shadow-purple-500/20 hover:shadow-lg'
                             }`}
                     >
-                        <Truck size={18} /> {pay.hasDelivery ? 'Dispatched to Delivery' : 'Send to Delivery Hub'}
+                        <Truck size={20} /> {pay.hasDelivery ? 'Dispatched to Delivery' : 'Send to Delivery Hub'}
                     </button>
                 </div>
             )}
@@ -673,22 +682,27 @@ export default function PaymentManagement({ loggedInUser }) {
     );
 
     return (
-        <div className="w-full animate-fade-in text-slate-200 pb-10 font-sans relative">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8 bg-gradient-to-r from-slate-900/80 to-slate-800/80 p-6 md:p-8 rounded-3xl border border-white/10 shadow-2xl backdrop-blur-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="w-full animate-fade-in text-gray-900 dark:text-slate-200 pb-10 font-sans relative">
+            
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8 bg-white/70 dark:bg-brand-darkCard/80 p-6 md:p-8 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm backdrop-blur-xl relative overflow-hidden transition-colors">
+                
+                {/* Glow Effects - Adjusted for Light/Dark */}
+                <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 dark:bg-emerald-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+                <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+                
                 <div className="flex items-center gap-5 relative z-10">
-                    <div className="p-4 bg-gradient-to-br from-emerald-400/20 to-emerald-600/20 rounded-2xl border border-emerald-400/30 text-emerald-400 shadow-inner">
+                    <div className="p-4 bg-emerald-50 dark:bg-emerald-500/10 rounded-2xl border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 shadow-sm transition-colors">
                         <Wallet size={32} strokeWidth={1.5} />
                     </div>
                     <div>
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 tracking-tight">Payment Hub</h2>
-                        <p className="text-slate-400 font-medium text-sm mt-1">Review, approve, and manage transactions seamlessly.</p>
+                        <h2 className="text-3xl md:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">Payment Hub</h2>
+                        <p className="text-gray-500 dark:text-slate-400 font-bold text-sm mt-1">Review, approve, and manage transactions seamlessly.</p>
                     </div>
                 </div>
             </div>
 
-            {/* 🔥 ALUTHIN ADD KALA: onOpenExport prop eka */}
+            {/* Filters */}
             <PaymentFilters
                 isAdmin={isAdmin} filters={filters} setFilters={setFilters}
                 businesses={businesses} batches={batches} groups={groups}
@@ -696,6 +710,7 @@ export default function PaymentManagement({ loggedInUser }) {
                 onOpenExport={() => setShowExportModal(true)}
             />
 
+            {/* Tabs Row */}
             <div className="flex gap-3 mb-8 pb-3 overflow-x-auto custom-scrollbar p-1">
                 <button onClick={() => setActiveTab('Pending')} className={getTabClass('Pending')}><Clock size={16} /> Pending</button>
                 <button onClick={() => setActiveTab('Approved')} className={getTabClass('Approved')}><Check size={16} /> Approved</button>
@@ -711,43 +726,43 @@ export default function PaymentManagement({ loggedInUser }) {
             {/* APPROVED TAB MAIN VIEW SPLIT */}
             {activeTab === 'Approved' ? (
                 <div className="space-y-6">
-                    <div className="flex flex-wrap items-center gap-2 bg-slate-900/40 p-2 rounded-2xl w-max border border-white/5 backdrop-blur-md shadow-inner">
-                        <button onClick={() => setApprovedFilter('All')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'All' ? 'bg-white/10 text-white border border-white/10 shadow-md' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}>All Approved</button>
-                        <button onClick={() => setApprovedFilter('Slips')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'Slips' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-md' : 'text-slate-400 hover:text-white hover:bg-emerald-500/10'}`}>Slip Payments</button>
-                        <button onClick={() => setApprovedFilter('Online')} className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${approvedFilter === 'Online' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-md' : 'text-slate-400 hover:text-white hover:bg-indigo-500/10'}`}>Online (PayHere)</button>
+                    <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-brand-darkCard p-2.5 rounded-2xl w-full md:w-max border border-gray-200 dark:border-brand-darkBorder shadow-sm transition-colors">
+                        <button onClick={() => setApprovedFilter('All')} className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all outline-none ${approvedFilter === 'All' ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white shadow-sm border border-gray-200 dark:border-transparent' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-white/5'}`}>All Approved</button>
+                        <button onClick={() => setApprovedFilter('Slips')} className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all outline-none ${approvedFilter === 'Slips' ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'}`}>Slip Payments</button>
+                        <button onClick={() => setApprovedFilter('Online')} className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-xs font-extrabold uppercase tracking-widest transition-all outline-none ${approvedFilter === 'Online' ? 'bg-indigo-50 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-indigo-700 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10'}`}>Online (PayHere)</button>
                     </div>
 
                     {loading ? (
-                        <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40} /></div>
+                        <div className="text-center py-20 bg-white/70 dark:bg-brand-darkCard/80 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm"><Loader2 className="animate-spin text-brand-accent mx-auto" size={40} /></div>
                     ) : (
                         <>
                             {/* SLIP PAYMENTS SECTION */}
                             {(approvedFilter === 'All' || approvedFilter === 'Slips') && (
-                                <div className="bg-slate-800/30 backdrop-blur-xl p-6 rounded-[2rem] border border-emerald-500/20 shadow-xl">
-                                    <h3 className="text-emerald-400 font-bold text-lg mb-6 flex items-center gap-2"><FileImage size={20} /> Slip Payments</h3>
+                                <div className="bg-white/70 dark:bg-brand-darkCard/80 p-6 md:p-8 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm transition-colors">
+                                    <h3 className="text-emerald-600 dark:text-emerald-400 font-extrabold text-xl mb-6 flex items-center gap-3 uppercase tracking-widest"><FileImage size={24} /> Slip Payments</h3>
                                     <div className="space-y-4">
                                         {paginatedStudents.map(student => {
                                             const slipPays = student.allPayments.filter(p => p.method !== 'PayHere' && p.method !== 'Online');
                                             if (slipPays.length === 0) return null;
                                             return (
-                                                <div key={`slip-${student.studentId}`} className="bg-slate-900/60 border border-white/5 hover:border-white/10 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-md transition-colors">
-                                                    <div className="flex items-center gap-4 w-full">
-                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400"><User size={20} /></div>
+                                                <div key={`slip-${student.studentId}`} className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/5 hover:border-emerald-300 dark:hover:border-emerald-500/30 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm hover:shadow-md transition-all group">
+                                                    <div className="flex items-center gap-5 w-full">
+                                                        <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-sm"><User size={24} /></div>
                                                         <div>
-                                                            <h4 className="font-bold text-white text-md flex items-center flex-wrap gap-2">
+                                                            <h4 className="font-extrabold text-gray-900 dark:text-white text-lg flex items-center flex-wrap gap-2.5">
                                                                 {student.studentName}
-                                                                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 tracking-widest uppercase">{student.studentNo}</span>
-                                                                {student.phone && student.phone !== 'N/A' && <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
+                                                                <span className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-200 dark:border-emerald-500/20 tracking-widest uppercase">{student.studentNo}</span>
+                                                                {student.phone && student.phone !== 'N/A' && <span className="text-[10px] text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
                                                             </h4>
-                                                            <p className="text-xs text-slate-400 mt-1">{slipPays.length} Slip Payment(s)</p>
+                                                            <p className="text-xs font-bold text-gray-500 dark:text-slate-400 mt-1.5">{slipPays.length} Slip Payment(s)</p>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setStudentActionModal({ ...student, allPayments: slipPays })} className="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/30 py-2 px-6 rounded-xl transition-all text-xs font-bold uppercase tracking-widest whitespace-nowrap">View Records</button>
+                                                    <button onClick={() => setStudentActionModal({ ...student, allPayments: slipPays })} className="w-full md:w-auto bg-emerald-50 dark:bg-emerald-600/20 hover:bg-emerald-600 text-emerald-700 dark:text-emerald-400 hover:text-white dark:hover:text-white border border-emerald-200 dark:border-emerald-500/30 py-3.5 px-6 rounded-xl transition-all text-xs font-extrabold uppercase tracking-widest whitespace-nowrap outline-none shadow-sm group-hover:shadow-emerald-500/20">View Records</button>
                                                 </div>
                                             );
                                         })}
                                         {paginatedStudents.every(s => s.allPayments.filter(p => p.method !== 'PayHere' && p.method !== 'Online').length === 0) && (
-                                            <p className="text-slate-500 text-sm italic">No approved slip payments found.</p>
+                                            <p className="text-gray-500 dark:text-slate-500 text-sm font-bold bg-gray-50 dark:bg-black/20 p-5 rounded-2xl border border-gray-200 dark:border-white/5 text-center">No approved slip payments found.</p>
                                         )}
                                     </div>
                                 </div>
@@ -755,86 +770,86 @@ export default function PaymentManagement({ loggedInUser }) {
 
                             {/* ONLINE PAYMENTS SECTION */}
                             {(approvedFilter === 'All' || approvedFilter === 'Online') && (
-                                <div className="bg-slate-800/30 backdrop-blur-xl p-6 rounded-[2rem] border border-indigo-500/20 shadow-xl mt-6">
-                                    <h3 className="text-indigo-400 font-bold text-lg mb-6 flex items-center gap-2"><CreditCard size={20} /> Online (PayHere) Payments</h3>
+                                <div className="bg-white/70 dark:bg-brand-darkCard/80 backdrop-blur-xl p-6 md:p-8 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm mt-8 transition-colors">
+                                    <h3 className="text-indigo-600 dark:text-indigo-400 font-extrabold text-xl mb-6 flex items-center gap-3 uppercase tracking-widest"><CreditCard size={24} /> Online (PayHere) Payments</h3>
                                     <div className="space-y-4">
                                         {paginatedStudents.map(student => {
                                             const onlinePays = student.allPayments.filter(p => p.method === 'PayHere' || p.method === 'Online');
                                             if (onlinePays.length === 0) return null;
                                             return (
-                                                <div key={`online-${student.studentId}`} className="bg-slate-900/60 border border-white/5 hover:border-white/10 p-5 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 shadow-md transition-colors">
-                                                    <div className="flex items-center gap-4 w-full">
-                                                        <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0 border border-indigo-500/20 bg-indigo-500/10 text-indigo-400"><User size={20} /></div>
+                                                <div key={`online-${student.studentId}`} className="bg-white dark:bg-black/20 border border-gray-200 dark:border-white/5 hover:border-indigo-300 dark:hover:border-indigo-500/30 p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm hover:shadow-md transition-all group">
+                                                    <div className="flex items-center gap-5 w-full">
+                                                        <div className="w-14 h-14 rounded-full flex items-center justify-center shrink-0 border border-indigo-200 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shadow-sm"><User size={24} /></div>
                                                         <div>
-                                                            <h4 className="font-bold text-white text-md flex items-center flex-wrap gap-2">
+                                                            <h4 className="font-extrabold text-gray-900 dark:text-white text-lg flex items-center flex-wrap gap-2.5">
                                                                 {student.studentName}
-                                                                <span className="text-[10px] text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 tracking-widest uppercase">{student.studentNo}</span>
-                                                                {student.phone && student.phone !== 'N/A' && <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
+                                                                <span className="text-[10px] text-indigo-700 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-500/10 px-2.5 py-1 rounded-md border border-indigo-200 dark:border-indigo-500/20 tracking-widest uppercase">{student.studentNo}</span>
+                                                                {student.phone && student.phone !== 'N/A' && <span className="text-[10px] text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-200 dark:border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
                                                             </h4>
-                                                            <p className="text-xs text-slate-400 mt-1">{onlinePays.length} Online Payment(s)</p>
+                                                            <p className="text-xs text-gray-500 dark:text-slate-400 mt-1.5 font-bold">{onlinePays.length} Online Payment(s)</p>
                                                         </div>
                                                     </div>
-                                                    <button onClick={() => setStudentActionModal({ ...student, allPayments: onlinePays })} className="bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white border border-indigo-500/30 py-2 px-6 rounded-xl transition-all text-xs font-bold uppercase tracking-widest whitespace-nowrap">View Records</button>
+                                                    <button onClick={() => setStudentActionModal({ ...student, allPayments: onlinePays })} className="w-full md:w-auto bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-700 dark:text-indigo-400 hover:text-white dark:hover:text-white border border-indigo-200 dark:border-indigo-500/30 py-3.5 px-6 rounded-xl transition-all text-xs font-extrabold uppercase tracking-widest whitespace-nowrap outline-none shadow-sm group-hover:shadow-indigo-500/20">View Records</button>
                                                 </div>
                                             );
                                         })}
                                         {paginatedStudents.every(s => s.allPayments.filter(p => p.method === 'PayHere' || p.method === 'Online').length === 0) && (
-                                            <p className="text-slate-500 text-sm italic">No approved online payments found.</p>
+                                            <p className="text-gray-500 dark:text-slate-500 text-sm font-bold bg-gray-50 dark:bg-black/20 p-5 rounded-2xl border border-gray-200 dark:border-white/5 text-center">No approved online payments found.</p>
                                         )}
                                     </div>
                                 </div>
                             )}
 
                             {totalPages > 1 && (
-                                <div className="flex justify-between items-center mt-6 bg-slate-800/40 backdrop-blur-md p-4 rounded-xl border border-white/5 shadow-inner">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16} /> Prev</button>
-                                    <span className="text-sm font-medium text-white bg-black/40 px-4 py-1.5 rounded-lg border border-white/5">Page {currentPage} of {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16} /></button>
+                                <div className="flex justify-between items-center mt-8 bg-white dark:bg-brand-darkCard p-4 rounded-2xl border border-gray-200 dark:border-brand-darkBorder shadow-sm">
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 transition-colors outline-none px-4 py-2"><ChevronLeft size={18} /> Prev</button>
+                                    <span className="text-sm font-extrabold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 px-5 py-2 rounded-xl border border-gray-200 dark:border-white/5">Page {currentPage} of {totalPages}</span>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 transition-colors outline-none px-4 py-2">Next <ChevronRight size={18} /></button>
                                 </div>
                             )}
                         </>
                     )}
                 </div>
             ) : (
-                <div className="space-y-4">
+                <div className="space-y-6">
                     {loading ? (
-                        <div className="text-center py-20"><Loader2 className="animate-spin text-emerald-500 mx-auto" size={40} /></div>
+                        <div className="text-center py-20 bg-white/70 dark:bg-brand-darkCard/80 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm"><Loader2 className="animate-spin text-brand-accent mx-auto" size={40} /></div>
                     ) : paginatedStudents.length === 0 ? (
-                        <div className="text-center py-20 bg-slate-800/30 backdrop-blur-xl rounded-[2rem] border border-white/5"><p className="text-slate-500 font-medium text-lg">No records found for the selected filters.</p></div>
+                        <div className="text-center py-20 bg-white/70 dark:bg-brand-darkCard/80 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm"><p className="text-gray-500 dark:text-slate-400 font-extrabold text-lg">No records found for the selected filters.</p></div>
                     ) : (
                         <>
                             {paginatedStudents.map(student => {
                                 const latestPayment = student.allPayments[0];
                                 return (
-                                    <div key={student.studentId} className="bg-slate-800/30 backdrop-blur-md border border-white/5 hover:border-white/10 p-5 md:p-6 rounded-2xl flex flex-col md:flex-row items-start justify-between gap-6 transition-colors shadow-xl group">
-                                        <div className="flex items-start gap-4 flex-1 w-full">
-                                            <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/20 bg-emerald-500/10 text-emerald-400 mt-1">
-                                                <User size={26} strokeWidth={1.5} />
+                                    <div key={student.studentId} className="bg-white/70 dark:bg-brand-darkCard/80 border border-gray-200 dark:border-brand-darkBorder hover:border-brand-accent/40 dark:hover:border-brand-accent/40 p-6 md:p-8 rounded-[2rem] flex flex-col md:flex-row items-start justify-between gap-6 transition-all shadow-sm hover:shadow-lg group">
+                                        <div className="flex items-start gap-5 flex-1 w-full">
+                                            <div className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border border-brand-accent/20 bg-brand-accentLight text-brand-accent shadow-sm">
+                                                <User size={30} strokeWidth={1.5} />
                                             </div>
-                                            <div className="flex-1">
-                                                <h4 className="font-bold text-lg text-white flex items-center flex-wrap gap-3">
+                                            <div className="flex-1 mt-1">
+                                                <h4 className="font-extrabold text-xl text-gray-900 dark:text-white flex items-center flex-wrap gap-3">
                                                     {student.studentName}
-                                                    <span className="text-[10px] font-normal text-white/50 bg-black/40 px-2.5 py-1 rounded-md border border-white/5 tracking-widest uppercase">{student.studentNo}</span>
-                                                    {student.phone && student.phone !== 'N/A' && <span className="text-[10px] font-normal text-blue-400 bg-blue-500/10 px-2.5 py-1 rounded-md border border-blue-500/20 tracking-widest uppercase">{student.phone}</span>}
+                                                    <span className="text-[10px] font-black text-gray-500 dark:text-white/50 bg-gray-100 dark:bg-black/40 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/5 tracking-widest uppercase shadow-sm">{student.studentNo}</span>
+                                                    {student.phone && student.phone !== 'N/A' && <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-500/20 tracking-widest uppercase shadow-sm">{student.phone}</span>}
                                                 </h4>
                                                 {latestPayment && (
                                                     <>
-                                                        <p className="text-xs text-slate-400 mt-2 flex items-center gap-2">
-                                                            <span className="text-white font-medium bg-white/10 px-2 py-0.5 rounded">{latestPayment.date}</span>
-                                                            <span>• {latestPayment.business}</span>
-                                                            <span>• {latestPayment.batch}</span>
+                                                        <p className="text-sm font-bold text-gray-500 dark:text-slate-400 mt-3 flex items-center gap-3">
+                                                            <span className="text-gray-700 dark:text-white font-extrabold bg-gray-100 dark:bg-white/10 px-3 py-1 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm">{latestPayment.date}</span>
+                                                            <span className="truncate max-w-[150px] sm:max-w-[300px]">({latestPayment.business})</span>
+                                                            <span className="truncate max-w-[100px] sm:max-w-[200px]">({latestPayment.batch})</span>
                                                         </p>
-                                                        <div className="flex flex-wrap gap-2 mt-3 items-center">
-                                                            <span className="text-[10px] font-normal bg-blue-500/10 text-blue-400 px-3 py-1 rounded-md border border-blue-500/20 uppercase tracking-widest">Type: {latestPayment.type}</span>
-                                                            <span className="text-[10px] font-normal bg-purple-500/10 text-purple-400 px-3 py-1 rounded-md border border-purple-500/20 uppercase tracking-widest">Method: {latestPayment.method}</span>
-                                                            {student.allPayments.length > 1 && <span className="text-[10px] font-normal text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded uppercase tracking-widest">+{student.allPayments.length - 1} Payments</span>}
+                                                        <div className="flex flex-wrap gap-2 mt-4 items-center">
+                                                            <span className="text-[10px] font-black bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-500/20 uppercase tracking-widest shadow-sm">Type: {latestPayment.type}</span>
+                                                            <span className="text-[10px] font-black bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 px-3 py-1.5 rounded-lg border border-purple-200 dark:border-purple-500/20 uppercase tracking-widest shadow-sm">Method: {latestPayment.method}</span>
+                                                            {student.allPayments.length > 1 && <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/20 uppercase tracking-widest shadow-sm">+{student.allPayments.length - 1} More</span>}
                                                         </div>
                                                     </>
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-white/5 md:border-t-0 pt-4 md:pt-0 shrink-0">
-                                            <button onClick={() => setStudentActionModal(student)} className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 px-8 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg whitespace-nowrap">
+                                        <div className="flex items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-gray-200 dark:border-white/5 md:border-t-0 pt-6 md:pt-0 shrink-0">
+                                            <button onClick={() => setStudentActionModal(student)} className="w-full md:w-auto bg-brand-accent hover:bg-brand-accentHover text-white font-extrabold py-4 md:py-3.5 px-8 rounded-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest shadow-lg shadow-brand-accent/30 dark:shadow-none whitespace-nowrap outline-none">
                                                 Review Payments
                                             </button>
                                         </div>
@@ -843,10 +858,10 @@ export default function PaymentManagement({ loggedInUser }) {
                             })}
 
                             {totalPages > 1 && (
-                                <div className="flex justify-between items-center mt-6 bg-slate-800/40 backdrop-blur-md p-4 rounded-xl border border-white/5 shadow-inner">
-                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors"><ChevronLeft size={16} /> Prev</button>
-                                    <span className="text-sm font-medium text-white bg-black/40 px-4 py-1.5 rounded-lg border border-white/5">Page {currentPage} of {totalPages}</span>
-                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-medium text-slate-400 hover:text-white disabled:opacity-30 transition-colors">Next <ChevronRight size={16} /></button>
+                                <div className="flex justify-between items-center mt-8 bg-white dark:bg-brand-darkCard p-4 rounded-2xl border border-gray-200 dark:border-brand-darkBorder shadow-sm">
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 transition-colors outline-none px-4 py-2"><ChevronLeft size={18} /> Prev</button>
+                                    <span className="text-sm font-extrabold text-gray-900 dark:text-white bg-gray-100 dark:bg-white/5 px-5 py-2 rounded-xl border border-gray-200 dark:border-white/5">Page {currentPage} of {totalPages}</span>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="flex items-center gap-2 text-sm font-bold text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white disabled:opacity-30 transition-colors outline-none px-4 py-2">Next <ChevronRight size={18} /></button>
                                 </div>
                             )}
                         </>
@@ -854,29 +869,31 @@ export default function PaymentManagement({ loggedInUser }) {
                 </div>
             )}
 
-            {/* 🔥 STUDENT ACTION MODAL (REVIEW PAYMENTS) - LOKU RECTANGLE SHAPE 🔥 */}
+            {/* 🔥 STUDENT ACTION MODAL (REVIEW PAYMENTS) - WIDER MODAL 🔥 */}
             {studentActionModal && createPortal(
-                <div className="fixed inset-0 z-[9990] bg-slate-900/80 backdrop-blur-xl p-4 md:p-8 flex items-center justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <div className="bg-slate-900/90 border border-white/10 rounded-[2.5rem] w-full max-w-[95vw] min-h-[90vh] max-h-[95vh] shadow-[0_0_50px_rgba(0,0,0,0.5)] relative animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden backdrop-blur-3xl">
+                <div className="fixed inset-0 z-[9990] bg-slate-900/60 dark:bg-slate-900/80 backdrop-blur-sm p-4 md:p-8 flex items-center justify-center [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] animate-fade-in">
+                    {/* 🔥 Changed max-w-7xl to max-w-[95vw] xl:max-w-[1400px] 🔥 */}
+                    <div className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder rounded-[2.5rem] w-full max-w-[95vw] xl:max-w-[1400px] min-h-[90vh] max-h-[95vh] shadow-2xl relative flex flex-col overflow-hidden transition-colors">
 
-                        <div className="bg-slate-800/50 border-b border-white/5 p-6 md:px-10 rounded-t-[2.5rem] flex justify-between items-center shadow-sm shrink-0">
+                        <div className="bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/5 p-6 md:px-10 rounded-t-[2.5rem] flex justify-between items-center shrink-0 shadow-sm">
                             <div className="flex items-center gap-5">
-                                <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex justify-center items-center border border-emerald-500/20"><User size={28} /></div>
+                                <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-2xl flex justify-center items-center border border-emerald-200 dark:border-emerald-500/20 shadow-sm"><User size={28} /></div>
                                 <div>
-                                    <h3 className="text-2xl font-black text-white tracking-wide">{studentActionModal.studentName}</h3>
-                                    <div className="flex items-center gap-2 mt-1.5">
-                                        <p className="text-xs text-emerald-400 font-bold tracking-widest uppercase bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/20 w-max">{studentActionModal.studentNo}</p>
-                                        {studentActionModal.phone && studentActionModal.phone !== 'N/A' && <p className="text-xs text-blue-400 font-bold tracking-widest uppercase bg-blue-500/10 px-3 py-1 rounded-lg border border-blue-500/20 w-max">{studentActionModal.phone}</p>}
+                                    <h3 className="text-2xl md:text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">{studentActionModal.studentName}</h3>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-extrabold tracking-widest uppercase bg-emerald-100 dark:bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-500/20 w-max shadow-sm">{studentActionModal.studentNo}</p>
+                                        {studentActionModal.phone && studentActionModal.phone !== 'N/A' && <p className="text-[10px] text-blue-700 dark:text-blue-400 font-extrabold tracking-widest uppercase bg-blue-100 dark:bg-blue-500/10 px-3 py-1.5 rounded-lg border border-blue-200 dark:border-blue-500/20 w-max shadow-sm">{studentActionModal.phone}</p>}
                                     </div>
                                 </div>
                             </div>
-                            <button onClick={() => setStudentActionModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-3 rounded-2xl transition-all border border-transparent hover:border-red-500/30"><CloseIcon size={24} strokeWidth={3} /></button>
+                            <button onClick={() => setStudentActionModal(null)} className="text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 bg-white dark:bg-white/5 hover:bg-red-50 dark:hover:bg-white/10 p-3.5 rounded-2xl transition-all border border-gray-200 dark:border-transparent outline-none shadow-sm"><CloseIcon size={24} strokeWidth={3} /></button>
                         </div>
 
                         <div className="p-6 md:p-10 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-10 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
 
-                            <div className="space-y-6 h-full">
-                                <h4 className="font-black text-white uppercase tracking-widest text-sm flex items-center gap-2 mb-6 border-b border-white/10 pb-4"><AlertCircle className="text-emerald-500" size={20} /> Payment to Action</h4>
+                            {/* LEFT SIDE: Active Payment Being Reviewed */}
+                            <div className="space-y-6 h-full flex flex-col">
+                                <h4 className="font-extrabold text-gray-900 dark:text-white uppercase tracking-widest text-sm flex items-center gap-3 mb-4 border-b border-gray-200 dark:border-white/10 pb-4 shrink-0"><AlertCircle className="text-brand-accent" size={20} /> Payment to Action</h4>
 
                                 {(() => {
                                     const allStudentPays = studentActionModal.allPayments || [];
@@ -886,22 +903,21 @@ export default function PaymentManagement({ loggedInUser }) {
                                         return p.status === activeTab && p.status !== 'Trash';
                                     });
 
-                                    if (!leftSidePayment && allStudentPays.length > 0) {
-                                        leftSidePayment = allStudentPays[0];
-                                    }
+                                    if (!leftSidePayment && allStudentPays.length > 0) leftSidePayment = allStudentPays[0];
 
                                     if (!leftSidePayment) {
-                                        return <div className="bg-white/5 border border-white/5 rounded-3xl p-10 text-center text-slate-400 text-lg font-bold">No payments found.</div>;
+                                        return <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5 rounded-3xl p-10 text-center text-gray-500 dark:text-slate-400 text-lg font-bold shadow-sm flex-1 flex items-center justify-center">No payments found to review.</div>;
                                     }
 
-                                    return renderPaymentCard(leftSidePayment);
+                                    return <div className="flex-1">{renderPaymentCard(leftSidePayment)}</div>;
                                 })()}
                             </div>
 
-                            <div className="bg-slate-900/50 rounded-[2rem] border border-white/5 p-8 h-full shadow-inner flex flex-col backdrop-blur-md">
-                                <h4 className="font-black text-white uppercase tracking-widest text-sm flex items-center gap-2 mb-6 border-b border-white/10 pb-4"><Clock className="text-blue-500" size={20} /> Other Payments History</h4>
+                            {/* RIGHT SIDE: Other Payments History */}
+                            <div className="bg-gray-50 dark:bg-black/30 rounded-[2.5rem] border border-gray-200 dark:border-white/5 p-6 md:p-8 h-full shadow-inner flex flex-col transition-colors">
+                                <h4 className="font-extrabold text-gray-900 dark:text-white uppercase tracking-widest text-sm flex items-center gap-3 mb-6 border-b border-gray-200 dark:border-white/10 pb-4 shrink-0"><Clock className="text-blue-500 dark:text-blue-400" size={20} /> Other Payments History</h4>
 
-                                <div className="space-y-4 flex-1 overflow-y-auto pr-2 pb-10 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                <div className="space-y-5 flex-1 overflow-y-auto pr-2 pb-10 custom-scrollbar">
                                     {(() => {
                                         const allStudentPays = studentActionModal.allPayments || [];
                                         let leftSidePayment = allStudentPays.find(p => {
@@ -915,29 +931,29 @@ export default function PaymentManagement({ loggedInUser }) {
 
                                         if (rightSidePayments.length === 0) {
                                             return (
-                                                <div className="h-full flex items-center justify-center pb-20">
-                                                    <p className="text-sm text-slate-500 italic font-medium bg-white/5 px-6 py-3 rounded-xl border border-white/5">No other payments available.</p>
+                                                <div className="h-full flex items-center justify-center pb-10">
+                                                    <p className="text-sm text-gray-500 dark:text-slate-500 font-extrabold bg-white dark:bg-white/5 px-6 py-4 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm text-center uppercase tracking-widest">No other payments available.</p>
                                                 </div>
                                             );
                                         }
 
                                         return rightSidePayments.map(hist => (
-                                            <div key={hist.id} className={`bg-white/5 rounded-[1.5rem] p-5 md:p-6 border hover:bg-white/10 transition-all shadow-md ${hist.status === 'Trash' ? 'border-red-500/30 opacity-60' : 'border-white/5'}`}>
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <span className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border ${['Approved', 'Free Card', 'Discount'].includes(hist.status) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : hist.status === 'Trash' ? 'bg-red-500/20 text-red-400 border-red-500/40' : hist.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' : 'bg-slate-500/10 text-slate-400 border-slate-500/20'}`}>{hist.status}</span>
-                                                    <span className="text-[10px] text-slate-400 font-bold bg-black/40 px-3 py-1.5 rounded-lg border border-white/5">{hist.date}</span>
+                                            <div key={hist.id} className={`bg-white dark:bg-white/5 rounded-3xl p-6 md:p-8 border transition-all shadow-sm hover:shadow-md ${hist.status === 'Trash' ? 'border-red-200 dark:border-red-500/30 opacity-70' : 'border-gray-200 dark:border-white/5 hover:border-gray-300 dark:hover:border-white/10'}`}>
+                                                <div className="flex flex-wrap justify-between items-start gap-4 mb-5">
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border shadow-sm ${['Approved', 'Free Card', 'Discount'].includes(hist.status) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' : hist.status === 'Trash' ? 'bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-500/20' : hist.status === 'Pending' ? 'bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20' : 'bg-gray-100 dark:bg-slate-500/10 text-gray-700 dark:text-slate-400 border-gray-200 dark:border-slate-500/20'}`}>{hist.status}</span>
+                                                    <span className="text-[10px] text-gray-600 dark:text-slate-300 font-black uppercase tracking-widest bg-gray-50 dark:bg-black/40 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/5 shadow-sm">{hist.date}</span>
                                                 </div>
-                                                <p className="text-lg font-black text-white leading-tight mb-1">{hist.business}</p>
-                                                <p className="text-sm text-slate-400 mb-5 font-medium">{hist.batch}</p>
-                                                <div className="flex justify-between items-center text-sm border-t border-white/5 pt-4">
-                                                    <span className="text-slate-500 font-bold uppercase tracking-widest text-[10px] bg-white/5 px-3 py-1 rounded-lg">{hist.type}</span>
-                                                    <div className="flex items-center gap-4">
+                                                <p className="text-xl font-extrabold text-gray-900 dark:text-white leading-tight mb-2 truncate" title={hist.business}>{hist.business}</p>
+                                                <p className="text-sm text-gray-500 dark:text-slate-400 mb-6 font-bold truncate">{hist.batch}</p>
+                                                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 text-sm border-t border-gray-100 dark:border-white/5 pt-5">
+                                                    <span className="text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest text-[10px] bg-gray-100 dark:bg-white/5 px-3 py-1.5 rounded-lg shadow-sm w-max">{hist.type}</span>
+                                                    <div className="flex flex-wrap items-center gap-4">
                                                         {hist.slips && hist.slips.length > 0 && (
-                                                            <button onClick={() => openSlipsInNewTab(hist.slips, studentActionModal.studentName, studentActionModal.studentNo, studentActionModal.phone)} className="text-[11px] font-bold text-blue-400 hover:text-blue-300 hover:underline cursor-pointer bg-blue-500/10 px-4 py-1.5 rounded-xl border border-blue-500/20 flex items-center gap-1.5 transition-colors shadow-sm">
+                                                            <button onClick={() => openSlipsInNewTab(hist.slips, studentActionModal.studentName, studentActionModal.studentNo, studentActionModal.phone)} className="text-[10px] font-extrabold text-blue-600 dark:text-blue-400 hover:text-white dark:hover:text-white hover:bg-blue-600 dark:hover:bg-blue-500 uppercase tracking-widest cursor-pointer bg-blue-50 dark:bg-blue-500/10 px-4 py-2 rounded-xl border border-blue-200 dark:border-blue-500/20 flex items-center gap-2 transition-colors shadow-sm outline-none">
                                                                 <FileImage size={14} /> View Slips
                                                             </button>
                                                         )}
-                                                        <span className="font-black text-white text-xl">LKR {parseFloat(hist.amount).toLocaleString()}</span>
+                                                        <span className="font-black text-gray-900 dark:text-white text-2xl whitespace-nowrap shrink-0">LKR {parseFloat(hist.amount).toLocaleString()}</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -950,48 +966,47 @@ export default function PaymentManagement({ loggedInUser }) {
                 </div>,
                 document.body
             )}
-
             {/* 🔥 VERIFY AMOUNT MODAL (OVER/UNDER PAY OPTION) 🔥 */}
             {approveModal && createPortal(
-                <div className="fixed inset-0 z-[99999] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-xl">
-                    <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
-                        <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><CheckCircle2 className="text-emerald-500" /> Verify Payment</h3>
-                            <button onClick={() => setApproveModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={20} /></button>
+                <div className="fixed inset-0 z-[99999] bg-slate-900/60 dark:bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder rounded-[2rem] p-6 md:p-8 w-full max-w-md shadow-2xl transition-colors">
+                        <div className="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-white/10 pb-4">
+                            <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3"><CheckCircle2 className="text-emerald-600 dark:text-emerald-500" size={24} /> Verify Payment</h3>
+                            <button onClick={() => setApproveModal(null)} className="text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 bg-gray-50 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-white/10 p-2.5 rounded-xl transition-all border border-gray-200 dark:border-transparent outline-none"><CloseIcon size={20} /></button>
                         </div>
 
-                        <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 text-center">
-                            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1">Expected Amount</p>
-                            <p className="text-3xl font-black text-white">LKR {parseFloat(approveModal.payment.amount || 0).toLocaleString()}</p>
+                        <div className="mb-6 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl p-5 text-center shadow-sm">
+                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-extrabold uppercase tracking-widest mb-1.5">Expected Amount</p>
+                            <p className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">LKR {parseFloat(approveModal.payment.amount || 0).toLocaleString()}</p>
                         </div>
 
                         {/* 🔥 Actual Amount Paid Field 🔥 */}
-                        <div className="mb-4">
-                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block">Actual Amount Paid (LKR)</label>
+                        <div className="mb-6">
+                            <label className="text-xs text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2.5 block">Actual Amount Paid (LKR)</label>
                             <input
                                 type="number"
                                 value={actualAmount}
                                 onChange={e => setActualAmount(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 text-lg text-center shadow-inner"
+                                className="w-full bg-white dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-4 text-gray-900 dark:text-white font-extrabold outline-none focus:border-emerald-500 dark:focus:border-emerald-500 text-xl text-center shadow-sm transition-colors"
                                 placeholder="Enter actual slip amount"
                             />
-                            <p className="text-[10px] text-orange-400/80 mt-2 text-center bg-orange-500/10 p-1.5 rounded-lg border border-orange-500/20">
+                            <p className="text-[10px] text-orange-700 dark:text-orange-400/90 mt-3 text-center bg-orange-50 dark:bg-orange-500/10 p-2 rounded-lg border border-orange-200 dark:border-orange-500/20 font-bold leading-relaxed shadow-sm">
                                 ⚠️ If you enter a different amount, the system will automatically adjust the student's Wallet (Due/Excess).
                             </p>
                         </div>
 
-                        <div className="mb-6">
-                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block flex items-center gap-1">Admin Remark (Optional)</label>
+                        <div className="mb-8">
+                            <label className="text-xs text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2.5 block">Admin Remark (Optional)</label>
                             <textarea
                                 value={actionRemark}
                                 onChange={e => setActionRemark(e.target.value)}
-                                placeholder="Any internal notes?" rows="2"
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-normal outline-none focus:border-emerald-500 transition-colors resize-none"
+                                placeholder="Any internal notes?" rows="3"
+                                className="w-full bg-white dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white font-medium outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors resize-none shadow-sm"
                             ></textarea>
                         </div>
 
-                        <button disabled={actioningPaymentId !== null} onClick={submitApprove} className="w-full font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20">
-                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                        <button disabled={actioningPaymentId !== null} onClick={submitApprove} className="w-full font-extrabold py-4 rounded-xl transition-transform hover:scale-[1.02] text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/30 dark:shadow-none outline-none border border-transparent dark:border-emerald-500/50">
+                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                             Confirm Approve {approveModal.isSelfPicked && '(Self-Picked)'}
                         </button>
                     </div>
@@ -1000,35 +1015,37 @@ export default function PaymentManagement({ loggedInUser }) {
             )}
 
             {advancedActionModal && createPortal(
-                <div className="fixed inset-0 z-[99999] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-xl">
-                    <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
-                        <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                {advancedActionModal.type === 'Discount' && <><Tag className="text-cyan-400" /> Set Custom Prices</>}
-                                {advancedActionModal.type === 'FreeCard' && <><Gift className="text-yellow-400" /> Grant Free Card</>}
-                                {advancedActionModal.type === 'PostPay' && <><Unlock className="text-orange-400" /> Grant Post Pay</>}
+                <div className="fixed inset-0 z-[99999] bg-slate-900/60 dark:bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder rounded-[2rem] p-6 md:p-8 w-full max-w-lg shadow-2xl transition-colors">
+                        <div className="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-white/10 pb-4">
+                            <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3">
+                                {advancedActionModal.type === 'Discount' && <><Tag className="text-cyan-600 dark:text-cyan-400" size={24} /> Set Custom Prices</>}
+                                {advancedActionModal.type === 'FreeCard' && <><Gift className="text-yellow-500 dark:text-yellow-400" size={24} /> Grant Free Card</>}
+                                {advancedActionModal.type === 'PostPay' && <><Unlock className="text-orange-600 dark:text-orange-400" size={24} /> Grant Post Pay</>}
                             </h3>
-                            <button onClick={() => setAdvancedActionModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={20} /></button>
+                            <button onClick={() => setAdvancedActionModal(null)} className="text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 bg-gray-50 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-white/10 p-2.5 rounded-xl transition-all border border-gray-200 dark:border-transparent outline-none"><CloseIcon size={20} /></button>
                         </div>
 
                         {advancedActionModal.type === 'Discount' && (
-                            <div className="space-y-4 mb-6">
-                                <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Subject Breakdown</p>
+                            <div className="space-y-4 mb-8">
+                                <p className="text-xs text-gray-500 dark:text-slate-400 font-extrabold uppercase tracking-widest bg-gray-50 dark:bg-white/5 p-3 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm inline-block">Subject Breakdown</p>
+                                <div className="space-y-3">
                                 {advancedActionModal.payment.subjectsList.map(sub => (
-                                    <div key={sub.id} className="flex items-center justify-between bg-black/40 p-3 rounded-xl border border-white/5">
-                                        <div className="flex-1 pr-4 truncate">
-                                            <p className="text-sm font-medium text-white truncate">{sub.name}</p>
-                                            <p className="text-[10px] text-slate-500 font-normal">System: LKR {parseFloat(sub.price).toLocaleString()}</p>
+                                    <div key={sub.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white dark:bg-black/20 p-4 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm gap-4">
+                                        <div className="flex-1 pr-4 overflow-hidden">
+                                            <p className="text-sm font-extrabold text-gray-900 dark:text-white truncate" title={sub.name}>{sub.name}</p>
+                                            <p className="text-[10px] text-gray-500 dark:text-slate-500 font-bold mt-1 uppercase tracking-wider">System: LKR {parseFloat(sub.price).toLocaleString()}</p>
                                         </div>
-                                        <div className="w-1/3 relative shrink-0">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-medium">LKR</span>
-                                            <input type="number" value={customPrices[sub.id] || ''} onChange={e => handleCustomPriceChange(sub.id, e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white font-medium outline-none focus:border-cyan-500" />
+                                        <div className="w-full sm:w-1/3 relative shrink-0">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 dark:text-slate-500 font-black">LKR</span>
+                                            <input type="number" value={customPrices[sub.id] || ''} onChange={e => handleCustomPriceChange(sub.id, e.target.value)} className="w-full bg-gray-50 dark:bg-white/5 border border-gray-300 dark:border-white/10 rounded-xl pl-10 pr-3 py-3 text-sm text-gray-900 dark:text-white font-extrabold outline-none focus:border-cyan-500 dark:focus:border-cyan-500 transition-colors shadow-sm" />
                                         </div>
                                     </div>
                                 ))}
-                                <div className="flex justify-between items-center pt-2 px-2">
-                                    <span className="text-slate-400 text-sm font-medium">Calculated Total:</span>
-                                    <span className="text-cyan-400 text-xl font-bold">
+                                </div>
+                                <div className="flex justify-between items-center pt-4 px-2 border-t border-gray-200 dark:border-white/10 mt-6">
+                                    <span className="text-gray-600 dark:text-slate-400 text-sm font-extrabold uppercase tracking-widest">Calculated Total:</span>
+                                    <span className="text-cyan-600 dark:text-cyan-400 text-2xl font-black tracking-tight">
                                         LKR {Object.values(customPrices).reduce((sum, val) => sum + (parseFloat(val) || 0), 0).toLocaleString()}
                                     </span>
                                 </div>
@@ -1036,22 +1053,22 @@ export default function PaymentManagement({ loggedInUser }) {
                         )}
 
                         {advancedActionModal.type === 'PostPay' && (
-                            <div className="mb-6 bg-orange-500/10 border border-orange-500/20 p-5 rounded-xl text-center">
-                                <AlertCircle size={30} className="text-orange-400 mx-auto mb-3" />
-                                <p className="text-sm text-white font-medium">This will grant the student 7 days of temporary access.</p>
-                                <p className="text-xs text-slate-400 mt-2">After 7 days, if the slip is not approved, access will be automatically revoked.</p>
+                            <div className="mb-8 bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/20 p-6 rounded-2xl text-center shadow-sm">
+                                <AlertCircle size={40} className="text-orange-500 dark:text-orange-400 mx-auto mb-4" />
+                                <p className="text-sm text-gray-900 dark:text-white font-extrabold">This will grant the student 7 days of temporary access.</p>
+                                <p className="text-xs text-gray-600 dark:text-slate-400 mt-2 font-bold leading-relaxed">After 7 days, if the slip is not approved, access will be automatically revoked.</p>
                             </div>
                         )}
 
                         {(advancedActionModal.type === 'Discount' || advancedActionModal.type === 'FreeCard') && (
-                            <div className="mb-6">
-                                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block flex items-center gap-1">Admin Remark <span className="text-red-500">*</span></label>
-                                <textarea value={actionRemark} onChange={e => setActionRemark(e.target.value)} placeholder="Why are you giving this discount/free card?" rows="3" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-normal outline-none focus:border-blue-500 transition-colors resize-none"></textarea>
+                            <div className="mb-8">
+                                <label className="text-xs text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2.5 block flex items-center gap-1">Admin Remark <span className="text-red-500">*</span></label>
+                                <textarea value={actionRemark} onChange={e => setActionRemark(e.target.value)} placeholder="Why are you giving this discount/free card?" rows="4" className="w-full bg-gray-50 dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white font-medium outline-none focus:border-blue-500 dark:focus:border-blue-500 transition-colors resize-none shadow-sm"></textarea>
                             </div>
                         )}
 
-                        <button disabled={actioningPaymentId !== null} onClick={submitAdvancedAction} className={`w-full font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg ${advancedActionModal.type === 'Discount' ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-600/20' : advancedActionModal.type === 'FreeCard' ? 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-yellow-500/20' : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20'}`}>
-                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                        <button disabled={actioningPaymentId !== null} onClick={submitAdvancedAction} className={`w-full font-extrabold py-4 rounded-xl transition-transform hover:scale-[1.02] text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg outline-none border border-transparent ${advancedActionModal.type === 'Discount' ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-cyan-500/30 dark:shadow-none dark:border-cyan-500/50' : advancedActionModal.type === 'FreeCard' ? 'bg-yellow-500 hover:bg-yellow-400 text-black shadow-yellow-500/30 dark:shadow-none dark:border-yellow-500/50' : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-500/30 dark:shadow-none dark:border-orange-500/50'}`}>
+                            {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
                             Confirm {advancedActionModal.type === 'Discount' ? 'Custom Approval' : advancedActionModal.type === 'FreeCard' ? 'Free Card' : '7 Days Temp Unlock'}
                         </button>
                     </div>
@@ -1061,22 +1078,22 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* 🔥 INSTITUTE PAYMENT OPTION MODAL 🔥 */}
             {institutePaymentModal && createPortal(
-                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/80 backdrop-blur-xl p-4 overflow-hidden">
-                    <div className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 md:p-8 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
-                        <div className="flex justify-between items-center mb-6 border-b border-white/5 pb-4">
-                            <h3 className="text-xl font-bold text-white flex items-center gap-2"><CheckCircle2 className="text-indigo-500" /> Institute Payment</h3>
-                            <button onClick={() => setInstitutePaymentModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={20} /></button>
+                <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-slate-900/60 dark:bg-slate-900/80 backdrop-blur-sm p-4 overflow-hidden animate-fade-in">
+                    <div className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder rounded-[2rem] p-6 md:p-8 w-full max-w-md shadow-2xl transition-colors">
+                        <div className="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-white/10 pb-4">
+                            <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3"><CheckCircle2 className="text-indigo-600 dark:text-indigo-500" size={24} /> Institute Payment</h3>
+                            <button onClick={() => setInstitutePaymentModal(null)} className="text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 bg-gray-50 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-white/10 p-2.5 rounded-xl transition-all border border-gray-200 dark:border-transparent outline-none"><CloseIcon size={20} /></button>
                         </div>
 
-                        <p className="text-sm text-slate-300 mb-6 text-center">How should the tutes be handled for this student?</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-300 mb-8 font-bold text-center bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-200 dark:border-white/5 shadow-sm">How should the tutes be handled for this student?</p>
 
-                        <div className="flex flex-col gap-3">
-                            <button disabled={actioningPaymentId !== null} onClick={() => handleInstituteApprove(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg flex justify-center items-center gap-2">
-                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <User size={18} />} Self Picked (No Delivery)
+                        <div className="flex flex-col gap-4">
+                            <button disabled={actioningPaymentId !== null} onClick={() => handleInstituteApprove(true)} className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-4 rounded-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/30 dark:shadow-none border border-transparent dark:border-emerald-500/50 flex justify-center items-center gap-3 outline-none">
+                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={20} /> : <User size={20} />} Self Picked (No Delivery)
                             </button>
 
-                            <button disabled={actioningPaymentId !== null} onClick={() => handleInstituteApprove(false)} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl transition-all text-xs uppercase tracking-widest shadow-lg flex justify-center items-center gap-2">
-                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={16} /> : <Truck size={18} />} Send to Delivery Hub
+                            <button disabled={actioningPaymentId !== null} onClick={() => handleInstituteApprove(false)} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-extrabold py-4 rounded-xl transition-transform hover:scale-[1.02] text-xs uppercase tracking-widest shadow-lg shadow-purple-500/30 dark:shadow-none border border-transparent dark:border-purple-500/50 flex justify-center items-center gap-3 outline-none">
+                                {actioningPaymentId !== null ? <Loader2 className="animate-spin" size={20} /> : <Truck size={20} />} Send to Delivery Hub
                             </button>
                         </div>
                     </div>
@@ -1086,45 +1103,45 @@ export default function PaymentManagement({ loggedInUser }) {
 
             {/* 🔥 Installment Verify Modal with Actual Amount 🔥 */}
             {installmentModal && createPortal(
-                <div className="fixed inset-0 z-[99999] bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-xl">
-                    <form onSubmit={handleInstallmentApprove} className="bg-slate-900/90 border border-white/10 rounded-3xl p-6 w-full max-w-sm shadow-[0_0_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 duration-200 backdrop-blur-3xl">
-                        <div className="flex justify-between items-center mb-4 border-b border-white/5 pb-4">
-                            <h3 className="text-white font-bold text-lg flex items-center gap-2"><CheckCircle2 className="text-emerald-500" /> Verify Installment</h3>
-                            <button type="button" onClick={() => setInstallmentModal(null)} className="text-slate-400 hover:text-red-400 bg-white/5 hover:bg-white/10 p-2 rounded-xl transition-all"><CloseIcon size={16} /></button>
+                <div className="fixed inset-0 z-[99999] bg-slate-900/60 dark:bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+                    <form onSubmit={handleInstallmentApprove} className="bg-white dark:bg-brand-darkCard border border-gray-200 dark:border-brand-darkBorder rounded-[2rem] p-6 md:p-8 w-full max-w-md shadow-2xl transition-colors">
+                        <div className="flex justify-between items-center mb-6 border-b border-gray-200 dark:border-white/10 pb-4">
+                            <h3 className="text-xl font-extrabold text-gray-900 dark:text-white flex items-center gap-3"><CheckCircle2 className="text-emerald-600 dark:text-emerald-500" size={24} /> Verify Installment</h3>
+                            <button type="button" onClick={() => setInstallmentModal(null)} className="text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 bg-gray-50 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-white/10 p-2.5 rounded-xl transition-all border border-gray-200 dark:border-transparent outline-none"><CloseIcon size={20} /></button>
                         </div>
 
-                        <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center">
-                            <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest mb-1">Expected Installment</p>
-                            <p className="text-2xl font-black text-white">LKR {parseFloat(installmentModal.payment.amount || 0).toLocaleString()}</p>
+                        <div className="mb-6 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-2xl p-5 text-center shadow-sm">
+                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-extrabold uppercase tracking-widest mb-1.5">Expected Installment</p>
+                            <p className="text-4xl font-black text-gray-900 dark:text-white tracking-tight">LKR {parseFloat(installmentModal.payment.amount || 0).toLocaleString()}</p>
                         </div>
 
-                        <div className="mb-4">
-                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block">Actual Amount Paid (LKR)</label>
+                        <div className="mb-6">
+                            <label className="text-xs text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2.5 block">Actual Amount Paid (LKR)</label>
                             <input
                                 type="number"
                                 value={actualAmount}
                                 onChange={e => setActualAmount(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold outline-none focus:border-emerald-500 text-center text-lg shadow-inner"
+                                className="w-full bg-white dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-4 text-gray-900 dark:text-white font-extrabold outline-none focus:border-emerald-500 dark:focus:border-emerald-500 text-center text-xl shadow-sm transition-colors"
                             />
                         </div>
 
-                        <div className="mb-4">
-                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block">Next Phase Due Date</label>
-                            <input type="date" value={nextDueDate} onChange={e => setNextDueDate(e.target.value)} required className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-normal outline-none focus:border-emerald-500" />
+                        <div className="mb-6">
+                            <label className="text-xs text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2.5 block">Next Phase Due Date</label>
+                            <input type="date" value={nextDueDate} onChange={e => setNextDueDate(e.target.value)} required className="w-full bg-white dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-4 text-gray-900 dark:text-white font-bold outline-none focus:border-emerald-500 dark:focus:border-emerald-500 shadow-sm transition-colors cursor-pointer" />
                         </div>
 
-                        <div className="mb-6">
-                            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2 block flex items-center gap-1">Admin Remark (Optional)</label>
+                        <div className="mb-8">
+                            <label className="text-xs text-gray-600 dark:text-slate-400 font-extrabold uppercase tracking-widest mb-2.5 block flex items-center gap-1">Admin Remark (Optional)</label>
                             <textarea
                                 value={actionRemark}
                                 onChange={e => setActionRemark(e.target.value)}
-                                placeholder="Any notes?" rows="2"
-                                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-normal outline-none focus:border-emerald-500 transition-colors resize-none"
+                                placeholder="Any notes?" rows="3"
+                                className="w-full bg-white dark:bg-black/40 border border-gray-300 dark:border-white/10 rounded-xl p-4 text-sm text-gray-900 dark:text-white font-medium outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-colors resize-none shadow-sm"
                             ></textarea>
                         </div>
 
-                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-4 text-xs tracking-widest uppercase font-bold transition-all shadow-lg shadow-emerald-600/20 flex justify-center items-center gap-2">
-                            <Check size={16} /> Confirm Installment
+                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl py-4 text-sm tracking-widest uppercase font-extrabold transition-transform hover:scale-[1.02] shadow-lg shadow-emerald-500/30 dark:shadow-none border border-transparent dark:border-emerald-500/50 flex justify-center items-center gap-3 outline-none">
+                            <Check size={20} /> Confirm Installment
                         </button>
                     </form>
                 </div>,

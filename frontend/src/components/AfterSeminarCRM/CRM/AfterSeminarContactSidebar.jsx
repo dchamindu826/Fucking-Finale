@@ -24,12 +24,15 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
   const [showImportModal, setShowImportModal] = useState(false); 
   const [csvFile, setCsvFile] = useState(null); 
   
+  // 🔥 ALUTH FILTERS TIKA 🔥
   const [staffFilter, setStaffFilter] = useState('');
   const [groupFilter, setGroupFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [assignedInqFilter, setAssignedInqFilter] = useState('');
+  const [roundFilter, setRoundFilter] = useState('');
+  const [phaseFilter, setPhaseFilter] = useState('');
 
-  // 🔥 LOAD MORE STATE 🔥
+  const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(50);
 
   const [subTabStats, setSubTabStats] = useState({
@@ -44,7 +47,6 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       return () => clearInterval(timer);
   }, []);
 
-  // 🔥 Reset visible count when tab or search changes 🔥
   useEffect(() => {
       setVisibleCount(50);
   }, [activeTab, newSubTab, searchQuery]);
@@ -60,6 +62,9 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
                 paymentGroup: groupFilter,
                 status: statusFilter, 
                 staffId: staffFilter,
+                inquiryType: activeTab === 'ASSIGNED' ? assignedInqFilter : '', // Assigned tab eke inq filter
+                round: roundFilter, // New
+                phase: phaseFilter, // New
                 loggedUserId: currentUserId, 
                 loggedUserRole: rawRole,
                 businessId: filters?.selectedBusiness || '', 
@@ -122,12 +127,13 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
 
   useEffect(() => { fetchCoordinatorsAndQuotas(); }, [filters?.selectedBusiness, filters?.selectedBatch]);
 
+  // 🔥 UPDATE: Aluth filter variables tika add kara 🔥
   useEffect(() => { 
       fetchLeads(true); 
       setCheckedLeads([]); 
       const interval = setInterval(() => { fetchLeads(false); }, 10000);
       return () => clearInterval(interval);
-  }, [activeTab, newSubTab, staffFilter, groupFilter, statusFilter, filters?.selectedBusiness, filters?.selectedBatch]);
+  }, [activeTab, newSubTab, staffFilter, groupFilter, statusFilter, assignedInqFilter, roundFilter, phaseFilter, filters?.selectedBusiness, filters?.selectedBatch]);
 
   const handleSelectAll = () => { if (checkedLeads.length === leads.length) setCheckedLeads([]); else setCheckedLeads(leads.map(l => l.id)); };
 
@@ -189,7 +195,6 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
       }
   };
 
-  // 🔥 OPTIMIZATION: useMemo එකක් දැම්මා search එක fast වෙන්න 🔥
   const filteredLeads = useMemo(() => {
       if (!searchQuery) return leads;
       const q = String(searchQuery).toLowerCase().trim();
@@ -201,7 +206,8 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
   }, [leads, searchQuery]);
 
   const getAssignedStats = () => {
-      if (activeTab === 'ASSIGNED' && staffFilter) {
+      // Return currently filtered count for assigned tab if any filter is active
+      if (activeTab === 'ASSIGNED' && (staffFilter || groupFilter || statusFilter || assignedInqFilter || roundFilter || phaseFilter)) {
           return { total: leads.length, unread: leads.filter(l => l.unreadCount > 0).length };
       }
       return { total: tabCounts.ASSIGNED, unread: unreadCounts.ASSIGNED };
@@ -218,7 +224,6 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
     { id: 'ALL', label: 'All', total: tabCounts.ALL, unread: unreadCounts.ALL }
   ];
 
-  // 🔥 LOAD MORE LOGIC 🔥
   const displayedLeads = filteredLeads.slice(0, visibleCount);
 
   return (
@@ -297,25 +302,57 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
              </div>
           )}
 
+          {/* 🔥 UPDATE: ASSIGNED FILTERS TIKA GRID EKAKATA DAMMA 🔥 */}
           {activeTab === 'ASSIGNED' && (
-            <div className="flex gap-2 mt-4">
-              <select onChange={e=>setStaffFilter(e.target.value)} className="w-1/3 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
-                <option value="">All Staff</option>
-                {coordinators.map(c => <option key={c.id} value={c.id}>{c.firstName}</option>)}
-              </select>
-              <select onChange={e=>setGroupFilter(e.target.value)} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
-                <option value="">Group</option>
-                <option value="FULL">Full Payment</option>
-                <option value="MONTHLY">Monthly</option>
-                <option value="INSTALLMENT">Installment</option>
-                <option value="NOT_DECIDED">Not Decided</option>
-              </select>
-              <select onChange={e=>setStatusFilter(e.target.value)} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
-                <option value="">Status</option>
-                <option value="pending">Pending</option>
-                <option value="answered">Answered</option>
-                <option value="no_answer">No Answer</option>
-              </select>
+            <div className="flex flex-col gap-2 mt-4">
+              {/* First Row of Filters */}
+              <div className="flex gap-2">
+                <select onChange={e=>setStaffFilter(e.target.value)} value={staffFilter} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
+                  <option value="">All Staff</option>
+                  {coordinators.map(c => <option key={c.id} value={c.id}>{c.firstName}</option>)}
+                </select>
+                
+                <select onChange={e=>setAssignedInqFilter(e.target.value)} value={assignedInqFilter} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
+                  <option value="">All Types</option>
+                  <option value="OPEN_SEMINAR">Open Seminar</option>
+                  <option value="NEW_INQ">New Inquiry</option>
+                </select>
+                
+                <select onChange={e=>setGroupFilter(e.target.value)} value={groupFilter} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
+                  <option value="">Group</option>
+                  <option value="FULL">Full Payment</option>
+                  <option value="MONTHLY">Monthly</option>
+                  <option value="INSTALLMENT">Installment</option>
+                  <option value="NOT_DECIDED">Not Decided</option>
+                </select>
+              </div>
+
+              {/* Second Row of Filters */}
+              <div className="flex gap-2">
+                <select onChange={e=>setRoundFilter(e.target.value)} value={roundFilter} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
+                  <option value="">All Rounds</option>
+                  <option value="1">Round 1</option>
+                  <option value="2">Round 2</option>
+                  <option value="3">Round 3</option>
+                  <option value="4">Round 4</option>
+                  <option value="5">Round 5</option>
+                </select>
+
+                <select onChange={e=>setPhaseFilter(e.target.value)} value={phaseFilter} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
+                  <option value="">All Phases</option>
+                  <option value="1">Phase 1</option>
+                  <option value="2">Phase 2</option>
+                  <option value="3">Phase 3</option>
+                </select>
+
+                <select onChange={e=>setStatusFilter(e.target.value)} value={statusFilter} className="flex-1 bg-[#0f172a] text-slate-300 text-[10px] font-bold uppercase rounded-lg px-2 py-2 border border-slate-700 outline-none">
+                  <option value="">All Statuses</option>
+                  <option value="pending">Pending</option>
+                  <option value="answered">Answered</option>
+                  <option value="no_answer">No Answer</option>
+                  <option value="reject">Reject</option>
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -418,7 +455,6 @@ export default function AfterSeminarContactSidebar({ activeMode, selectedLead, s
               </div>
             )})}
 
-            {/* 🔥 LOAD MORE BUTTON 🔥 */}
             {filteredLeads.length > visibleCount && (
                 <div className="flex justify-center mt-4 mb-2">
                     <button 

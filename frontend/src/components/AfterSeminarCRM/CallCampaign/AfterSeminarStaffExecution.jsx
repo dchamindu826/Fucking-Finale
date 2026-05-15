@@ -4,8 +4,8 @@ import toast from 'react-hot-toast';
 import { Loader2 } from 'lucide-react';
 
 // 🔥 Coordinator ගේ Modules 4 Import කරගන්නවා 🔥
-import AfterSeminarOpenSem from './AfterSeminarOpenSem';
-import AfterSeminarNewInq from './AfterSeminarNewInq';
+import AfterSeminarOpenSem from './AfterSemOpen/AfterSeminarOpenSem';
+import AfterSeminarNewInq from './AfterSemNew/AfterSeminarNewInq';
 import AfterSeminarPaidCampaign from './AfterSeminarPaidCampaign';
 import BridgeStaffExecution from "./BridgeStaffExecution";
 

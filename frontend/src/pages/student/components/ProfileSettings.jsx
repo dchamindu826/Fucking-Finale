@@ -29,23 +29,20 @@ export default function ProfileSettings() {
     // ==========================================
     // 🔥 DEBUGGING & DYNAMIC URL LOGIC START 🔥
     // ==========================================
-    
-    console.log("🔥 [DEBUG 1] User Object from LocalStorage:", user);
-    console.log("🔥 [DEBUG 2] Saved Image Name:", user.image);
 
     // මෙතනින් Localhost ද Live ද කියලා Auto අඳුරගන්නවා
     const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? 'http://localhost:5000' 
     : 'https://imacampus.online/api'; // 🔥 මෙන්න මෙතනට /api කෑල්ල දැම්මා!
     
-    console.log("🔥 [DEBUG 3] Selected Backend URL:", BACKEND_URL);
+    
 
     // Image URL එක හදනවා
     const generatedImageUrl = user.image && user.image !== 'default.png' && user.image !== 'null' 
     ? `${BACKEND_URL}/storage/images/${user.image}` // 🔥 සමහරවිට ඔයාගේ Node.js static path එක 'storage/images' වෙන්නත් පුළුවන්. ඒකත් මම මෙතන හැදුවා.
     : null;
 
-    console.log("🔥 [DEBUG 4] Final Generated Image URL:", generatedImageUrl);
+    
 
     const [previewUrl, setPreviewUrl] = useState(generatedImageUrl);
 

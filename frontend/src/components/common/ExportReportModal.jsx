@@ -69,7 +69,6 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
 
     const exportDataList = useMemo(() => {
         return payments.filter(p => {
-            // 🔥 FIX: Free Cards අයින් කරලා, Approved සහ Discount අයව විතරක් ඇතුළත් කරනවා
             if (p.status !== 'Approved' && p.status !== 'Discount') return false;
 
             const matchesBiz = localFilters.businessId === 'All' || (p.businessId || p.business_id)?.toString() === localFilters.businessId.toString();
@@ -108,9 +107,8 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
         const discountStudents = new Set();
         const dateMap = {};
 
-        // 🔥 ALUTH: Subject & Student Tracking 🔥
-        const studentSubjectsCount = {}; // ළමයෙක්ට විෂයයන් කීයක් තියෙනවද කියලා බලන්න
-        const subjectStats = {}; // විෂය අනුව සල්ලි සහ ළමයි ගාණ එකතු කරන්න
+        const studentSubjectsCount = {}; 
+        const subjectStats = {}; 
 
         exportDataList.forEach(p => {
             const amt = parseFloat(p.amount || 0);
@@ -142,52 +140,54 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
             subs.forEach(s => {
                 const sName = (s.name || s.courseName || '').replace(/\s*-\s*(Full|Monthly|Installment)/i, '').trim();
                 if (sName) {
-                    // ළමයාගේ subject එක set එකට දානවා (duplicate වෙන්නේ නෑ)
                     studentSubjectsCount[p.studentId].add(sName);
 
-                    // Subject Stats හදනවා
                     if (!subjectStats[sName]) {
-                        subjectStats[sName] = { name: sName, enrolled: new Set(), revenue: 0 };
+                        // 🔥 ALUTH: Sets for breaking down payment types 🔥
+                        subjectStats[sName] = { 
+                            name: sName, 
+                            enrolled: new Set(), 
+                            fullSet: new Set(),
+                            monthlySet: new Set(),
+                            installSet: new Set(),
+                            revenue: 0 
+                        };
                     }
+                    
                     subjectStats[sName].enrolled.add(p.studentId);
                     
-                    // Note: System Price එකෙන් revenue ගණනය කරන්නේ නැතුව, මුළු Slip Amount එකෙන් estimate එකක් විතරයි මෙතන ගන්නේ 
-                    // (හේතුව ළමයා subject කිහිපයකට එක Slip එකක් දාන්න පුළුවන් නිසා)
+                    if (type.includes('full')) subjectStats[sName].fullSet.add(p.studentId);
+                    else if (type.includes('install')) subjectStats[sName].installSet.add(p.studentId);
+                    else subjectStats[sName].monthlySet.add(p.studentId);
+
                     if(s.price) subjectStats[sName].revenue += parseFloat(s.price); 
                 }
             });
         });
 
-        // 🔥 Average Count (Dynamic for O/L and A/L) 🔥
         let averageCount = 0;
         let averageRevenue = 0;
 
         Object.keys(studentSubjectsCount).forEach(stuId => {
             const subjectsSet = studentSubjectsCount[stuId];
             
-            // ළමයාගේ Payments ටික ගන්නවා
             const stuPayments = exportDataList.filter(p => p.studentId === parseInt(stuId) || p.studentId === stuId);
             if (stuPayments.length === 0) return;
 
-            // ළමයා ඉන්න Business එක හොයාගන්නවා
             const stuBizId = stuPayments[0].businessId || stuPayments[0].business_id;
             const stuBiz = businesses.find(b => b.id?.toString() === stuBizId?.toString());
             
-            // Business එකේ නමේ 'o/l' හරි 'ordinary' හරි තියෙනවද බලනවා (Category අවුල් නිසා නමෙන් අල්ලනවා)
             const isOL = stuBiz ? (stuBiz.name.toLowerCase().includes('o/l') || stuBiz.name.toLowerCase().includes('ordinary')) : false;
 
             if (isOL) {
-                // 🔹 O/L LOGIC: විෂයයන් 9ක් තියෙන්න ඕනේ
                 if (subjectsSet.size >= 9) {
                     averageCount++;
                     averageRevenue += stuPayments.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0);
                 }
             } else {
-                // 🔹 A/L LOGIC: English, General Test, GIT අයින් කරලා ප්‍රධාන විෂයයන් 3ක් තියෙන්න ඕනේ
                 let mainSubjectCount = 0;
                 subjectsSet.forEach(subName => {
                     const nameLower = subName.toLowerCase();
-                    // මේ නම් වලට සමාන ඒවා Main Subjects විදියට ගණන් ගන්නේ නෑ
                     if (!nameLower.includes('english') && !nameLower.includes('general') && !nameLower.includes('git')) {
                         mainSubjectCount++;
                     }
@@ -200,10 +200,13 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
             }
         });
 
-        // Format subject stats to array (මේක කලින් තිබ්බ එකමයි)
+        // 🔥 Formatting Subject Stats with new data 🔥
         const formattedSubjectStats = Object.values(subjectStats).map(sub => ({
             name: sub.name,
             enrolledCount: sub.enrolled.size,
+            fullCount: sub.fullSet.size,
+            monthlyCount: sub.monthlySet.size,
+            installCount: sub.installSet.size,
             revenue: sub.revenue
         })).sort((a, b) => b.enrolledCount - a.enrolledCount);
 
@@ -220,12 +223,11 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
                 { name: 'Installments', value: installRev, color: '#f59e0b' }
             ].filter(d => d.value > 0),
             barData,
-            // 🔥 ALUTH DATA 🔥
             averageCount,
             averageRevenue,
             subjectStats: formattedSubjectStats
         };
-    }, [exportDataList]);
+    }, [exportDataList, businesses]);
 
     const bizName = localFilters.businessId === 'All' ? 'All Businesses' : businesses.find(b => b.id?.toString() === localFilters.businessId.toString())?.name || 'Unknown Business';
     const batchName = localFilters.batchId === 'All' ? 'All Batches' : fetchedBatches.find(b => b.id?.toString() === localFilters.batchId.toString())?.name || 'Unknown Batch';
@@ -274,7 +276,7 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
             "Batch": p.batch,
             "Type": p.type,
             "Method": p.method,
-            "Status": p.status, // Included status to easily identify discounts in Excel
+            "Status": p.status, 
             "Amount (LKR)": parseFloat(p.amount || 0)
         }));
         const ws = XLSX.utils.json_to_sheet(sheetData);
@@ -515,7 +517,7 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
                                 </div>
                             </div>
 
-                            {/* 🔥 ALUTH: SUBJECT WISE & AVERAGE ANALYSIS 🔥 */}
+                            {/* 🔥 ALUTH: SUBJECT WISE & AVERAGE ANALYSIS WITH ADVANCED METRICS 🔥 */}
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10 border-t border-white/10 pt-8">
                                 
                                 {/* Average Student Details */}
@@ -534,11 +536,11 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
                                     </div>
                                 </div>
 
-                                {/* Subject Wise Breakdown Table */}
+                                {/* Subject Wise Breakdown Table - UPDATED WITH FULL, MONTHLY, INSTALL */}
                                 <div className="lg:col-span-2 bg-slate-900/40 p-6 rounded-3xl border border-white/5 shadow-xl flex flex-col">
                                     <h3 className="text-slate-300 font-bold text-sm tracking-widest uppercase mb-4 flex justify-between items-center">
-                                        Subject Performance
-                                        <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px]">{stats.subjectStats.length} Subjects Active</span>
+                                        Subject Performance Breakdown
+                                        <span className="bg-emerald-500/10 text-emerald-400 px-3 py-1 rounded-full text-[10px]">{stats.subjectStats.length} Subjects</span>
                                     </h3>
                                     
                                     <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 max-h-[300px]">
@@ -546,21 +548,27 @@ export default function ExportReportModal({ onClose, payments, filters: initialF
                                             <thead>
                                                 <tr>
                                                     <th className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3 border-b border-white/5">Subject Name</th>
-                                                    <th className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3 border-b border-white/5 text-center">Enrolled</th>
-                                                    <th className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3 border-b border-white/5 text-right">Est. Revenue (LKR)</th>
+                                                    <th className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3 border-b border-white/5 text-center">Total</th>
+                                                    <th className="text-[10px] font-bold text-emerald-500/70 uppercase tracking-widest pb-3 border-b border-white/5 text-center" title="Full Payments">Full</th>
+                                                    <th className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest pb-3 border-b border-white/5 text-center" title="Monthly Payments">Monthly</th>
+                                                    <th className="text-[10px] font-bold text-orange-500/70 uppercase tracking-widest pb-3 border-b border-white/5 text-center" title="Installment Payments">Install</th>
+                                                    <th className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pb-3 border-b border-white/5 text-right">Est. Rev (LKR)</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {stats.subjectStats.map((sub, i) => (
                                                     <tr key={i} className="hover:bg-white/5 transition-colors">
                                                         <td className="py-3 text-xs font-semibold text-slate-200 border-b border-white/5">{sub.name}</td>
-                                                        <td className="py-3 text-sm font-black text-blue-400 text-center border-b border-white/5">{sub.enrolledCount}</td>
+                                                        <td className="py-3 text-sm font-black text-white text-center border-b border-white/5">{sub.enrolledCount}</td>
+                                                        <td className="py-3 text-xs font-bold text-emerald-400 text-center border-b border-white/5">{sub.fullCount}</td>
+                                                        <td className="py-3 text-xs font-bold text-blue-400 text-center border-b border-white/5">{sub.monthlyCount}</td>
+                                                        <td className="py-3 text-xs font-bold text-orange-400 text-center border-b border-white/5">{sub.installCount}</td>
                                                         <td className="py-3 text-xs font-bold text-emerald-400 text-right border-b border-white/5">{sub.revenue.toLocaleString()}</td>
                                                     </tr>
                                                 ))}
                                                 {stats.subjectStats.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="3" className="text-center py-10 text-slate-500 text-xs italic">No subject data found for selected filters.</td>
+                                                        <td colSpan="6" className="text-center py-10 text-slate-500 text-xs italic">No subject data found for selected filters.</td>
                                                     </tr>
                                                 )}
                                             </tbody>

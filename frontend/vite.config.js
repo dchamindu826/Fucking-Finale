@@ -3,12 +3,13 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
+  base: '/', // 🔥 මෙන්න මේ පේළිය අලුතෙන් දැම්මා 🔥
   plugins: [
     react(),
     tailwindcss(),
   ],
   build: {
-    sourcemap: false, // 🔥 මේකෙන් තමයි public source code පේන එක සම්පූර්ණයෙන්ම නවත්තන්නේ
+    sourcemap: false, 
     rollupOptions: {
         output: {
             manualChunks: undefined,

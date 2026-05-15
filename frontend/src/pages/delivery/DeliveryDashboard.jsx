@@ -4,7 +4,6 @@ import { Truck, Search } from 'lucide-react';
 
 import Overview from './components/Overview';
 import PendingHolds from './components/PendingHolds';
-// 🔥 මෙතන පරණ නම වෙනුවට අලුත් නම දැම්මා
 import DispatchDelivered from './components/DispatchDelivered'; 
 import TuteStock from './components/TuteStock';
 import DeliveryHistory from './components/DeliveryHistory';
@@ -17,40 +16,40 @@ export default function DeliveryDashboard() {
     const [searchQuery, setSearchQuery] = useState('');
 
     return (
-        <div className="w-full animate-fade-in text-slate-200 pb-10 font-sans relative">
+        <div className="w-full animate-fade-in text-gray-900 dark:text-gray-100 pb-10 font-sans relative transition-colors duration-500">
             
             {/* Header Section */}
-            <div className="flex items-center gap-4 mb-8 bg-[#1e2336]/60 p-6 md:p-8 rounded-[2rem] border border-white/5 shadow-xl backdrop-blur-xl">
-                <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-400 shrink-0">
+            <div className="flex items-center gap-4 mb-8 bg-white dark:bg-brand-darkCard p-6 md:p-8 rounded-[2rem] border border-gray-200 dark:border-brand-darkBorder shadow-sm dark:shadow-md transition-colors">
+                <div className="p-3 bg-brand-accentLight rounded-xl border border-brand-accent/20 text-brand-accent shrink-0 transition-colors">
                     <Truck size={28}/>
                 </div>
                 <div className="flex-1">
-                    <h2 className="text-2xl md:text-3xl font-black text-white tracking-wide capitalize">
+                    <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white tracking-wide capitalize transition-colors">
                         {activeTab === 'overview' && 'Overview'}
                         {activeTab === 'pending' && 'Pending & Holds'}
-                        {activeTab === 'delivered' && 'Dispatch & Delivered'} {/* 🔥 Header එකත් වෙනස් කළා */}
+                        {activeTab === 'delivered' && 'Dispatch & Delivered'} 
                         {activeTab === 'stock' && 'Tute Stock'}
                         {activeTab === 'history' && 'Delivery History'}
                     </h2>
-                    <p className="text-slate-400 font-medium text-sm mt-1">Manage student deliveries, tracking, and tute inventory.</p>
+                    <p className="text-gray-500 dark:text-brand-darkTextMuted font-medium text-sm mt-1 transition-colors">Manage student deliveries, tracking, and tute inventory.</p>
                 </div>
             </div>
 
             {/* Search Bar (Hidden in Overview & Stock) */}
-{(activeTab === 'pending' || activeTab === 'delivered') && (
-    <div className="bg-[#1e2336]/60 p-5 rounded-2xl border border-white/5 mb-6 shadow-lg backdrop-blur-xl">
-        <div className="relative w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-            <input 
-                type="text" 
-                placeholder="Search orders, students, batches or tracking IDs..." 
-                value={searchQuery} 
-                onChange={e => setSearchQuery(e.target.value)} 
-                className="w-full bg-black/40 border border-white/5 rounded-xl pl-11 pr-4 py-3.5 text-white outline-none focus:border-blue-500/50 transition-colors text-sm font-medium" 
-            />
-        </div>
-    </div>
-)}
+            {(activeTab === 'pending' || activeTab === 'delivered') && (
+                <div className="bg-white dark:bg-brand-darkCard p-5 rounded-2xl border border-gray-200 dark:border-brand-darkBorder mb-6 shadow-sm transition-colors">
+                    <div className="relative w-full">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18}/>
+                        <input 
+                            type="text" 
+                            placeholder="Search orders, students, batches or tracking IDs..." 
+                            value={searchQuery} 
+                            onChange={e => setSearchQuery(e.target.value)} 
+                            className="w-full bg-gray-50 dark:bg-brand-darkBg border border-gray-200 dark:border-brand-darkBorder rounded-xl pl-11 pr-4 py-3.5 text-gray-900 dark:text-white outline-none focus:border-brand-accent dark:focus:border-brand-accent transition-colors text-sm font-medium placeholder-gray-400 dark:placeholder-gray-500" 
+                        />
+                    </div>
+                </div>
+            )}
 
             {/* Render the active module based on URL parameter */}
             <div className="mt-4">

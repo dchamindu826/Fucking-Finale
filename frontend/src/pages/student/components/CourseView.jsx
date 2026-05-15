@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from '../../../api/axios';
-import { Loader2, Video, MonitorPlay, FileText, FileSignature, CheckCircle, ArrowLeft, X, Lock, CalendarDays, FolderOpen, ChevronDown, Maximize, Minimize } from 'lucide-react';
+import { Loader2, Video, MonitorPlay, FileText, FileSignature, CheckCircle, ArrowLeft, X, Lock, CalendarDays, FolderOpen, ChevronDown, Maximize, Minimize, Play, SkipForward } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function CourseView({ courseId, onBack }) {
@@ -8,11 +8,20 @@ export default function CourseView({ courseId, onBack }) {
     const [data, setData] = useState(null);
     const [activeTab, setActiveTab] = useState('recordings');
     const [openFolders, setOpenFolders] = useState({});
-    const [playingVideo, setPlayingVideo] = useState(null);
     
-    // 🔥 Fullscreen State & Ref
+    // Video Playing State
+    const [playingVideo, setPlayingVideo] = useState(null);
+    const [nextVideo, setNextVideo] = useState(null);
+    
+    // Fullscreen State & Ref
     const [isFullscreen, setIsFullscreen] = useState(false);
     const modalRef = useRef(null);
+
+    // API Base URL for images
+    const getBaseUrl = () => {
+        let url = axios.defaults.baseURL || 'https://imacampus.online/api';
+        return url.endsWith('/') ? url.slice(0, -1) : url;
+    };
 
     useEffect(() => {
         axios.get(`/student/module/${courseId}`).then(res => {
@@ -28,7 +37,7 @@ export default function CourseView({ courseId, onBack }) {
         }).finally(() => setLoading(false));
     }, [courseId]);
 
-    // 🔥 Fullscreen Change Listener
+    // Fullscreen Change Listener
     useEffect(() => {
         const handleFullscreenChange = () => {
             setIsFullscreen(!!document.fullscreenElement);
@@ -64,23 +73,39 @@ export default function CourseView({ courseId, onBack }) {
         }
     };
 
-   const handlePlayVideo = (item) => {
-        const url = item.link || item.url || '';
-        
-        if (url.includes('youtube.com') || url.includes('youtu.be')) {
-            // YouTube ලින්ක් එකක් නම්, අලුත් Tab එකක කෙලින්ම YouTube සයිට් එකට යනවා
-            window.open(url, '_blank');
-        } else {
-            // වෙනත් (Google Drive වගේ) ලින්ක් එකක් නම් ඇප් එක ඇතුළෙම ප්ලේ වෙන්න දෙනවා
-            setPlayingVideo({ ...item, secure_link: getEmbedUrl(url) });
-        }
-    };
+    // 🔥 Find Next Video Logic 🔥
+    const findNextVideo = (currentItem) => {
+        if (!data) return null;
+        const currentData = data[activeTab] || [];
+        
+        const folderId = currentItem.content_group_id ?? currentItem.contentGroupId ?? currentItem.folder_id;
+        let sameFolderItems = currentData.filter(item => String(item.content_group_id ?? item.contentGroupId ?? item.folder_id) === String(folderId));
+        sameFolderItems.sort((a, b) => (a.itemOrder || 1) - (b.itemOrder || 1));
+        
+        const currentIndex = sameFolderItems.findIndex(i => i.id === currentItem.id);
+        if (currentIndex !== -1 && currentIndex < sameFolderItems.length - 1) {
+            return sameFolderItems[currentIndex + 1];
+        }
+        return null;
+    };
+
+    const handlePlayVideo = (item) => {
+        const url = item.link || item.url || '';
+        
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            window.open(url, '_blank');
+        } else {
+            setPlayingVideo({ ...item, secure_link: getEmbedUrl(url) });
+            setNextVideo(findNextVideo(item));
+        }
+    };
 
     const handleCloseVideo = () => {
         if (document.fullscreenElement) {
             document.exitFullscreen().catch(()=>{});
         }
         setPlayingVideo(null);
+        setNextVideo(null);
     };
 
     if (loading) return <div className="flex justify-center items-center py-40"><Loader2 className="animate-spin text-red-500" size={50} /></div>;
@@ -97,6 +122,38 @@ export default function CourseView({ courseId, onBack }) {
     const currentData = currentTabInfo?.data || [];
     const getTypeInt = (id) => ({ live: 1, recordings: 2, documents: 3, sPapers: 4, papers: 5 }[id] || 1);
     const getFolderId = (item) => String(item.content_group_id ?? item.contentGroupId ?? item.folder_id);
+
+    // 🔥 Updated UI Layout: Enlarged Thumbnails & Removed Numbers 🔥
+    const renderRow = (item, index) => (
+        <div key={item.id} className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-red-500/30 p-4 rounded-2xl transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-6">
+            <div className="flex items-center md:items-start gap-4 md:gap-6 flex-1 w-full min-w-0">
+                
+                {/* 🔥 Enlarged Thumbnail (Numbers removed) 🔥 */}
+                <div className="w-36 h-24 md:w-48 md:h-32 shrink-0 rounded-xl bg-black/40 border border-white/10 overflow-hidden relative flex items-center justify-center">
+                    {item.thumbnail ? (
+                        <img src={`${getBaseUrl()}/storage/documents/${item.thumbnail}`} alt="thumb" className="w-full h-full object-cover" />
+                    ) : (
+                        <img src="/logo.png" alt="default-thumb" className="w-16 md:w-24 h-auto opacity-30 object-contain drop-shadow-lg" />
+                    )}
+                </div>
+
+                <div className="flex-1 min-w-0 pt-2 md:pt-4">
+                    <h4 className="text-white font-bold text-sm md:text-lg break-words leading-tight mb-2">{item.title}</h4>
+                    <p className="text-[10px] md:text-sm text-white/50 font-medium flex items-center gap-1.5 mt-2">
+                        <CalendarDays size={16} className="text-red-400 shrink-0"/> {item.date ? new Date(item.date).toDateString() : 'No Date'}
+                    </p>
+                </div>
+            </div>
+            
+            <div className="w-full md:w-auto flex shrink-0 pt-3 md:pt-0 border-t border-white/5 md:border-0">
+                {activeTab === 'live' && <a href={item.link} target="_blank" rel="noreferrer" className="w-full md:w-max bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 transition-all"><Video size={16}/> Join Live</a>}
+                {activeTab === 'recordings' && <button onClick={() => handlePlayVideo(item)} className="w-full md:w-max bg-white/10 hover:bg-red-600 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 border border-white/10 transition-all"><MonitorPlay size={16} className='text-red-400'/> Play Video</button>}
+                {activeTab === 'documents' && <a href={`${getBaseUrl()}/storage/documents/${item.fileName}`} target="_blank" rel="noreferrer" download className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 border border-white/10"><FileText size={16} className="text-yellow-400"/> Download</a>}
+                {activeTab === 'sPapers' && <a href={`${getBaseUrl()}/storage/documents/${item.fileName}`} target="_blank" rel="noreferrer" download className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 border border-white/10"><FileSignature size={16} className="text-yellow-400"/> Download</a>}
+                {activeTab === 'papers' && <a href={`${getBaseUrl()}/storage/documents/${item.fileName}`} target="_blank" rel="noreferrer" download className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 border border-white/10"><CheckCircle size={16} className="text-yellow-400"/> Download</a>}
+            </div>
+        </div>
+    );
 
     const renderContentRows = () => {
         if (currentData.length === 0) return <div className="text-white/40 text-center py-20 font-medium">No content uploaded yet.</div>;
@@ -136,71 +193,47 @@ export default function CourseView({ courseId, onBack }) {
         );
     };
 
-    const renderRow = (item, index) => (
-        <div key={item.id} className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-red-500/30 p-4 rounded-2xl transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div className="flex items-start gap-4 flex-1 w-full min-w-0">
-                <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-black/30 flex items-center justify-center text-red-400 font-bold shrink-0 border border-white/5 text-xs md:text-sm">{index + 1}</div>
-                <div className="flex-1 min-w-0">
-                    <h4 className="text-white font-bold text-sm md:text-base break-words leading-tight">{item.title}</h4>
-                    <p className="text-[10px] md:text-xs text-white/50 font-medium flex items-center gap-1.5 mt-1.5"><CalendarDays size={12} className="text-red-400 shrink-0"/> {item.date ? new Date(item.date).toDateString() : 'No Date'}</p>
-                </div>
-            </div>
-            
-            <div className="w-full md:w-auto flex shrink-0 pt-3 md:pt-0 border-t border-white/5 md:border-0">
-                {activeTab === 'live' && <a href={item.link} target="_blank" rel="noreferrer" className="w-full md:w-max bg-red-600 hover:bg-red-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 transition-all"><Video size={16}/> Join Live</a>}
-                {activeTab === 'recordings' && <button onClick={() => handlePlayVideo(item)} className="w-full md:w-max bg-white/10 hover:bg-red-600 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 border border-white/10 transition-all"><MonitorPlay size={16} className='text-red-400'/> Play Video</button>}
-                {activeTab === 'documents' && <a href={`https://imacampus.online/api/storage/documents/${item.fileName}`} target="_blank" rel="noreferrer" download className="w-full md:w-max bg-white/10 hover:bg-white/20 text-white font-bold px-6 py-2.5 rounded-xl text-xs md:text-sm flex items-center justify-center gap-2 border border-white/10"><FileText size={16} className="text-yellow-400"/> Download</a>}
-            </div>
-        </div>
-    );
-
     return (
         <div className="w-full h-full relative animate-fade-in custom-scrollbar">
             {playingVideo ? (
-                /* 🔥 VIDEO PLAYER INLINE MODE 🔥 */
-                <div className="flex flex-col items-center justify-center w-full h-full min-h-[calc(100vh-120px)] animate-fade-in">
-                    <div 
-                        ref={modalRef} 
-                        className={`relative bg-black shadow-[0_0_50px_rgba(0,0,0,0.6)] flex flex-col mx-auto transition-all duration-300 ease-out ${
-                            isFullscreen 
-                            ? 'w-screen h-screen rounded-none fixed inset-0 z-[9999]' 
-                            : 'w-full aspect-[16/11] md:aspect-video rounded-[1.5rem] md:rounded-[2rem] border border-white/10 overflow-hidden'
-                        }`}
-                        style={isFullscreen ? {} : { 
-                            maxHeight: '85vh',
-                            maxWidth: 'min(100%, calc(85vh * 16 / 9))'
-                        }}
-                    >
-                        <div className="absolute top-0 left-0 w-full h-[70px] bg-gradient-to-b from-black/80 to-transparent flex items-start pt-3 md:pt-4 justify-between px-4 md:px-6 z-[70] pointer-events-none">
-                            <span className="text-white font-bold text-sm md:text-lg truncate pr-4 drop-shadow-md">{playingVideo.title}</span>
-                            <div className="flex items-center gap-3 pointer-events-auto">
-                                <button onClick={toggleFullScreen} className="text-white/90 bg-black/40 p-2 rounded-xl hover:bg-blue-600 hover:text-white transition-colors backdrop-blur-md border border-white/20">
-                                    {isFullscreen ? <Minimize size={20}/> : <Maximize size={20}/>}
-                                </button>
-                                <button onClick={handleCloseVideo} className="text-white/90 bg-black/40 p-2 rounded-xl hover:bg-red-600 hover:text-white transition-colors backdrop-blur-md border border-white/20">
-                                    <X size={20}/>
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* 🔥 1. TOP TRANSPARENT MASK (YT Title පේනවා, හැබැයි Click/Touch කරන්න බෑ) 🔥 */}
-                        <div 
-                            className="absolute top-0 left-0 w-full h-[80px] md:h-[100px] bg-transparent z-[50]" 
-                            onContextMenu={e => e.preventDefault()} 
-                            onClick={e => { e.preventDefault(); e.stopPropagation(); }}
-                            onTouchStart={e => { e.stopPropagation(); }}
-                            onTouchEnd={e => { e.stopPropagation(); }}
-                        />
-
-                        {/* 🔥 2. FULL WIDTH BOTTOM BLACK BAR (YT logo, Watch on YT ඔක්කොම වහන්න) 🔥 */}
-                        <div className="absolute bottom-0 left-0 w-full h-[55px] md:h-[60px] bg-black z-[50]" onContextMenu={e => e.preventDefault()} onClick={e => e.stopPropagation()} />
-
-                        <iframe 
-                            src={playingVideo.secure_link || getEmbedUrl(playingVideo.link)} 
-                            className="w-full h-full border-none pointer-events-auto" 
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        ></iframe>
+                /* 🔥 VIDEO PLAYER INLINE MODE (Redesigned & Fixed) 🔥 */
+                <div className="flex flex-col items-center justify-start w-full h-full min-h-[calc(100vh-120px)] animate-fade-in max-w-[95%] mx-auto px-2 md:px-4">
+                    
+                    {/* Top Controls (Back Button Only) */}
+                    <div className="w-full flex justify-between items-center mb-4 mt-2">
+                        <button onClick={handleCloseVideo} className="text-white/80 hover:text-red-400 bg-white/5 hover:bg-white/10 px-5 py-2.5 rounded-xl font-bold flex items-center border border-white/10 transition-colors text-sm shadow-md">
+                            <ArrowLeft size={18} className="mr-2" /> Back to Course
+                        </button>
                     </div>
+
+                    {/* Video Player Container (Larger Size) */}
+                    <div className="relative bg-black flex flex-col mx-auto w-full h-[80vh] md:h-[85vh] rounded-[1.5rem] md:rounded-[2rem] shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden">
+
+                        {/* 🔥 FIXED IFRAME: allowFullScreen added, sandbox WITHOUT allow-downloads 🔥 */}
+                        <iframe 
+                            src={playingVideo.secure_link || getEmbedUrl(playingVideo.link)} 
+                            className="w-full h-full border-none pointer-events-auto bg-white" 
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+                            allowFullScreen={true}
+                            webkitallowfullscreen="true"
+                            mozallowfullscreen="true"
+                            sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-forms"
+                            title="Video Player"
+                        ></iframe>
+                    </div>
+
+                    {/* 🔥 UP NEXT UI 🔥 */}
+                    {nextVideo && (
+                        <div className="w-full mt-6 bg-white/5 border border-white/10 p-5 md:p-6 rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-md shadow-lg">
+                            <div className="flex-1 min-w-0 text-center md:text-left">
+                                <h3 className="text-white/50 text-xs font-bold uppercase tracking-widest mb-1.5 flex items-center justify-center md:justify-start gap-2"><SkipForward size={16} className="text-red-400"/> Up Next</h3>
+                                <h2 className="text-white text-lg md:text-xl font-bold truncate">{nextVideo.title}</h2>
+                            </div>
+                            <button onClick={() => handlePlayVideo(nextVideo)} className="w-full md:w-auto bg-red-600 hover:bg-red-500 text-white font-bold px-8 py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all shrink-0 shadow-lg shadow-red-600/20 hover:scale-[1.02]">
+                                <Play size={18} fill="currentColor" /> Play Next
+                            </button>
+                        </div>
+                    )}
                 </div>
             ) : (
                 /* 🔥 COURSE CONTENT LIST 🔥 */
@@ -217,7 +250,6 @@ export default function CourseView({ courseId, onBack }) {
                         {tabs.map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-5 py-3 rounded-xl font-bold text-xs md:text-sm whitespace-nowrap transition-all border ${activeTab === tab.id ? 'bg-red-600 border-red-500 text-white shadow-lg' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10 hover:text-white'}`}>
                                 <tab.icon size={16} className={activeTab === tab.id ? 'text-white' : 'text-white/40'}/> {tab.name} 
-                                <span className={`ml-1 px-1.5 py-0.5 rounded-md text-[9px] ${activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-black/30 text-white/60'}`}>{tab.data?.length || 0}</span>
                             </button>
                         ))}
                     </div>

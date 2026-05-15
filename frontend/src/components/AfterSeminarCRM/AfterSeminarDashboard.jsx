@@ -27,7 +27,6 @@ export default function AfterSeminarDashboard() {
 
   const [isFollowUpOn, setIsFollowUpOn] = useState(false);
 
-  // 🔥 අලුතින් දාපු State 2 (Campaign Redirect එකට) 🔥
   const [targetCampaignTab, setTargetCampaignTab] = useState('OPEN_SEM');
   const [campaignSearchPhone, setCampaignSearchPhone] = useState('');
 
@@ -119,16 +118,12 @@ export default function AfterSeminarDashboard() {
     }
   };
 
-  // 🔥 UPDATE කරපු Redirect Function එක (කෙලින්ම Campaign එකට යන්න) 🔥
   const handleRedirectToCampaign = (lead) => {
       setActiveMode('CALL_CAMPAIGN'); 
-      setSelectedLead(null); // Chat modal එක open වෙන එක නවත්තනවා
-      
-      // Auto Search වෙන්න Phone Number එක ගන්නවා
+      setSelectedLead(null); 
       const phoneBase = lead.phone.split('_')[0];
       setCampaignSearchPhone(phoneBase);
 
-      // හරියටම අදාල Tab එක හොයාගන්නවා
       if (lead.source === 'bridge_transfer' && lead.enrollmentStatus !== 'ENROLLED') {
           setTargetCampaignTab('BRIDGE');
       } else if (lead.enrollmentStatus === 'ENROLLED') {
@@ -141,11 +136,21 @@ export default function AfterSeminarDashboard() {
   };
 
   return (
-    <div className="h-full flex flex-col gap-4 animate-fade-in-up text-slate-300 relative">
-      <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-[#23303f] p-3 rounded-2xl shadow-md border border-white/5">
-        <div className="flex gap-2 p-1 bg-[#1a2430] rounded-full border border-white/5 w-full xl:w-auto overflow-x-auto custom-scrollbar">
-          <button onClick={() => {setActiveMode('CRM'); setSelectedLead(null);}} className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 whitespace-nowrap ${activeMode === 'CRM' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}><FaWhatsapp /> After Seminar CRM</button>
-          <button onClick={() => {setActiveMode('CALL_CAMPAIGN'); setSelectedLead(null);}} className={`flex items-center gap-2 px-6 py-2 rounded-full font-semibold transition-all duration-300 whitespace-nowrap ${activeMode === 'CALL_CAMPAIGN' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-400 hover:bg-white/5'}`}>
+    <div className="h-full flex flex-col gap-4 animate-fade-in-up text-slate-200 relative">
+      
+      {/* 🚀 TOP NAVIGATION - Glass Effect */}
+      <div className="flex flex-col xl:flex-row justify-between items-center gap-4 bg-white/5 backdrop-blur-lg p-3 rounded-2xl border border-white/10 shadow-xl">
+        <div className="flex gap-2 p-1 bg-black/20 rounded-full border border-white/5 w-full xl:w-auto overflow-x-auto custom-scrollbar">
+          <button 
+            onClick={() => {setActiveMode('CRM'); setSelectedLead(null);}} 
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 whitespace-nowrap ${activeMode === 'CRM' ? 'bg-brand-accent text-white shadow-lg shadow-brand-accent/20' : 'text-slate-400 hover:bg-white/5'}`}
+          >
+            <FaWhatsapp /> After Seminar CRM
+          </button>
+          <button 
+            onClick={() => {setActiveMode('CALL_CAMPAIGN'); setSelectedLead(null);}} 
+            className={`flex items-center gap-2 px-6 py-2 rounded-full font-bold text-sm transition-all duration-300 whitespace-nowrap ${activeMode === 'CALL_CAMPAIGN' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-white/5'}`}
+          >
             {isManager ? <><FaChartBar /> Campaign Progress</> : <><FaHeadset /> Call Campaign</>}
           </button>
         </div>
@@ -158,55 +163,54 @@ export default function AfterSeminarDashboard() {
             </button>
           )}
 
-          <div className="w-px h-6 bg-slate-600 mx-1 hidden xl:block"></div>
+          <div className="w-px h-6 bg-white/10 mx-1 hidden xl:block"></div>
 
           <div className="flex items-center gap-3">
             <FaFilter className="text-slate-500 shrink-0" />
-            
             {isAdmin && (
-              <select value={selectedBusiness} onChange={(e) => { setSelectedBusiness(e.target.value); setSelectedBatch(''); }} className="bg-[#1a2430] border border-white/10 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-emerald-600">
+              <select value={selectedBusiness} onChange={(e) => { setSelectedBusiness(e.target.value); setSelectedBatch(''); }} className="bg-black/40 border border-white/10 text-slate-300 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:border-brand-accent transition-all cursor-pointer">
                 <option value="">Select Business</option>
-                {businesses.map(biz => <option key={biz.id} value={biz.id}>{biz.name}</option>)}
+                {businesses.map(biz => <option key={biz.id} value={biz.id} className="bg-slate-900">{biz.name}</option>)}
               </select>
             )}
 
-            <select value={selectedBatch} onChange={(e) => setSelectedBatch(e.target.value)} className="bg-[#1a2430] border border-white/10 text-slate-300 text-sm rounded-lg px-3 py-2 outline-none focus:border-emerald-600">
+            <select value={selectedBatch} onChange={(e) => setSelectedBatch(e.target.value)} className="bg-black/40 border border-white/10 text-slate-300 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:border-brand-accent transition-all cursor-pointer">
               <option value="">Select Batch (All)</option>
-              {displayBatches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {displayBatches.map(b => <option key={b.id} value={b.id} className="bg-slate-900">{b.name}</option>)}
             </select>
           </div>
         </div>
       </div>
 
       {needsToSelectBusiness ? (
-        <div className="flex-1 bg-[#1a2430] rounded-2xl flex flex-col items-center justify-center text-slate-500 shadow-xl border border-white/5 animate-fade-in-up">
-          <FaFilter className="text-6xl text-slate-600 mb-4 opacity-50" />
-          <h2 className="text-xl font-semibold text-slate-300">Select a Business to Start</h2>
+        <div className="flex-1 bg-white/5 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center text-slate-500 shadow-xl border border-white/10 animate-fade-in-up">
+          <FaFilter className="text-6xl text-slate-600 mb-4 opacity-20" />
+          <h2 className="text-xl font-bold text-slate-400 tracking-tight">Select a Business to Start</h2>
         </div>
       ) : activeMode === 'CRM' ? (
         <div className="flex-1 flex gap-4 h-[calc(100%-6rem)] overflow-hidden">
           <AfterSeminarContactSidebar 
-           activeMode={activeMode} 
-           selectedLead={selectedLead} 
-           setSelectedLead={setSelectedLead} 
-           filters={{ selectedBusiness: activeBusinessId, selectedBatch }} 
-           onRedirectToCampaign={handleRedirectToCampaign} 
-           />
+            activeMode={activeMode} 
+            selectedLead={selectedLead} 
+            setSelectedLead={setSelectedLead} 
+            filters={{ selectedBusiness: activeBusinessId, selectedBatch }} 
+            onRedirectToCampaign={handleRedirectToCampaign} 
+          />
           {selectedLead ? (
             <>
-    {/* මෙතනට businessId={activeBusinessId} එකතු කරන්න */}
-    <AfterSeminarChatArea selectedLead={selectedLead} businessId={activeBusinessId} />
-    <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
-  </>
+              <AfterSeminarChatArea selectedLead={selectedLead} businessId={activeBusinessId} />
+              <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
+            </>
           ) : (
-            <div className="flex-1 bg-[#23303f] rounded-2xl flex flex-col items-center justify-center text-slate-500 shadow-xl border border-white/5">
-              <FaWhatsapp className="text-6xl text-slate-600 mb-4 opacity-50" />
-              <h2 className="text-xl font-semibold text-slate-300">Select a lead to start</h2>
+            <div className="flex-1 bg-white/5 backdrop-blur-md rounded-2xl flex flex-col items-center justify-center text-slate-400 shadow-xl border border-white/10">
+              <FaWhatsapp className="text-6xl text-slate-600 mb-4 opacity-20" />
+              <h2 className="text-xl font-bold text-slate-400 tracking-tight">Select a lead to start</h2>
             </div>
           )}
         </div>
       ) : (
-        <div className="flex-1 bg-[#1a2430] rounded-2xl border border-white/5 overflow-hidden shadow-xl">
+        /* 📈 CALL CAMPAIGN SECTION - Entirely Transparent Base */
+        <div className="flex-1 bg-transparent overflow-hidden">
             {isManager ? (
                 <AfterSeminarManagerCampaignStats filters={{ selectedBusiness: activeBusinessId, selectedBatch }} allBatches={displayBatches} />
             ) : (
@@ -221,29 +225,28 @@ export default function AfterSeminarDashboard() {
         </div>
       )}
 
-      {/* CALL CAMPAIGN CHAT MODAL (IFRAME TYPE POPUP) */}
+      {/* 🛠 CALL CAMPAIGN CHAT MODAL (Glass Popup) */}
       {activeMode === 'CALL_CAMPAIGN' && selectedLead && (
-        <div className="fixed inset-0 z-[100] bg-[#020617]/90 backdrop-blur-sm flex items-center justify-center p-4 md:pl-[280px] lg:pl-[320px] animate-fade-in">
-            <div className="bg-[#1a2430] w-full max-w-[1500px] h-full max-h-[90vh] rounded-3xl flex flex-col overflow-hidden border border-slate-700 shadow-[0_0_50px_rgba(0,0,0,0.5)] relative">
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 md:pl-[300px] animate-fade-in">
+            <div className="bg-[#090E17]/95 backdrop-blur-3xl w-full max-w-[1500px] h-full max-h-[90vh] rounded-[32px] flex flex-col overflow-hidden border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
                 
-                <div className="bg-[#0f172a] px-6 py-4 flex justify-between items-center border-b border-slate-700">
+                <div className="bg-white/5 px-8 py-5 flex justify-between items-center border-b border-white/10">
                     <div>
-                        <h3 className="text-white font-bold text-lg">Campaign Workspace</h3>
-                        <p className="text-emerald-400 text-xs font-semibold">Communicating with: {selectedLead.phone}</p>
+                        <h3 className="text-white font-black text-xl tracking-tight uppercase">Campaign Workspace</h3>
+                        <p className="text-brand-accent text-xs font-bold mt-0.5 opacity-80">Connected with: {selectedLead.phone}</p>
                     </div>
                     <button 
                         onClick={() => setSelectedLead(null)} 
-                        className="bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white p-3 rounded-xl transition-all shadow-sm border border-red-500/20"
+                        className="bg-white/5 hover:bg-brand-accent/20 text-slate-400 hover:text-brand-accent p-2.5 rounded-2xl transition-all border border-white/10"
                     >
-                        <FaTimes size={16} />
+                        <FaTimes size={20} />
                     </button>
                 </div>
 
-                <div className="flex-1 flex gap-4 p-4 h-[calc(100%-70px)] bg-[#0b141a]">
-    {/* මෙතනටත් businessId={activeBusinessId} එකතු කරන්න */}
-    <AfterSeminarChatArea selectedLead={selectedLead} businessId={activeBusinessId} />
-    <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
-</div>
+                <div className="flex-1 flex gap-4 p-6 h-[calc(100%-75px)] bg-transparent overflow-hidden">
+                  <AfterSeminarChatArea selectedLead={selectedLead} businessId={activeBusinessId} />
+                  <AfterSeminarRightPanel selectedLead={selectedLead} activeMode={activeMode} />
+                </div>
             </div>
         </div>
       )}

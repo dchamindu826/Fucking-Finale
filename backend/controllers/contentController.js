@@ -1,5 +1,78 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const admin = require("firebase-admin");
+const axios = require('axios');
+
+// 🔥 පරණ Hardcoded Keys අයින් කළා. දැන් කෙලින්ම ගන්නේ .env ෆයිල් එකෙන් 🔥
+
+const getZoomDirectMp4Link = async (meetingId) => {
+    console.log(`\n================ ZOOM DEBUG START ================`);
+    console.log(`[1] Requested Meeting ID: "${meetingId}"`);
+
+    try {
+        // 🔥 .env එකෙන් Keys ටික ගන්නවා 🔥
+        const accountId = process.env.ZOOM_ACCOUNT_ID;
+        const clientId = process.env.ZOOM_CLIENT_ID;
+        const clientSecret = process.env.ZOOM_CLIENT_SECRET;
+
+        if (!accountId || !clientId || !clientSecret) {
+            console.error(`[!] ERROR: Zoom Credentials missing in .env file!`);
+            return null;
+        }
+
+        const authHeader = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+        console.log(`[2] Requesting Access Token...`);
+
+        // 🔥 Token Request එක යවනවා 🔥
+        const tokenRes = await axios.post(`https://zoom.us/oauth/token?grant_type=account_credentials&account_id=${accountId}`, null, {
+            headers: { 'Authorization': `Basic ${authHeader}` }
+        });
+
+        const accessToken = tokenRes.data.access_token;
+        console.log(`[3] Access Token Received (First 10 chars): ${accessToken.substring(0, 10)}...`);
+        console.log(`[4] Fetching recordings for Meeting ID: ${meetingId}...`);
+
+        // 🔥 Meeting ID එකෙන් Recording Details ඉල්ලනවා 🔥
+        const recRes = await axios.get(`https://api.zoom.us/v2/meetings/${meetingId}/recordings`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        console.log(`[5] Zoom API Response Status: ${recRes.status}`);
+        console.log(`[6] Available Files Count: ${recRes.data?.recording_files?.length || 0}`);
+
+        if (recRes.data && recRes.data.recording_files) {
+            // 🔥 MP4 ෆයිල් එකක් තියෙනවද කියලා හොයනවා 🔥
+            const mp4File = recRes.data.recording_files.find(file => file.file_type === 'MP4');
+            
+            if (mp4File) {
+                console.log(`[7] MP4 File Found! Size: ${(mp4File.file_size / (1024*1024)).toFixed(2)} MB`);
+                console.log(`================ ZOOM DEBUG END ================\n`);
+                
+                // 🔥 Download URL එකට Token එක අමුණලා යවනවා (එතකොට කෙලින්ම බාගන්න පුළුවන්) 🔥
+                return `${mp4File.download_url}?access_token=${accessToken}`;
+            } else {
+                console.log(`[!] Error: No MP4 format found in this recording.`);
+                console.log(`[!] Available types:`, recRes.data.recording_files.map(f => f.file_type));
+            }
+        } else {
+            console.log(`[!] Error: No recording_files array in response.`);
+            console.log(`[!] Raw Data:`, JSON.stringify(recRes.data, null, 2));
+        }
+
+        console.log(`================ ZOOM DEBUG END ================\n`);
+        return null;
+
+    } catch (error) {
+        console.log(`\n[!!!] ZOOM API CRASHED [!!!]`);
+        console.log(`[!] Request URL:`, error.config?.url);
+        console.log(`[!] Status Code:`, error.response?.status);
+        console.log(`[!] Zoom Error Code:`, error.response?.data?.code);
+        console.log(`[!] Zoom Error Message:`, error.response?.data?.message);
+        console.log(`[!] Full Raw Error Data:`, JSON.stringify(error.response?.data, null, 2));
+        console.log(`================ ZOOM DEBUG END ================\n`);
+        return null;
+    }
+};
 
 const getTypeInt = (typeStr) => {
     switch (typeStr) {
@@ -389,16 +462,50 @@ exports.addContentMassAssign = async (req, res) => {
     try {
         const { type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree, selectedCourses, batch_id, itemOrder } = req.body;
         
-        const newContent = await prisma.content.create({
-            data: {
-                title, contentType: type, contentGroupId: contentGroupId ? parseInt(contentGroupId) : null,
-                link, meetingId: zoomMeetingId, fileName: req.file ? req.file.filename : null,
-                date: date ? new Date(date) : null, startTime, endTime,
-                paperTime: paperTime ? parseInt(paperTime) : null, questionCount: questionCount ? parseInt(questionCount) : null,
-                isFree: isFree === '1', batchId: parseInt(batch_id), courseId: 0,
-                itemOrder: parseInt(itemOrder || 1)
+        let fileName = null;
+        let thumbnail = null;
+
+        if (req.files && !Array.isArray(req.files)) {
+            if (req.files['file'] && req.files['file'].length > 0) fileName = req.files['file'][0].filename;
+            if (req.files['thumbnail'] && req.files['thumbnail'].length > 0) thumbnail = req.files['thumbnail'][0].filename;
+        } else if (req.file) {
+            fileName = req.file.filename;
+        }
+
+        const sanitizedMeetingId = zoomMeetingId ? zoomMeetingId.replace(/\s+/g, '') : null;
+
+        // 🔥 ZOOM DIRECT LINK (Create කරද්දී) 🔥
+        let finalVideoLink = link;
+        if (sanitizedMeetingId) {
+            const directMp4 = await getZoomDirectMp4Link(sanitizedMeetingId);
+            if (directMp4) {
+                finalVideoLink = directMp4; 
             }
-        });
+        }
+
+        const data = {
+            title, 
+            contentType: type, 
+            link: finalVideoLink, // Update කරපු ලින්ක් එක සේව් වෙනවා
+            meetingId: sanitizedMeetingId, 
+            fileName, 
+            thumbnail, 
+            date: date ? new Date(date) : null, 
+            startTime, 
+            endTime,
+            paperTime: paperTime ? parseInt(paperTime) : null, 
+            questionCount: questionCount ? parseInt(questionCount) : null,
+            isFree: isFree === '1', 
+            batchId: parseInt(batch_id), 
+            courseId: 0,
+            itemOrder: parseInt(itemOrder || 1)
+        };
+
+        if (contentGroupId && contentGroupId !== 'null' && contentGroupId !== 'undefined') {
+            data.contentGroupId = parseInt(contentGroupId);
+        }
+
+        const newContent = await prisma.content.create({ data });
 
         if (selectedCourses) {
             const coursesArray = JSON.parse(selectedCourses);
@@ -406,7 +513,140 @@ exports.addContentMassAssign = async (req, res) => {
             if (contentCourseData.length > 0) await prisma.contentCourse.createMany({ data: contentCourseData });
         }
         res.status(201).json({ message: "Assigned Successfully", data: newContent });
-    } catch (e) { console.error(e); res.status(500).json({ error: "Failed to add content" }); }
+    } catch (e) { 
+        console.error(e); 
+        res.status(500).json({ error: "Failed to add content" }); 
+    }
+};
+
+exports.updateContentMassAssign = async (req, res) => {
+    try {
+        // 🔥 මේ DEBUG ටික අනිවාර්යයෙන්ම දාන්න 🔥
+        console.log(`\n================ UPDATE CONTENT TRIGGERED ================`);
+        console.log(`Frontend එකෙන් ආපු ඔක්කොම Data:`, req.body);
+
+        const { content_id, type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree, itemOrder, selectedCourses } = req.body;
+        
+        const sanitizedMeetingId = zoomMeetingId ? zoomMeetingId.replace(/\s+/g, '') : null;
+        console.log(`[DEBUG] Meeting ID එක: "${sanitizedMeetingId}"`);
+
+        // 🔥 ZOOM DIRECT LINK 🔥
+        let finalVideoLink = link;
+        if (sanitizedMeetingId && sanitizedMeetingId !== 'undefined' && sanitizedMeetingId !== 'null' && sanitizedMeetingId !== '') {
+            console.log(`[DEBUG] Meeting ID එකක් තියෙනවා! දැන් Zoom API එකට කතා කරනවා...`);
+            const directMp4 = await getZoomDirectMp4Link(sanitizedMeetingId);
+            if (directMp4) {
+                finalVideoLink = directMp4; 
+            }
+        } else {
+            console.log(`[DEBUG] Meeting ID එක හිස්! ඒක නිසා Zoom API එකට කතා කරන්නේ නෑ.`);
+        }
+
+        let updateData = { 
+            title, 
+            contentType: type, 
+            link: finalVideoLink, 
+            meetingId: sanitizedMeetingId,
+            date: date ? new Date(date) : null, 
+            startTime, 
+            endTime, 
+            paperTime: paperTime ? parseInt(paperTime) : null, 
+            questionCount: questionCount ? parseInt(questionCount) : null, 
+            isFree: isFree === '1',
+            itemOrder: parseInt(itemOrder || 1)
+        };
+
+        if (contentGroupId && contentGroupId !== 'null' && contentGroupId !== 'undefined') {
+            updateData.contentGroupId = parseInt(contentGroupId);
+        } else {
+            updateData.contentGroupId = null;
+        }
+
+        if (req.files && !Array.isArray(req.files)) {
+            if (req.files['file'] && req.files['file'].length > 0) updateData.fileName = req.files['file'][0].filename;
+            if (req.files['thumbnail'] && req.files['thumbnail'].length > 0) updateData.thumbnail = req.files['thumbnail'][0].filename;
+        } else if (req.file) {
+            updateData.fileName = req.file.filename;
+        }
+
+        const updated = await prisma.content.update({ where: { id: parseInt(content_id) }, data: updateData });
+
+        if (selectedCourses) {
+            const coursesArray = JSON.parse(selectedCourses);
+            await prisma.contentCourse.deleteMany({ where: { content_id: parseInt(content_id) } });
+            
+            if (coursesArray.length > 0) {
+                const contentCourseData = coursesArray.map(cId => ({ 
+                    content_id: parseInt(content_id), 
+                    course_id: BigInt(cId), 
+                    type: getTypeInt(type) 
+                }));
+                await prisma.contentCourse.createMany({ data: contentCourseData });
+            }
+        }
+
+        res.status(200).json(updated);
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Failed to update content" }); 
+    }
+};
+
+exports.updateContentMassAssign = async (req, res) => {
+    try {
+        const { content_id, type, contentGroupId, title, link, zoomMeetingId, date, startTime, endTime, paperTime, questionCount, isFree, itemOrder, selectedCourses } = req.body;
+        
+        // 🔥 FIX: Meeting ID එකේ මැද තියෙන හිස්තැන් ඔක්කොම අයින් කිරීම 🔥
+        const sanitizedMeetingId = zoomMeetingId ? zoomMeetingId.replace(/\s+/g, '') : null;
+
+        let updateData = { 
+            title, 
+            contentType: type, 
+            link, 
+            meetingId: sanitizedMeetingId, // හිස්තැන් අයින් කරපු ID එක
+            date: date ? new Date(date) : null, 
+            startTime, 
+            endTime, 
+            paperTime: paperTime ? parseInt(paperTime) : null, 
+            questionCount: questionCount ? parseInt(questionCount) : null, 
+            isFree: isFree === '1',
+            itemOrder: parseInt(itemOrder || 1)
+        };
+
+        if (contentGroupId && contentGroupId !== 'null' && contentGroupId !== 'undefined') {
+            updateData.contentGroupId = parseInt(contentGroupId);
+        } else {
+            updateData.contentGroupId = null;
+        }
+
+        if (req.files && !Array.isArray(req.files)) {
+            if (req.files['file'] && req.files['file'].length > 0) updateData.fileName = req.files['file'][0].filename;
+            if (req.files['thumbnail'] && req.files['thumbnail'].length > 0) updateData.thumbnail = req.files['thumbnail'][0].filename;
+        } else if (req.file) {
+            updateData.fileName = req.file.filename;
+        }
+
+        const updated = await prisma.content.update({ where: { id: parseInt(content_id) }, data: updateData });
+
+        if (selectedCourses) {
+            const coursesArray = JSON.parse(selectedCourses);
+            await prisma.contentCourse.deleteMany({ where: { content_id: parseInt(content_id) } });
+            
+            if (coursesArray.length > 0) {
+                const contentCourseData = coursesArray.map(cId => ({ 
+                    content_id: parseInt(content_id), 
+                    course_id: BigInt(cId), 
+                    type: getTypeInt(type) 
+                }));
+                await prisma.contentCourse.createMany({ data: contentCourseData });
+            }
+        }
+
+        res.status(200).json(updated);
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Failed to update content" }); 
+    }
 };
 
 exports.updateContentMassAssign = async (req, res) => {
@@ -428,10 +668,16 @@ exports.updateContentMassAssign = async (req, res) => {
             itemOrder: parseInt(itemOrder || 1)
         };
 
-        if (req.file) updateData.fileName = req.file.filename;
+        // 🔥 අප්ඩේට් කරද්දී අලුත් files ඇවිත්ද බලන විදිහ
+        if (req.files && !Array.isArray(req.files)) {
+            if (req.files['file'] && req.files['file'].length > 0) updateData.fileName = req.files['file'][0].filename;
+            if (req.files['thumbnail'] && req.files['thumbnail'].length > 0) updateData.thumbnail = req.files['thumbnail'][0].filename;
+        } else if (req.file) {
+            updateData.fileName = req.file.filename;
+        }
+
         const updated = await prisma.content.update({ where: { id: parseInt(content_id) }, data: updateData });
 
-        // 🔥 FIX: Update karaddi database eke subject allocation eka update wena eka
         if (selectedCourses) {
             const coursesArray = JSON.parse(selectedCourses);
             await prisma.contentCourse.deleteMany({ where: { content_id: parseInt(content_id) } });
@@ -447,7 +693,10 @@ exports.updateContentMassAssign = async (req, res) => {
         }
 
         res.status(200).json(updated);
-    } catch (e) { res.status(500).json({ error: "Failed to update content" }); }
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Failed to update content" }); 
+    }
 };
 
 exports.deleteContent = async (req, res) => {
@@ -512,18 +761,17 @@ exports.getBatchesFull = async (req, res) => {
 };
 
 // ================= POSTS =================
-const admin = require("firebase-admin"); // 🔥 Firebase Admin Import Karanna
 
 exports.createAdminPost = async (req, res) => {
     try {
         const { title, description, businessId, batchId } = req.body;
-        
-        const finalBizId = (businessId === 'all' || !businessId) ? null : BigInt(businessId);
-        const finalBatchId = (batchId === 'all' || !batchId) ? null : BigInt(batchId);
+
+        const finalBizId = (businessId === 'all' || !businessId || businessId === 'null') ? null : BigInt(businessId);
+        const finalBatchId = (batchId === 'all' || !batchId || batchId === 'null') ? null : BigInt(batchId);
         
         const fileName = req.file ? req.file.filename : 'default.png';
 
-        // 1. Database ekata save karanawa
+        // 1. Database එකට Save කරනවා
         const newPost = await prisma.post.create({ 
             data: { 
                 title, 
@@ -534,26 +782,67 @@ exports.createAdminPost = async (req, res) => {
             }
         });
 
-        // 2. 🔥 Firebase Cloud Messaging (Push Notification) Yawana Kotasa 🔥
+        // 2. 🔥 Firebase Cloud Messaging (Push Notification) යවන කොටස 🔥
         try {
+            // Default topic එක (හැමෝටම)
+            let targetTopic = 'ima_updates';
+
+            // Batch එකක් select කරලා නම් (හිස් string ආවොත් block කරන්න '')
+            if (batchId && batchId !== 'all' && batchId !== 'null' && batchId !== 'undefined' && batchId !== '') {
+                targetTopic = `batch_${batchId}`; 
+            } 
+            // Batch එක All වෙලා, Business එකක් select කරලා නම්
+            else if (businessId && businessId !== 'all' && businessId !== 'null' && businessId !== 'undefined' && businessId !== '') {
+                targetTopic = `business_${businessId}`;
+            }
+
+            // Image URL එක හදාගන්නවා
+            const imageUrl = fileName !== 'default.png' ? `https://imacampus.online/storage/posts/${fileName}` : null;
+
             const message = {
                 notification: {
                     title: title,
                     body: description
                 },
                 data: {
-                    image_url: fileName !== 'default.png' ? `https://imacampus.online/storage/posts/${fileName}` : '',
+                    image_url: imageUrl || '', // මේක App එක ඇතුලෙදි පාවිච්චි කරන්න
                 },
-                topic: 'ima_updates' // Mobile app eken subscribe wela inna topic eka
+                topic: targetTopic 
             };
 
+            // 🔥 FIX: ෆෝන් එකේ උඩින් පේන Notification එකට Image එක දාන කොටස
+            if (imageUrl) {
+                message.notification.imageUrl = imageUrl; // General
+                
+                // Android වල ලොකුවට ෆොටෝ එක පේන්න
+                message.android = {
+                    notification: {
+                        imageUrl: imageUrl
+                    }
+                };
+                
+                // iOS (Apple) වල ෆොටෝ එක පේන්න
+                message.apns = {
+                    payload: {
+                        aps: {
+                            'mutable-content': 1
+                        }
+                    },
+                    fcm_options: {
+                        image: imageUrl
+                    }
+                };
+            }
+
+            // 👉 දැන් ඇත්තටම ළමයින්ගේ ෆෝන් වලට Notification එක යවනවා
             await admin.messaging().send(message);
-            console.log("🚀 Push notification sent successfully!");
+            console.log(`🚀 Push notification sent successfully to topic: ${targetTopic}`);
+
         } catch (fcmError) {
             console.error("Push notification send error:", fcmError);
         }
 
-        res.status(201).json({ message: "Post Created & Notification Sent" });
+        res.status(201).json({ message: "Post Created & Notification Sent Successfully" });
     } catch (e) { 
         console.error("Post Creation Error:", e); 
         res.status(500).json({ error: "Failed to create post" }); 
@@ -562,10 +851,32 @@ exports.createAdminPost = async (req, res) => {
 
 exports.getPosts = async (req, res) => {
     try {
-        const posts = await prisma.post.findMany({ orderBy: { created_at: 'desc' } });
+        // ෆ්‍රන්ට්එන්ඩ් එකෙන් එවන businessId එක ගන්නවා
+        const { businessId } = req.query;
+        
+        let whereClause = {};
+        
+        // Business ID එකක් එවලා තියෙනවා නම්, ඒකට අදාල පෝස්ට් විතරක් ගන්නවා
+        if (businessId && businessId !== 'all' && businessId !== 'null') {
+            whereClause = {
+                OR: [
+                    { business_id: BigInt(businessId) }, // ඒ අදාල Business එකේ පෝස්ට්
+                    { business_id: null } // 'All' කියලා දාපු පොදු පෝස්ට්
+                ]
+            };
+        }
+
+        const posts = await prisma.post.findMany({ 
+            where: whereClause,
+            orderBy: { created_at: 'desc' } 
+        });
+        
         const safeData = JSON.parse(JSON.stringify(posts, (key, value) => typeof value === 'bigint' ? value.toString() : value));
         res.status(200).json(safeData);
-    } catch (e) { res.status(500).json({ error: "Failed to get posts" }); }
+    } catch (e) { 
+        console.error(e);
+        res.status(500).json({ error: "Failed to get posts" }); 
+    }
 };
 
 exports.deletePost = async (req, res) => {
@@ -573,4 +884,27 @@ exports.deletePost = async (req, res) => {
         await prisma.post.delete({ where: { id: parseInt(req.body.post_id) } });
         res.status(200).json({ message: "Post Deleted" });
     } catch (e) { res.status(500).json({ error: "Failed to delete post" }); }
+};
+
+// ================= ZOOM DYNAMIC DOWNLOAD =================
+exports.getZoomDownloadRedirect = async (req, res) => {
+    try {
+        const { meetingId } = req.params;
+        if (!meetingId) return res.status(400).send("Meeting ID is required");
+
+        console.log(`[DOWNLOAD] Fetching fresh Zoom link for Meeting ID: ${meetingId}`);
+        
+        // ඔයා කලින් හදලා තියෙන Function එක කෝල් කරනවා
+        const directMp4 = await getZoomDirectMp4Link(meetingId);
+        
+        if (directMp4) {
+            // මේක තමයි මැජික් එක! App එක අලුත් ලින්ක් එකට Redirect කරනවා.
+            return res.redirect(directMp4); 
+        } else {
+            return res.status(404).send("Zoom recording not found or expired.");
+        }
+    } catch (error) {
+        console.error("Zoom Redirect Error:", error);
+        res.status(500).send("Server Error");
+    }
 };

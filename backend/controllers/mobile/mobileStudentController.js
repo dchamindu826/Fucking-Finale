@@ -90,18 +90,20 @@ exports.getMobilePayments = async (req, res) => {
         payments.forEach(p => {
             const isVerifying = p.status === -1 || (p.status === 0 && p.method === 'Slip');
             
-            const basePayment = {
-                id: p.id,
-                courseName: `${p.business?.name || ''} - ${p.batch?.name || ''}`,
-                amount: p.amount,
-                status: p.status,
-                method: p.method,
-                createdDate: p.created_at,
-                dueDate: p.due_date,
-                isInstallment: p.payment_type === 2,
-                installmentNo: p.installment_no,
-                batchLogo: p.batch?.logo
-            };
+    const basePayment = {
+    id: p.id,
+    businessId: p.businessId, // 🔥 අලුතින් මේ පේළිය දාන්න
+    batchId: p.batchId,       // 🔥 අලුතින් මේ පේළිය දාන්න
+    courseName: `${p.business?.name || ''} - ${p.batch?.name || ''}`,
+    amount: p.amount,
+    status: p.status,
+    method: p.method,
+    createdDate: p.created_at,
+    dueDate: p.due_date,
+    isInstallment: p.payment_type === 2,
+    installmentNo: p.installment_no,
+    batchLogo: p.batch?.logo
+};
 
             if (p.status === 1 || p.status === 2 || p.status === 4 || isVerifying) {
                 basePayment.displayStatus = (p.status === 1 || p.status === 4) ? 'Approved' 
@@ -280,7 +282,6 @@ exports.getCourseModules = async (req, res) => {
 };
 
 // 🔥 FIX: Prisma relation error එක මඟහරින්න Courses ටික වෙනම අරන් map කරනවා
-// 🔥 FIX: Prisma relation error එක මඟහරින්න Courses ටික වෙනම අරන් map කරනවා
 exports.getMobileUpcomingLives = async (req, res) => {
     try {
         const studentId = req.user?.userId || req.user?.id || req.userId;
@@ -303,7 +304,6 @@ exports.getMobileUpcomingLives = async (req, res) => {
         const uniqueSubjectIds = [...new Set(allowedSubjectIds)];
         if (uniqueSubjectIds.length === 0) return res.status(200).json({ liveClasses: [] });
 
-        // 1. Get Linked Contents (Without including course)
         let linkedContents = [];
         try {
             linkedContents = await prisma.contentCourse.findMany({
@@ -321,7 +321,6 @@ exports.getMobileUpcomingLives = async (req, res) => {
 
         if (!linkedContents || linkedContents.length === 0) return res.status(200).json({ liveClasses: [] });
 
-        // 2. Fetch Course Names separately
         let coursesList = [];
         try {
             coursesList = await prisma.course.findMany({
@@ -339,7 +338,6 @@ exports.getMobileUpcomingLives = async (req, res) => {
 
         const contentIds = [...new Set(linkedContents.map(lc => lc.content_id))];
 
-        // 3. Fetch Live Contents
         let liveContents = [];
         try {
             liveContents = await prisma.content.findMany({
@@ -363,7 +361,6 @@ exports.getMobileUpcomingLives = async (req, res) => {
             }
         }
 
-        // 4. Map everything together
         const formattedLives = liveContents.map(c => {
             const linkObj = linkedContents.find(lc => lc.content_id.toString() === c.id.toString());
             const courseObj = coursesList.find(cr => cr.id.toString() === linkObj?.course_id?.toString());
@@ -383,6 +380,7 @@ exports.getMobileUpcomingLives = async (req, res) => {
                 endTime: c.endTime,
                 link: c.link,
                 zoomMeetingId: c.meetingId,
+                image: c.fileName || c.image || null, // 🔥 අලුතින් එකතු කළා Thumbnail එක යවන්න
                 paidStatus: 1 
             };
         });
